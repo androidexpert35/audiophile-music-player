@@ -1,14 +1,39 @@
-# Audiophile Music Player
+<p align="center">
+  <img
+    src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+    alt="Audiophile Music Player app icon"
+    width="128"
+    height="128"
+  />
+</p>
 
-**A bit-perfect, offline-first Android music player built for people who can hear the
-difference — and want proof, not marketing.**
+<h1 align="center">Audiophile Music Player</h1>
 
-[![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)](#)
-[![Min SDK](https://img.shields.io/badge/minSdk-33-blue)](#)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](#)
-[![Architecture](https://img.shields.io/badge/architecture-Clean%20%2B%20MVVM%20%2B%20UDF-informational)](#)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Free forever](https://img.shields.io/badge/price-free%2C%20no%20ads%2C%20no%20catch-yellow)](AUTHOR.md)
+<p align="center">
+  <strong>
+    A bit-perfect, offline-first Android music player built for people who can hear the
+    difference — and want proof, not marketing.
+  </strong>
+</p>
+
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.androidexpert35.audiophilemusicplayer">
+    <img
+      src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+      alt="Get it on Google Play"
+      height="80"
+    />
+  </a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Android-3DDC84?logo=android&amp;logoColor=white" alt="Platform: Android" />
+  <img src="https://img.shields.io/badge/minSdk-33-blue" alt="Minimum SDK: 33" />
+  <img src="https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&amp;logoColor=white" alt="Kotlin 2.3" />
+  <img src="https://img.shields.io/badge/architecture-Clean%20%2B%20MVVM%20%2B%20UDF-informational" alt="Architecture: Clean + MVVM + UDF" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT" /></a>
+  <a href="AUTHOR.md"><img src="https://img.shields.io/badge/price-free%2C%20no%20ads%2C%20no%20catch-yellow" alt="Free forever: no ads, no catch" /></a>
+</p>
 
 Audiophile decodes audio itself, drives USB DACs directly at the protocol level, and
 tells you — in real time — exactly what path your music took to reach your ears. No
