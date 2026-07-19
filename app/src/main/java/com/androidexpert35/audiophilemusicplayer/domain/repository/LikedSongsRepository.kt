@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * Persists track IDs that the user has liked and exposes them as reactive flows
  * so any observer (library screen, player screen) stays in sync without polling.
+ * The Data implementation coordinates these rows with the reserved favorites M3U playlist.
  */
 interface LikedSongsRepository {
 
@@ -41,4 +42,3 @@ interface LikedSongsRepository {
      */
     suspend fun toggleLike(trackId: Long): Resource<Unit>
 }
-

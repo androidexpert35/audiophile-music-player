@@ -29,8 +29,8 @@ import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.
  * The sort/toggle row appears first in the [LazyColumn]. Every collection in the
  * Playlists section, including the M3U-backed favorites collection, uses the same row.
  *
- * `likedSongIds` is coerced into a [Set] once per model change so that each item's
- * `isLiked` lookup runs in O(1) instead of O(N) during scroll.
+ * `likedSongIds` is already a [Set], so each item's `isLiked` lookup remains O(1)
+ * during scroll without allocating another collection.
  *
  * @param model Current library UI snapshot.
  * @param shellBottomPadding Bottom padding reserving space for the floating shell panel.

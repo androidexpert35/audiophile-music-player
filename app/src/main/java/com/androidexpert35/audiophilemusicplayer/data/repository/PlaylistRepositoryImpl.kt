@@ -14,13 +14,6 @@ import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaylistRepos
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.File
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +24,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Owns every local M3U playlist and keeps the reserved favorites playlist aligned with Room.
@@ -73,18 +73,14 @@ class PlaylistRepositoryImpl @Inject constructor(
     override suspend fun createPlaylist(name: String): Resource<Playlist> = withContext(ioDispatcher) {
         mutationMutex.withLock {
             val normalizedName = name.trim()
-            val currentPlaylists = runCatching {
-                synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
-                loadPlaylists()
-            }.getOrElse { error ->
-                return@withLock Resource.Error(storageOrDatabaseError(error))
-            }
+            val currentPlaylists = loadPlaylists()
             when {
                 normalizedName.isBlank() -> Resource.Error(
                     ResourceError.LogicError("A playlist name is required.")
                 )
 
-                currentPlaylists.any { it.name.equals(normalizedName, ignoreCase = true) } -> Resource.Error(
+                normalizedName.equals(favoritesName(), ignoreCase = true) ||
+                    currentPlaylists.any { it.name.equals(normalizedName, ignoreCase = true) } -> Resource.Error(
                     ResourceError.LogicError("A playlist with this name already exists.")
                 )
 
@@ -116,8 +112,8 @@ class PlaylistRepositoryImpl @Inject constructor(
         mutationMutex.withLock {
             runCatching {
                 require(tracks.isNotEmpty()) { "Select at least one track to add." }
-                synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
                 if (playlistId == FAVORITES_PLAYLIST_ID) {
+                    synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
                     appendFavorites(tracks)
                 } else {
                     val playlist = requirePlaylist(playlistId)
@@ -142,7 +138,9 @@ class PlaylistRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             mutationMutex.withLock {
                 runCatching {
-                    synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
+                    if (playlistId == FAVORITES_PLAYLIST_ID) {
+                        synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
+                    }
                     val playlist = requirePlaylist(playlistId)
                     check(
                         playlist.trackUris.groupingBy { it }.eachCount() ==
@@ -164,7 +162,9 @@ class PlaylistRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             mutationMutex.withLock {
                 runCatching {
-                    synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
+                    if (playlistId == FAVORITES_PLAYLIST_ID) {
+                        synchronizeFavoritesFile(likedSongDao.getLikedSongIds())
+                    }
                     replacePlaylistContents(requirePlaylist(playlistId), trackUris)
                 }.fold(
                     onSuccess = {
@@ -224,7 +224,6 @@ class PlaylistRepositoryImpl @Inject constructor(
     /** Appends unique liked tracks and persists the resulting playlist/Room snapshot together. */
     private suspend fun appendFavorites(tracks: List<Track>) {
         val currentRows = likedSongDao.getLikedSongs()
-        synchronizeFavoritesFile(currentRows.map(LikedSongEntity::trackId))
         val existingIds = currentRows.mapTo(mutableSetOf(), LikedSongEntity::trackId)
         val uniqueTracks = tracks.distinctBy(Track::id).filterNot { track -> track.id in existingIds }
         if (uniqueTracks.isEmpty()) return

@@ -13,18 +13,18 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaylistRepositoryImplTest {
@@ -64,7 +64,28 @@ class PlaylistRepositoryImplTest {
         assertTrue(result is Resource.Success)
         assertTrue(favoritesFile().readText().contains(track.uri))
         coVerify(exactly = 1) {
-            likedSongDao.replaceLikedSongs(match { rows -> rows.map(LikedSongEntity::trackId) == listOf(track.id) })
+            likedSongDao.replaceLikedSongs(
+                match { rows -> rows.map(LikedSongEntity::trackId) == listOf(track.id) }
+            )
+        }
+    }
+
+    @Test
+    fun `given unliked track when heart toggled then favorites playlist receives the track`() = runTest {
+        val track = trackEntity(id = 11L, uri = "content://tracks/11")
+        stubContext()
+        coEvery { libraryIndexDao.getTracksByIds(listOf(track.id)) } returns listOf(track)
+        coEvery { likedSongDao.getLikedSongs() } returns emptyList()
+        coEvery { likedSongDao.replaceLikedSongs(any()) } returns Unit
+
+        val result = repository(testScheduler).toggleLike(track.id)
+
+        assertTrue(result is Resource.Success)
+        assertTrue(favoritesFile().readText().contains(track.contentUri))
+        coVerify(exactly = 1) {
+            likedSongDao.replaceLikedSongs(
+                match { rows -> rows.map(LikedSongEntity::trackId) == listOf(track.id) }
+            )
         }
     }
 
@@ -90,16 +111,19 @@ class PlaylistRepositoryImplTest {
             favoritesFile().readLines().filterNot { line -> line.isBlank() || line.startsWith("#") }
         )
         coVerify(exactly = 1) {
-            likedSongDao.replaceLikedSongs(match { rows -> rows.map(LikedSongEntity::trackId) == listOf(2L, 1L) })
+            likedSongDao.replaceLikedSongs(
+                match { rows -> rows.map(LikedSongEntity::trackId) == listOf(2L, 1L) }
+            )
         }
     }
 
-    private fun repository(testScheduler: TestCoroutineScheduler): PlaylistRepositoryImpl = PlaylistRepositoryImpl(
-        context = context,
-        likedSongDao = likedSongDao,
-        libraryIndexDao = libraryIndexDao,
-        ioDispatcher = UnconfinedTestDispatcher(testScheduler)
-    )
+    private fun repository(testScheduler: TestCoroutineScheduler): PlaylistRepositoryImpl =
+        PlaylistRepositoryImpl(
+            context = context,
+            likedSongDao = likedSongDao,
+            libraryIndexDao = libraryIndexDao,
+            ioDispatcher = UnconfinedTestDispatcher(testScheduler)
+        )
 
     private fun stubContext() {
         every { context.filesDir } returns temporaryFolder.root

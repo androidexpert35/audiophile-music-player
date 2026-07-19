@@ -27,7 +27,7 @@ Current impls: `MusicRepositoryImpl`, `MediaIndexRepositoryImpl`,
 `PlaybackRepositoryImpl`, `PlaybackPersistenceRepositoryImpl`,
 `AudioTelemetryRepositoryImpl`,
 `RecentlyPlayedRepositoryImpl`, `LyricsRepositoryImpl`, `RemoteImageRepositoryImpl`,
-`SettingsRepositoryImpl`.
+`SettingsRepositoryImpl`, `PlaylistRepositoryImpl`.
 
 `PlaylistRepositoryImpl` stores playlists as UTF-8 extended M3U files in the app-private
 `files/playlists/` directory and implements both `PlaylistRepository` and

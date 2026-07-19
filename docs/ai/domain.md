@@ -32,7 +32,7 @@ Contracts only — implementations live in Data. Current set includes
 `MusicRepository`, `PlaybackRepository`, `AudioTelemetryRepository`,
 `MediaIndexRepository`, `SettingsRepository`, `LikedSongsRepository`,
 `RecentlyPlayedRepository`, `LyricsRepository`, `RemoteImageRepository`,
-`PlaybackPersistenceRepository`.
+`PlaybackPersistenceRepository`, `PlaylistRepository`.
 
 `PlaylistRepository` and `LikedSongsRepository` are separate domain contracts but share one Data
 coordinator. The reserved favorites collection is exposed as `PlaylistKind.FAVORITES`, so Domain
