@@ -1,0 +1,36 @@
+<resources>
+    <plurals name="playlist_track_count">
+        <item quantity="one">%d brano</item>
+        <item quantity="other">%d brani</item>
+    </plurals>
+
+    <plurals name="library_track_count">
+        <item quantity="one">%d brano</item>
+        <item quantity="many">%d brani</item>
+        <item quantity="other">%d brani</item>
+    </plurals>
+
+    <plurals name="library_album_count">
+        <item quantity="one">%d album</item>
+        <item quantity="many">%d album</item>
+        <item quantity="other">%d album</item>
+    </plurals>
+
+    <plurals name="library_disc_count">
+        <item quantity="one">%d disco</item>
+        <item quantity="many">%d dischi</item>
+        <item quantity="other">%d dischi</item>
+    </plurals>
+
+    <plurals name="library_lossless_track_count">
+        <item quantity="one">%d brano lossless</item>
+        <item quantity="many">%d brani lossless</item>
+        <item quantity="other">%d brani lossless</item>
+    </plurals>
+
+    <plurals name="player_queue_song_count">
+        <item quantity="one">%d brano</item>
+        <item quantity="many">%d brani</item>
+        <item quantity="other">%d brani</item>
+    </plurals>
+</resources>

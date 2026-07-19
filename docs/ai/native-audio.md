@@ -1,0 +1,223 @@
+# Native Audio — C++/JNI, FFmpeg, libusb, DSD/DoP
+
+> Part of the Audiophile AI guide. Start at [`/AGENTS.md`](../../AGENTS.md).
+> Kotlin-side orchestration is in [`playback.md`](playback.md). Platform ceilings and
+> the rationale behind every constraint here are in
+> [`/docs/BIT_PERFECT_LIMITATIONS.md`](../BIT_PERFECT_LIMITATIONS.md) — read it before
+> changing anything in this layer.
+
+The native layer (`app/src/main/cpp/`) is the heart of bit-perfect playback. It is
+C++17, built with CMake, and exposed to Kotlin via JNI. **Audio correctness is
+load-bearing here** — a careless change silently degrades sound quality without a
+compile error.
+
+---
+
+## Pipeline (Step-15 architecture)
+
+Legacy `AudioTrack` output is severed from the FFmpeg decode path. Decoded PCM/DSD now
+flows:
+
+```
+FfmpegAudioDecoder (IAudioDecoder)
+   └─ DecoderToRingBridge (pump thread)
+        └─ SpscRingBuffer
+             └─ IsoTransferPool ISO callback → USB DAC (libusb UAC2)
+```
+
+When an app-owned PCM enhancement is active, the transport branch is:
+
+```
+FFmpegDecoder → SUE / Hi-Res / explicit SoXR (Kotlin-owned loop, float32)
+   └─ EngineSwapBridge.nativeWriteToRingBuffer
+        └─ finite clamp + direct-USB volume + S32LE packing
+             └─ SpscRingBuffer → IsoTransferPool → USB DAC (libusb UAC2)
+```
+
+A seek that exists before the pump attaches (track reload from a settings
+toggle, resume after idle-sink release) must be applied with
+`nativeSeekUsbDecoder` **before** `nativeAttachUsbEngine`: the attach pre-fills
+the ring from the decoder's current position and the ring is never cleared, so
+a post-attach seek audibly replays the start of the track before jumping to the
+target. Both `LibusbPcmAudioSink.play()` and `LibusbDsdAudioSink.play()` follow
+this order.
+
+`nativeStartPlayback()` prepares the ring and event thread but does not submit PCM
+transfers into an empty ring. The native decoder-pump route submits after its prefill;
+the enhanced writer submits after its first real-audio push. The enhanced selector
+must negotiate an exact Type-I PCM four-byte subslot. The writer honours the
+endpoint's advertised valid-bit resolution (for example 24-in-32) by clearing low
+padding bits. The endpoint selector returns both `bSubslotSize` and
+`bBitResolution` to Kotlin so telemetry reports the post-DSP USB precision rather
+than the decoder's original source depth. It must never copy raw IEEE-float bytes
+into an integer UAC endpoint.
+
+Key source files:
+- `i_audio_decoder.h` — pure C++ decoder interface.
+- `ffmpeg_session.h` — the single non-JNI FFmpeg session API. Both output engines
+  delegate open/read/seek/close to this boundary.
+- `ffmpeg_audio_decoder.{h,cpp}` — thin `IAudioDecoder` adapter over `FfmpegSession`.
+- `ffmpeg_bridge.cpp` / `ffmpeg_bridge_stub.cpp` — full vs. stub JNI bridge (see below).
+- `cpu_affinity_policy.{h,cpp}` — decode-load classification (host-testable) and
+  CPU cluster pinning / priority for the decode thread.
+- `decoder_to_ring_bridge.{h,cpp}` — pump thread (decoder → ring buffer).
+- `audio_gain.h` — the single quadratic UI-position → gain taper shared by the
+  decoder pump (`set_volume`) and the enhanced float writer
+  (`nativeWriteToRingBuffer`). Never reimplement the taper locally.
+- `usb_handle_validation.h` — shared jlong handle validation (MTE/HWASan-safe
+  tagged-pointer contract) with the per-bridge error-sentinel bounds; the
+  bridges `static_assert` their error codes against it.
+- `jni_global_ref.h` — RAII global-ref holder for native callbacks; releases the
+  ref when the callback object is destroyed, not when it fires (EOF is not
+  guaranteed to fire).
+- `pcm_wire_formatter.{h,cpp}` / `usb_pcm_wire_format.h` — shared PCM gain,
+  quantisation, endpoint-valid-bit rounding, and explicit little-endian packing for
+  both the decoder pump and enhanced writer.
+- `usb_playback_state.{h,cpp}` / `usb_producer_coordinator.{h,cpp}` — legal session
+  transitions and single-producer ownership during start, seek, fallback, and teardown.
+- `spsc_ring_buffer.cpp` — lock-free single-producer/single-consumer buffer.
+- `usb_session_transport.{h,cpp}` — shared ring-buffer + libusb-event-thread
+  bring-up/rollback used by both `nativeStartPlayback` and
+  `nativeStartDsdPlayback` (transfer submission stays per-session).
+- `usb_audio_bridge.cpp`, `usb_device_controller.cpp`, `usb_iso_transfer_pool.cpp`,
+  `usb_teardown.cpp`, `libusb_event_thread.cpp` — libusb UAC2 transfer + lifecycle.
+- `uac2_descriptor_parser.cpp`, `uac2_dsd_detector.cpp` — UAC2 parsing + DSD capability.
+- `uac2_clock_control.{h,cpp}` — the ONLY encoder of the UAC2 SET_CUR clock
+  transfer (bmRequestType `0x21`, Interface recipient), plus Clock Source
+  discovery and the ranked clock-ID probing used at session setup. Every clock
+  transfer (setup, DSD switch, teardown soft-reset) must go through it.
+- `dop_formatter.cpp`, `native_dsd_formatter.cpp`, `dsd_playback_manager.cpp` —
+  DoP encoding, native DSD_U32LE formatting, and native-DSD→DoP automatic fallback.
+- `engine_swap_bridge.cpp` — JNI for `ACTION_USB_DEVICE_ATTACHED` hot-plug engine swap
+  and the enhanced float32-to-S32LE direct-ring writer.
+- `sue_bridge.cpp` — JNI implementation of the Sonic Upscaling Enhancer (SUE): builds an
+  `libavfilter` lavfi graph (≥2× oversampled harmonic excitation tuned near the codec's
+  expected low-pass cutoff, high-band contouring, stereo widening gated to
+  AGGRESSIVE/MODERATE profiles only, soft low-pass, true-peak limiter, anti-alias
+  downsample back to the target carrier) for lossy-compressed sources only. The
+  intensity matrix lives both here (`PROFILE_MATRIX`) and in `SueProfileResolver.kt` —
+  keep them in sync. Kotlin counterpart is `SueBridge`/`SueStage` — see
+  [`playback.md`](playback.md).
+
+The Kotlin counterparts live in `data/playback/native_/` (`FFmpegDecoder`,
+`AudioTrackSink`, `DsdPipelineInfo`, `PipelinePathReport`, …) and
+`data/playback/usb/`.
+
+Raw DSD seeks use a two-stage exact-position contract: `av_seek_frame` first
+lands on the preceding DSF/DSDIFF packet boundary, then `ffmpeg_bridge.cpp`
+converts the remaining timestamp delta to channel-aligned DSD bytes and trims
+that prefix from the first normalized post-seek spill. Do not remove the trim or
+seek accuracy will regress to the container block size.
+
+### Native ownership and state model
+
+`UsbDriverContext` is the session aggregate and owns the libusb handle, transfer
+pool, ring, event thread, playback-state machine, producer coordinator, and optional
+DSD fallback manager. Ownership is one-way: JNI entry points borrow the context;
+the context owns transport resources; `UsbProducerCoordinator` holds the sole
+non-owning producer pointer and is shared with that producer only to make detach safe.
+
+The legal happy paths are:
+
+```
+Created → Configured → Priming → StreamingPcm
+Created → Configured → Priming → StreamingNativeDsd
+Created → Configured → Priming → StreamingDop
+StreamingNativeDsd → SwitchingToDop → Priming → StreamingDop
+any live state → Stopping → Stopped
+```
+
+Illegal cross-mode transitions fail closed. Teardown first quiesces the producer,
+then drains/cancels transfers, joins the event thread, and only then destroys the
+pool/ring/libusb resources.
+
+### PCM volume and wire precision
+
+The UI supplies a position in `[0, 1]`; native code applies one quadratic taper
+(`gain = position²`). There is no hidden pre-amplifier. At position `1.0`, integer
+PCM follows an exact integer-only unity path.
+
+`PcmWireFormatter` is the only PCM-to-USB quantisation boundary:
+
+- S16 is widened before gain. Under attenuation, precision is retained in the low
+  bits of the 32-bit USB subslot instead of being requantised to `int16_t`.
+- S32 and float enhanced output use the same rounding, clamp, valid-bit mask, and
+  explicit little-endian writer.
+- A 24-valid-bit endpoint clears only its eight declared padding bits; a 32-valid-bit
+  endpoint retains all available attenuation precision.
+- Buffer shape and capacity are validated before any destination byte is written.
+
+Full volume can therefore be sample-exact for an unprocessed PCM path. Software
+attenuation is not mathematically bit-perfect relative to the source, but it is
+performed once at the maximum precision the negotiated DAC container exposes.
+
+### DSD transport selection and fallback
+
+DoP-only DACs start directly in DoP with the correct `DSD bit rate / 16` carrier;
+they no longer provoke a Native DSD STALL as a mode-selection mechanism. When both
+targets exist, Native DSD starts at `DSD bit rate / 32`. A detected early STALL:
+
+1. stops and joins the sole decoder producer;
+2. drains all ISO callbacks before touching the ring or pool;
+3. allocates a new transfer pool for the DoP endpoint at exactly twice the native
+   USB frame rate and validates endpoint microframe bandwidth;
+4. switches alt-setting, replaces the drained pool, seeds valid marker-bearing DoP
+   silence, and restarts the same producer in DoP mode;
+5. updates the state machine and Kotlin telemetry only after submissions succeed.
+
+Incomplete DSD input frames are carried into the next decoder read; no tail bytes
+are silently discarded. DoP marker phase is chained across every formatted chunk.
+
+---
+
+## Build (CMake — `app/src/main/cpp/CMakeLists.txt`)
+
+- **Two-mode build, by feature detection:**
+  - If `app/src/main/jniLibs/<ABI>/libavformat.so` exists → the **full bridge** compiles
+    (FFmpeg + Step-15 + USB sources), linking `avformat avcodec avfilter swresample
+    avutil libusb`.
+  - Otherwise → the **stub** (`ffmpeg_bridge_stub.cpp`) compiles so the APK still
+    assembles; decoding fails at runtime with a clear `FFmpegDecoderException`.
+- **ABIs shipped:** `arm64-v8a`, `armeabi-v7a`, `x86_64` (set in `app/build.gradle.kts`).
+- **STL:** `c++_shared`, `-std=c++17`, hidden visibility, function/data sections.
+  Release adds `-O3 -flto`. Warnings: `-Wall -Wextra -Werror=return-type`.
+- **SoX resampler is embedded in FFmpeg** (`--enable-libsoxr`) and used via the lavfi
+  `aresample=...:resampler=soxr:precision=33` graph. There is **no** separate soxr JNI
+  bridge — resampling lives inside the decoder's lavfi graph.
+- **Single Source of Truth layout:** shared libs → `jniLibs/<ABI>/lib<name>.so`,
+  headers → `cpp/include/` (ABI-agnostic). Drop `.so` files in and rebuild; CMake
+  auto-detects.
+
+> The `prebuilt/` FFmpeg tree is intentionally **excluded from version control**. CI is
+> expected to rebuild FFmpeg from pinned sources (audio-only config) so upstream
+> security patches are tracked. See `app/src/main/cpp/prebuilt/README.md`.
+
+---
+
+## Rules for native changes
+
+- ✅ **Keep the data path sample-exact.** No hidden resampling, gain, dithering, or
+  channel remap on the bit-perfect/USB path beyond the explicitly intended FFmpeg lavfi
+  stages (SoX resample when a rate change is genuinely required; SUE only for lossy).
+- ✅ **Match the existing DSD discipline.** DSD framing (DoP vs. native DSD_U32LE,
+  bit-order per DAC) is subtle; follow `dsd_playback_manager` / `native_dsd_formatter`
+  and the comments there. Wrong framing produces loud noise on real hardware.
+- ✅ **Respect the cold-boot / teardown sequences** for USB endpoints
+  (`usb_teardown.cpp`, the ISO cold-boot logic) — they exist to avoid
+  `LIBUSB_ERROR_BUSY` and audible glitches on first play / device re-attach.
+- ✅ Keep JNI signatures in sync on both sides; update the Kotlin `native_`/`usb`
+  classes when you change an `extern "C"` entry point.
+- ✅ Add host-side tests under `cpp/tests/` for pure wire-format/state logic. Run
+  them with ASan+UBSan as well as the Android CMake build.
+- ✅ Treat direct transport and bit-perfect content as separate facts: SUE, Hi-Res
+  Dynamic Remaster, and explicit resampling modify samples even though libusb still
+  bypasses AudioFlinger.
+- ✅ Log through the Android `log` lib with the established path tags; keep diagnostics
+  rich (this layer is hard to debug on-device) but don't log full file paths/URIs.
+- ❌ Don't add new third-party native deps without updating CMake's SSoT layout and the
+  ABI list, and confirming licensing.
+- ❌ Don't reintroduce ExoPlayer offload or a parallel output path.
+
+When you change this layer, update [`playback.md`](playback.md),
+[`/docs/BIT_PERFECT_LIMITATIONS.md`](../BIT_PERFECT_LIMITATIONS.md) (if a limitation
+changes), and the CMake header comment if the source set changes.

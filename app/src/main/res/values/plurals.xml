@@ -1,0 +1,36 @@
+<resources>
+    <plurals name="playlist_track_count">
+        <item quantity="one">%d track</item>
+        <item quantity="other">%d tracks</item>
+    </plurals>
+
+    <plurals name="playlist_unavailable_track_count">
+        <item quantity="one">%d unavailable track</item>
+        <item quantity="other">%d unavailable tracks</item>
+    </plurals>
+
+    <plurals name="library_track_count">
+        <item quantity="one">%d track</item>
+        <item quantity="other">%d tracks</item>
+    </plurals>
+
+    <plurals name="library_album_count">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+
+    <plurals name="library_disc_count">
+        <item quantity="one">%d disc</item>
+        <item quantity="other">%d discs</item>
+    </plurals>
+
+    <plurals name="library_lossless_track_count">
+        <item quantity="one">%d lossless track</item>
+        <item quantity="other">%d lossless tracks</item>
+    </plurals>
+
+    <plurals name="player_queue_song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+</resources>

@@ -1,0 +1,52 @@
+# Gradle, Kotlin, and generated build output
+.gradle/
+.kotlin/
+**/build/
+captures/
+*.log
+hs_err_pid*
+
+# Android SDK and machine-local configuration
+local.properties
+
+# Signing keys and credentials
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+keystore.properties
+secrets.properties
+service-account*.json
+firebase-adminsdk*.json
+google-services.json
+.env
+.env.*
+!.env.example
+
+# Android native build output
+.externalNativeBuild/
+.cxx/
+
+# IDE and editor state
+.idea/
+*.iml
+.vscode/
+.fleet/
+.claude/
+.codex/
+.agents/
+
+# Local project-planning notes
+/docs/COREUI_REFACTORING_PLAN.md
+
+# Packaged application artifacts
+*.apk
+*.aab
+*.apks
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

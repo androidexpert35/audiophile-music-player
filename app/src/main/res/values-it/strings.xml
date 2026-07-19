@@ -1,0 +1,454 @@
+<resources>
+    <string name="app_name">Audiophile Music Player</string>
+
+    <!-- Common -->
+    <string name="common_unknown">Sconosciuto</string>
+    <string name="common_bullet_prefixed_text">• %1$s</string>
+    <string name="common_hd_badge">HD</string>
+
+    <!-- Error strings used by BaseViewModel -->
+    <string name="error_unexpected_title">Errore imprevisto</string>
+    <string name="error_unknown_fallback_message">Qualcosa è andato storto. Riprova.</string>
+    <string name="error_unknown_title">Errore sconosciuto</string>
+    <string name="error_unknown_message">Si è verificato un errore sconosciuto.</string>
+    <string name="error_generic_title">Errore</string>
+    <string name="error_generic_fallback_message">Si è verificato un errore. Riprova.</string>
+    <string name="error_storage_title">Errore di archiviazione</string>
+    <string name="error_storage_message">Impossibile accedere alla tua libreria musicale. Verifica i permessi.</string>
+    <string name="error_playback_title">Errore di riproduzione</string>
+    <string name="error_playback_message">Si è verificato un errore durante la riproduzione audio.</string>
+    <string name="error_database_title">Errore del database</string>
+    <string name="error_validation_title">Errore di validazione</string>
+    <string name="error_service_title">Errore del servizio</string>
+    <string name="error_network_title">Errore di rete</string>
+    <string name="error_network_message">Impossibile raggiungere il servizio remoto. Controlla la connessione e riprova.</string>
+
+    <!-- Base Screen / Dialog -->
+    <string name="ok">OK</string>
+    <string name="error_icon_cd">Icona di errore</string>
+    <string name="loading_label">Stiamo preparando il tuo spazio d’ascolto…</string>
+    <string name="loading_secondary_label">Stiamo perfezionando l’esperienza</string>
+    <string name="action_explore_player">Esplora il lettore</string>
+    <string name="action_close">Chiudi</string>
+
+    <!-- Onboarding / Media Indexing -->
+    <string name="onboarding_permission_title">Consenti ad Audiophile di leggere la tua libreria locale</string>
+    <string name="onboarding_permission_message">Concedi l’accesso alla libreria audio così l’app potrà analizzare il dispositivo una sola volta, creare un indice locale veloce e rendere fluida la navigazione durante la riproduzione.</string>
+    <string name="onboarding_permission_action">Concedi accesso alla libreria</string>
+    <string name="onboarding_scanning_title">Indicizzazione della tua libreria ad alta risoluzione…</string>
+    <string name="onboarding_scanning_message">Stiamo analizzando l’audio locale e memorizzando album, artisti e brani per offrirti una navigazione più rapida.</string>
+    <string name="onboarding_scanning_progress">%1$d%% completato</string>
+    <string name="onboarding_scanning_preparing">Stiamo preparando il tuo catalogo locale…</string>
+    <string name="onboarding_completed_title">Libreria pronta</string>
+    <string name="onboarding_completed_message">La tua raccolta è stata indicizzata ed è pronta per l’esperienza di ascolto principale.</string>
+    <string name="onboarding_retry_action">Riprova l’indicizzazione</string>
+
+    <!-- Search -->
+    <string name="search_placeholder">Artisti, album, brani…</string>
+    <string name="search_clear_content_description">Cancella ricerca</string>
+    <string name="search_idle_title">Trova la tua musica</string>
+    <string name="search_idle_message">Cerca in tutti gli artisti, gli album e i brani della tua libreria locale.</string>
+    <string name="search_no_results_title">Nessun risultato</string>
+    <string name="search_no_results_message">Prova con un titolo, un artista o un album diverso.</string>
+    <string name="search_songs_section_label">Brani</string>
+    <string name="search_section_count_badge">(%1$d)</string>
+    <string name="search_playback_empty_queue">Nessun brano riproducibile corrisponde alla tua ricerca.</string>
+
+    <!-- Player Screen — Content Descriptions -->
+    <string name="cd_album_art">Copertina dell’album %1$s</string>
+    <string name="cd_toggle_favorite">Attiva o disattiva preferito</string>
+    <string name="cd_share_track">Condividi brano</string>
+    <string name="cd_more_options">Altre opzioni</string>
+    <string name="cd_shuffle">Riproduzione casuale</string>
+    <string name="cd_skip_previous">Vai al brano precedente</string>
+    <string name="cd_play">Riproduci</string>
+    <string name="cd_pause">Pausa</string>
+    <string name="cd_skip_next">Vai al brano successivo</string>
+    <string name="cd_repeat">Ripeti</string>
+    <string name="cd_audio_info">Dettagli sulla qualità audio</string>
+    <string name="cd_open_playback_queue">Apri la coda di riproduzione</string>
+    <string name="cd_open_track_destinations">Apri album e artista del brano</string>
+    <string name="cd_open_lossy_restorer_info">Apri le informazioni su Lossy Restorer</string>
+    <string name="cd_open_hires_remaster_info">Apri le informazioni su Hi-Res Remaster</string>
+
+    <!-- Audio Telemetry Dialog -->
+    <string name="dialog_audio_details_title">Dettagli audio</string>
+    <string name="dialog_audio_details_subtitle">Sorgente → motore → uscita</string>
+    <string name="telemetry_section_source_signal">Percorso segnale</string>
+    <string name="telemetry_section_source">Sorgente file</string>
+    <string name="telemetry_section_engine">Motore Audiophile</string>
+    <string name="telemetry_section_signal">Percorso del segnale</string>
+    <string name="telemetry_section_hardware">Hardware</string>
+    <string name="telemetry_section_output_path">Percorso di uscita</string>
+    <string name="telemetry_section_wireless_output">Uscita Bluetooth</string>
+    <string name="telemetry_section_session">Sessione</string>
+    <string name="telemetry_signal_path">Percorso segnale</string>
+    <string name="telemetry_source_details">Dettagli file</string>
+    <string name="telemetry_output_details">Dettagli tecnici</string>
+    <string name="telemetry_source_quality">Qualità sorgente</string>
+    <string name="telemetry_source_resolution">Risoluzione</string>
+    <string name="telemetry_source_channels">Canali</string>
+    <string name="telemetry_source_bitrate">Bitrate codificato</string>
+    <string name="telemetry_source_lossless">Lossless</string>
+    <string name="telemetry_source_lossy">Lossy</string>
+    <string name="telemetry_pipeline_source">Sorgente</string>
+    <string name="telemetry_pipeline_engine">Motore</string>
+    <string name="telemetry_pipeline_audiophile_engine">Motore audiophile</string>
+    <string name="telemetry_pipeline_android_engine">Android</string>
+    <string name="telemetry_pipeline_decoder">Decoder</string>
+    <string name="telemetry_pipeline_processing">DSP</string>
+    <string name="telemetry_pipeline_output">Uscita</string>
+    <string name="telemetry_pipeline_engine_output">Uscita del motore</string>
+    <string name="telemetry_pipeline_sent_to_android">Inviato ad Android</string>
+    <string name="telemetry_pipeline_sent_to_dac">Inviato direttamente al DAC</string>
+    <string name="telemetry_bluetooth_audio">Audio Bluetooth</string>
+    <string name="telemetry_system_managed">Gestito dal sistema</string>
+    <string name="telemetry_bluetooth_summary">Audiophile invia %1$s ad Android. Il sistema può adattare il segnale alla connessione Bluetooth attiva.</string>
+    <string name="telemetry_output_device_fallback">Uscita audio</string>
+    <string name="telemetry_current_output">Uscita attuale</string>
+    <string name="telemetry_output_bit_perfect_confirmed">Bit-perfect confermato</string>
+    <string name="telemetry_output_direct">Uscita diretta</string>
+    <string name="telemetry_output_direct_review">Diretta, non garantita</string>
+    <string name="telemetry_output_android_managed">Gestita da Android</string>
+    <string name="telemetry_output_checking">Verifica in corso</string>
+    <string name="telemetry_output_bit_perfect_explanation">Il segnale raggiunge l’uscita senza conversioni da parte dell’app o del mixer Android.</string>
+    <string name="telemetry_output_direct_explanation">Il dispositivo ha accettato direttamente il formato nativo, ma la riproduzione bit-perfect non è confermata.</string>
+    <string name="telemetry_output_direct_review_explanation">L’uscita diretta è attiva, ma l’elaborazione del dispositivo potrebbe comunque modificare il segnale.</string>
+    <string name="telemetry_output_android_managed_explanation">Il segnale passa attraverso il mixer Android e può essere adattato all’uscita attiva.</string>
+    <string name="telemetry_output_checking_explanation">Audiophile è in attesa che Android comunichi il percorso di uscita attivo.</string>
+    <string name="telemetry_pipeline_passthrough">Passthrough</string>
+    <string name="telemetry_pipeline_native_decode">Decode nativo</string>
+    <string name="telemetry_pipeline_dsd_transport">Trasporto DSD</string>
+    <string name="telemetry_pipeline_pcm_output">Uscita PCM</string>
+    <string name="telemetry_processing_lossy_restorer">Lossy Audio Restorer</string>
+    <string name="telemetry_processing_hires_remaster">Hi-Res Dynamic Remaster</string>
+    <string name="telemetry_processing_off">Spento</string>
+    <string name="telemetry_processing_armed">Abilitato / in attesa</string>
+    <string name="telemetry_processing_bypassed">Bypassato</string>
+    <string name="telemetry_processing_unavailable">Non disponibile</string>
+    <string name="telemetry_processing_active">In elaborazione</string>
+    <string name="telemetry_lossy_restorer_processing">Ricostruzione di armoniche e spazialità per questa sorgente lossy.</string>
+    <string name="telemetry_lossy_restorer_armed_lossless">Abilitato, ma in attesa di una sorgente lossy. Questo file lossless resta intatto.</string>
+    <string name="telemetry_lossy_restorer_bypassed_profile">Abilitato, ma il profilo codec/bitrate è già pulito e bypassa il restauro.</string>
+    <string name="telemetry_lossy_restorer_off">Disabilitato o non disponibile per il motore di riproduzione attuale.</string>
+    <string name="telemetry_hires_remaster_processing">Oversampling e remaster dinamico di questa sorgente lossless.</string>
+    <string name="telemetry_hires_remaster_armed_lossy">Abilitato, ma in attesa di una sorgente lossless. I file lossy usano il restorer.</string>
+    <string name="telemetry_hires_remaster_armed_hires">Abilitato, ma questa sorgente è già hi-res nativa o instradata senza elaborazione.</string>
+    <string name="telemetry_hires_remaster_off">Disabilitato o non disponibile per il motore di riproduzione attuale.</string>
+    <string name="telemetry_stage_profile">Profilo: %1$s</string>
+    <string name="telemetry_stage_codec">Codec: %1$s</string>
+    <string name="telemetry_output_sample_rate">Campionamento</string>
+    <string name="telemetry_output_bit_depth">Profondità in bit</string>
+    <string name="telemetry_codec">Codec</string>
+    <string name="telemetry_dsd_source_format">Formato sorgente</string>
+    <string name="telemetry_dsd_rate">Frequenza DSD</string>
+    <string name="telemetry_dsd_output_mode">Uscita DSD</string>
+    <string name="telemetry_dsd_effective_rate">Frequenza effettiva</string>
+    <string name="telemetry_dop_pcm_rate">Frequenza PCM DoP</string>
+    <string name="telemetry_bitrate">Bitrate</string>
+    <string name="telemetry_offload">Offload HW</string>
+    <string name="telemetry_direct_playback">Percorso diretto</string>
+    <string name="telemetry_bit_perfect">Bit-perfect</string>
+    <string name="telemetry_buffer">Buffer</string>
+    <string name="telemetry_session_id">ID sessione</string>
+    <string name="telemetry_resampler">Resampler</string>
+    <string name="telemetry_resampler_sox">SoXR VHQ Max</string>
+    <string name="telemetry_resampler_android_system">Sistema Android</string>
+    <string name="telemetry_resampler_native">Nativo</string>
+    <string name="telemetry_active">Attivo</string>
+    <string name="telemetry_active_unconfirmed">Ativo (verifica)</string>
+    <string name="telemetry_inactive">Non attivo</string>
+    <string name="telemetry_unavailable">—</string>
+    <string name="telemetry_dop_carrier">DSD —> PCM</string>
+    <string name="telemetry_resampled_dsd_note">La sorgente DSD è stata decodificata in PCM 88.2 kHz / 32-bit perché nessun trasporto DSD/DoP bit-perfect era disponibile sull\'uscita attiva.</string>
+    <string name="telemetry_advanced_title">Diagnostica avanzata</string>
+    <string name="telemetry_advanced_supporting">Controlla i passaggi usati per valutare la riproduzione bit-perfect.</string>
+    <string name="telemetry_advanced_summary_confirmed">Confermato</string>
+    <string name="telemetry_advanced_summary_review">Verifica</string>
+    <string name="telemetry_diagnostic_engine_audiophile">Motore audiophile attivo</string>
+    <string name="telemetry_diagnostic_direct_path_confirmed">Percorso diretto confermato</string>
+    <string name="telemetry_diagnostic_direct_usb_bypass">Bypass diretto DAC USB</string>
+    <string name="telemetry_diagnostic_audioflinger_bypassed">AudioFlinger Android ignorato</string>
+    <string name="telemetry_diagnostic_mixer_routing_active">Routing mixer Android attivo</string>
+    <string name="telemetry_diagnostic_mixer_requirement_satisfied">Requisito mixer soddisfatto</string>
+    <string name="telemetry_diagnostic_no_float_fallback">Nessun fallback PCM_FLOAT</string>
+    <string name="telemetry_diagnostic_sample_rate_match">Diagnostica frequenza di campionamento</string>
+    <string name="telemetry_diagnostic_sample_rate_supporting">Negoziato: %1$s • Nativo: %2$s</string>
+    <string name="telemetry_diagnostic_unavailable">Non disponibile</string>
+    <string name="telemetry_diagnostic_advanced">Dettagli avanzati</string>
+    <string name="telemetry_diagnostic_routing_tier">Routing</string>
+    <string name="telemetry_diagnostic_output_device">Dispositivo di uscita</string>
+    <string name="telemetry_path_status_bit_perfect">Bit-Perfect Diretto</string>
+    <string name="telemetry_path_status_direct">Diretto</string>
+    <string name="telemetry_path_status_oem_warning">Diretto (Rischio DSP OEM)</string>
+    <string name="telemetry_path_status_resampled">Ricampionato</string>
+    <string name="telemetry_path_status_unknown">Sconosciuto</string>
+    <string name="cd_expand_advanced_diagnostics">Espandi diagnostica avanzata</string>
+    <string name="cd_collapse_advanced_diagnostics">Comprimi diagnostica avanzata</string>
+
+    <!-- Sonic Upscaling Enhancer (SUE) — Motore Lossy -->
+    <string name="settings_sue_title">Lossy Audio Restoration</string>
+    <string name="settings_sue_disabled_description">Disabilitato — attivalo per ricostruire le armoniche e la spazialità perse durante la compressione lossy.</string>
+    <string name="settings_sue_enabled_lossy_description">Attivo — ricostruzione di armoniche e spazialità per l\'audio compresso in corso.</string>
+    <string name="settings_sue_enabled_lossless_description">Abilitato, ma inattivo — i file lossless vengono riprodotti senza miglioramento lossy.</string>
+    <string name="settings_sue_enabled_idle_description">Ricostruisce le armoniche e la spazialità perse durante la compressione lossy.</string>
+    <string name="settings_sue_enabled_bypass_description">Attivo, ma la sorgente attuale non necessita di miglioramenti.</string>
+    <string name="settings_sue_unavailable_description">Abilitato, ma non disponibile — questa build non ha potuto inizializzare la pipeline SUE nativa.</string>
+    <string name="settings_sue_status_codec">Codec sorgente: %1$s</string>
+    <string name="settings_sue_status_profile">Profilo: %1$s</string>
+    <string name="dialog_lossy_restorer_title">Come funziona: Lossy Restorer</string>
+    <string name="dialog_lossy_restorer_body">La compressione lossy (MP3, AAC, Opus…) elimina in modo permanente i dettagli ad alta frequenza e può restringere l\'immagine stereo per risparmiare spazio. Questo motore non usa "magie IA": è DSP puramente matematico che adatta la propria intensità ai danni reali causati dal codec e dal bitrate della sorgente:\n\n• Sintetizza le armoniche ad alta frequenza mancanti.\n• Allarga il campo stereo sulle sorgenti più compresse, dove è più collassato.\n• Attenua gli artefatti di intermodulazione con un filtro morbido, poi chiude con un limiter true-peak che mantiene ogni fase priva di clipping.\n\nI file lossy puliti e ad alto bitrate richiedono poca o nessuna elaborazione e vengono esclusi automaticamente — così come i file lossless, per preservare la riproduzione bit-perfect.</string>
+
+    <!-- Hi-Res Dynamic Remaster — Motore Lossless -->
+    <string name="settings_hires_remaster_title">Hi-Res Dynamic Remaster</string>
+    <string name="settings_hires_remaster_enabled_description">Espande delicatamente la dinamica e sovracampiona le sorgenti lossless fino a 96kHz; le tracce già hi-res restano intatte.</string>
+    <string name="settings_hires_remaster_disabled_description">Hi-Res Dynamic Remaster è disabilitato.</string>
+    <string name="dialog_hires_remaster_title">Come funziona: Hi-Res Remaster</string>
+    <string name="dialog_hires_remaster_body">La musica moderna è spesso iper-compressa in studio per suonare più forte (Loudness War), sacrificando l\'impatto dinamico. Questo motore agisce solo sulle sorgenti lossless (FLAC, ALAC, WAV…) che non sono già hi-res native — quelle restano completamente intatte. Sulle tracce idonee funziona come una catena di mastering:\n\n• Applica un\'espansione dinamica delicata ai transienti — mai compressione — così i colpi di batteria e i picchi recuperano fino a ~2,5dB dell\'impatto appiattito dal mastering moderno, mentre i passaggi più quieti restano intatti.\n• Sovracampiona la sorgente (44,1→88,2kHz o 48→96kHz) per dare all\'espansione e al limiter lo spazio per lavorare in modo pulito.\n• Chiude con un limiter true-peak che impedisce il clipping tra l\'espansione e il sovracampionamento, con un guadagno iniziale regolato automaticamente in base al picco reale della traccia.\n\nI file lossy non sono interessati da questo motore — passano invece dal Restorer.</string>
+    <string name="dialog_btn_understood">Capito</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_player">Lettore</string>
+    <string name="nav_search">Cerca</string>
+    <string name="nav_library">Libreria</string>
+    <string name="nav_settings">Impostazioni</string>
+    <string name="nav_riproduttore">Lettore</string>
+    <string name="nav_notifiche">Notifiche</string>
+    <string name="nav_cerca">Cerca</string>
+    <string name="nav_impostazioni">Impostazioni</string>
+
+    <!-- Settings -->
+    <string name="settings_section_general">General</string>
+    <string name="settings_section_smart_effects">Audio Effects</string>
+    <string name="settings_section_usb_settings">USB Audio Settings</string>
+    <string name="settings_audiophile_mode_title">Modalità audiophile</string>
+    <string name="settings_audiophile_mode_enabled_description">Pipeline bit-perfect con FFmpeg + AudioTrack. Massima fedeltà, con un maggiore consumo di CPU e batteria.</string>
+    <string name="settings_audiophile_mode_disabled_description">Pipeline standard ExoPlayer. Minore uso della CPU e maggiore autonomia; il routing bit-perfect è disattivato.</string>
+    <string name="settings_audiophile_mode_switching_enabled">Passaggio alla modalità audiophile… la posizione di riproduzione verrà mantenuta.</string>
+    <string name="settings_audiophile_mode_switching_disabled">Passaggio alla modalità standard… la posizione di riproduzione verrà mantenuta.</string>
+    <string name="settings_audiophile_toggle_error_fallback">Impossibile cambiare motore di riproduzione in questo momento. Riprova.</string>
+    <!-- SoX Resampler -->
+    <string name="settings_sox_title">Resampler SoX VHQ</string>
+    <string name="settings_sox_enabled_description">Campionamento software di alta qualità alla frequenza nativa del DAC. Aumenta il carico CPU; viene bypassato quando le frequenze di ingresso e uscita coincidono già.</string>
+    <string name="settings_sox_disabled_description">Il resampling software è disattivato. La pipeline trasmette i campioni alla loro frequenza originale senza alcuna conversione aggiuntiva.</string>
+    <string name="settings_sox_not_provisioned">libsoxr non è stata inclusa in questa build. Il resampling software non è disponibile.</string>
+    <string name="settings_sox_status_active">Attivo: %1$s kHz → %2$s kHz</string>
+    <string name="settings_sox_status_passthrough">Passthrough — le frequenze di ingresso e uscita coincidono (%1$s kHz)</string>
+    <string name="settings_sox_status_idle">In attesa — nessun brano caricato</string>
+    <string name="settings_sox_quality">Qualità: %1$s</string>
+
+    <string name="settings_usb_device_title">DAC USB</string>
+    <string name="settings_usb_device_none">Nessun DAC USB compatibile collegato</string>
+    <string name="settings_usb_device_active">DAC USB attivo</string>
+    <string name="settings_usb_device_passthrough_active">Tutto funziona correttamente. La musica è attualmente riprodotta tramite questo DAC in modalità passthrough.</string>
+    <string name="settings_usb_device_ready">L\'uscita USB diretta è pronta. Il motore audiophile è attivo su questo DAC.</string>
+    <string name="settings_usb_device_permission_required">Questo DAC è collegato, ma è ancora necessaria l\'autorizzazione di Android prima di avviare la riproduzione USB diretta.</string>
+    <string name="settings_usb_device_not_supported">DAC USB collegato, ma non è possibile utilizzare l\'engine Audiophile la riproduzione USB diretta. La riproduzione avverrà quindi attraverso Android, che potrebbe comunque instradarsi verso il DAC USB.</string>
+    <string name="settings_usb_device_connected">È collegato un DAC compatibile. Attiva l\'audio USB diretto oppure concedi l\'autorizzazione per usarlo.</string>
+    <string name="settings_usb_device_disconnected">Collega un DAC USB class-compliant per abilitare la riproduzione USB diretta.</string>
+    <string name="settings_usb_request_permission">Concedi accesso USB</string>
+    <string name="settings_usb_refresh">Cerca dispositivi USB</string>
+    <string name="settings_usb_refreshing">Caricamento…</string>
+    <string name="settings_dsd_section_title">Riproduzione DSD</string>
+    <string name="settings_dsd_output_mode_label">Modalità di uscita DSD rilevata</string>
+    <string name="settings_dsd_output_mode_native">DSD nativo</string>
+    <string name="settings_dsd_output_mode_dop">DoP</string>
+    <string name="settings_dsd_output_mode_unsupported">Non supportato</string>
+    <string name="settings_dsd_output_mode_native_supporting">Trasporto nativo disponibile fino a %1$s.</string>
+    <string name="settings_dsd_output_mode_dop_supporting">Carrier DoP disponibile fino a %1$s PCM.</string>
+    <string name="settings_dsd_output_mode_unsupported_supporting">Il percorso di uscita attivo non può trasportare DSD nativo e non espone un carrier DoP ad alta frequenza.</string>
+    <string name="settings_dsd256_dop_note">DSD256 DoP richiede un carrier PCM a 705,6 kHz. Quando il DAC corrente non supporta questa frequenza, l’app riduce DSD256 a DSD128 prima del DoP e segnala il cambiamento nei dettagli della pipeline di riproduzione.</string>
+
+    <!-- Audio Output Control -->
+    <string name="cd_audio_output_control">Controllo uscita audio</string>
+    <string name="cd_playback_viz_bars">Barre di visualizzazione della riproduzione</string>
+
+    <!-- App Top Bar -->
+    <string name="cd_navigate_back">Torna indietro</string>
+
+    <!-- Mini Player -->
+    <string name="cd_mini_player">In riproduzione: %1$s di %2$s. Tocca per espandere.</string>
+
+    <!-- Player Screen -->
+    <string name="player_now_playing">In riproduzione</string>
+    <string name="player_queue_position">Coda %1$d di %2$d</string>
+    <string name="player_queue_unknown">Coda pronta</string>
+    <string name="player_playback_panel_title">Controlli di riproduzione</string>
+    <string name="player_queue_action">Coda</string>
+    <string name="player_go_to_action">Vai a</string>
+    <string name="player_queue_dialog_title">Coda di riproduzione</string>
+    <string name="player_queue_empty_message">Al momento non ci sono brani in coda.</string>
+    <string name="player_go_to_dialog_title">Vai a</string>
+    <string name="player_go_to_dialog_message">Scegli una destinazione per %1$s.</string>
+    <string name="player_go_to_album_title">Album</string>
+    <string name="player_go_to_artist_title">Artista</string>
+    <string name="player_empty_title">Non è ancora in riproduzione alcuna musica</string>
+    <string name="player_empty_message">Avvia un brano dalla tua libreria per visualizzare qui copertina, dettagli della coda e controlli di riproduzione evoluti.</string>
+    <string name="player_queue_sheet_title">Coda di riproduzione</string>
+    <string name="player_queue_empty_title">La coda è vuota</string>
+    <string name="player_queue_empty_supporting">Riproduci un brano o un album per iniziare una coda.</string>
+    <string name="player_queue_section_now_playing">In riproduzione</string>
+    <string name="player_queue_section_coming_up">Prossimi brani</string>
+    <string name="player_queue_now_playing_content_description">In riproduzione</string>
+    <string name="player_queue_edit_content_description">Modifica la coda di riproduzione</string>
+    <string name="player_queue_finish_edit_content_description">Termina la modifica della coda</string>
+    <string name="player_queue_reorder_handle_content_description">Trascina per riordinare il brano in coda</string>
+
+    <!-- Playback Fallback Messages -->
+    <string name="playback_failed">Riproduzione non riuscita</string>
+    <string name="shuffle_playback_failed">Riproduzione casuale non riuscita</string>
+    <string name="playback_command_failed">Comando di riproduzione non riuscito</string>
+    <string name="start_playback_failed">Impossibile avviare la riproduzione</string>
+    <string name="liked_songs_update_failed">Impossibile aggiornare i brani preferiti</string>
+
+    <!-- Library Screen -->
+    <string name="library_title">Libreria</string>
+    <string name="library_subtitle">Esplora ogni brano, album e artista indicizzato in un unico catalogo locale.</string>
+    <string name="library_tracks_section_label">Brani</string>
+    <string name="library_playlists_section_label">Playlist</string>
+    <string name="library_albums_section_label">Album</string>
+    <string name="library_artists_section_label">Artisti</string>
+    <string name="library_favorites_title">Brani preferiti</string>
+    <string name="cd_like_track">Aggiungi ai preferiti</string>
+    <string name="cd_unlike_track">Rimuovi dai preferiti</string>
+    <string name="library_empty_liked_songs_title">Ancora nessun brano preferito</string>
+    <string name="library_empty_liked_songs_message">Tocca l’icona a cuore su un brano per aggiungerlo qui.</string>
+    <string name="library_empty_recently_played_title">Nessuna riproduzione recente</string>
+    <string name="library_empty_recently_played_message">Inizia a riprodurre musica e la cronologia apparirà qui.</string>
+    <string name="library_sort_recently_played">Riprodotti di recente</string>
+    <string name="library_sort_recently_added">Aggiunti di recente</string>
+    <string name="library_sort_alphabetical">Alfabetico</string>
+    <string name="cd_library_profile_icon">Profilo</string>
+    <string name="cd_search_library">Cerca nella libreria</string>
+    <string name="cd_refresh_library">Aggiorna libreria</string>
+    <string name="cd_add_to_library">Aggiungi alla libreria</string>
+    <string name="cd_change_sort_order">Cambia ordinamento</string>
+    <string name="cd_toggle_library_view_mode">Cambia modalità di visualizzazione</string>
+    <string name="library_empty_playlists_title">Ancora nessuna playlist</string>
+    <string name="library_empty_playlists_message">Crea una playlist per raccogliere i brani che ami.</string>
+    <string name="playlist_create_title">Crea playlist</string>
+    <string name="playlist_create_description">Dai un nome alla tua playlist</string>
+    <string name="playlist_name_label">Nome playlist</string>
+    <string name="playlist_picker_title">Aggiungi alla playlist</string>
+    <string name="playlist_picker_empty">Crea una playlist prima di aggiungervi dei brani.</string>
+    <string name="playlist_add_track_action">Aggiungi alla playlist</string>
+    <string name="track_play_next_action">Riproduci come prossimo</string>
+    <string name="track_add_to_queue_action">Aggiungi alla coda</string>
+    <string name="track_go_to_album_action">Vai all\'album</string>
+    <string name="track_go_to_artist_action">Vai all\'artista</string>
+    <string name="track_queued_next_success">“%1$s” verrà riprodotto come prossimo</string>
+    <string name="track_added_to_queue_success">“%1$s” aggiunto alla coda</string>
+    <string name="cd_track_more_options">Opzioni brano</string>
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Annulla</string>
+    <string name="library_search_tracks_placeholder">Cerca brani</string>
+    <string name="library_search_tracks_supporting">La ricerca dei brani considera titolo, artista e metadati dell’album.</string>
+    <string name="library_search_results_title">Risultati della ricerca</string>
+    <string name="library_search_results_summary">%1$d brani corrispondenti per “%2$s”</string>
+    <string name="library_empty_collection_title">La tua libreria è pronta per la musica</string>
+    <string name="library_empty_collection_message">Quando l’indice del dispositivo conterrà file audio, questa schermata mostrerà qui ogni brano, album e artista.</string>
+    <string name="library_empty_tracks_title">Nessun brano disponibile</string>
+    <string name="library_empty_tracks_message">I brani audio indicizzati appariranno qui non appena la tua libreria locale conterrà musica.</string>
+    <string name="library_empty_albums_title">Nessun album disponibile</string>
+    <string name="library_empty_albums_message">Gli album della tua raccolta indicizzata appariranno qui quando i metadati audio saranno disponibili.</string>
+    <string name="library_empty_artists_title">Nessun artista disponibile</string>
+    <string name="library_empty_artists_message">Gli artisti della tua raccolta indicizzata appariranno qui quando i metadati audio saranno disponibili.</string>
+    <string name="library_empty_search_title">Nessun brano corrispondente</string>
+    <string name="library_empty_search_message">Prova con un altro titolo del brano, nome dell’artista o titolo dell’album.</string>
+    <string name="library_playback_empty_queue">Questa selezione non contiene ancora brani riproducibili.</string>
+    <string name="library_playback_album_unavailable">Impossibile trovare brani riproducibili per %1$s.</string>
+    <string name="cd_open_library_settings">Apri impostazioni libreria</string>
+    <string name="cd_clear_library_search">Cancella ricerca nella libreria</string>
+    <string name="album_overview_not_found_title">Album non disponibile</string>
+    <string name="album_overview_not_found_message">Impossibile caricare l’album selezionato dalla libreria indicizzata.</string>
+    <string name="album_overview_empty_tracks_title">Nessun brano in questo album</string>
+    <string name="album_overview_empty_tracks_message">Questo album al momento non espone brani riproducibili nell’indice locale.</string>
+    <string name="album_overview_play_album_label">Riproduci album</string>
+    <string name="album_overview_album_info_title">Panoramica album</string>
+    <string name="album_overview_track_list_title">Elenco brani</string>
+    <string name="album_overview_now_playing_label">In riproduzione</string>
+    <string name="album_overview_fact_duration">Durata</string>
+    <string name="album_overview_fact_storage">Archiviazione</string>
+    <string name="album_overview_fact_discs">Dischi</string>
+    <string name="album_overview_fact_formats">Formati</string>
+    <string name="album_overview_fact_quality">Qualità migliore</string>
+    <string name="album_overview_fact_lossless">Lossless</string>
+    <string name="album_overview_fact_year">Anno</string>
+    <string name="artist_overview_back_content_description">Indietro</string>
+    <string name="artist_overview_play_artist_label">Riproduci artista</string>
+    <string name="artist_overview_info_title">Panoramica artista</string>
+    <string name="artist_overview_track_list_title">Brani</string>
+    <string name="artist_overview_not_found_title">Artista non disponibile</string>
+    <string name="artist_overview_not_found_message">Impossibile caricare l’artista selezionato (%1$s) dalla libreria indicizzata.</string>
+    <string name="artist_overview_empty_tracks_title">Nessun brano per questo artista</string>
+    <string name="artist_overview_empty_tracks_message">Questo artista al momento non espone brani riproducibili nell’indice locale.</string>
+    <string name="artist_overview_fact_albums">Album</string>
+    <string name="artist_overview_fact_tracks">Brani</string>
+    <string name="artist_overview_fact_duration">Durata</string>
+    <string name="artist_overview_fact_formats">Formati</string>
+    <string name="artist_overview_fact_quality">Qualità migliore</string>
+    <string name="artist_overview_fact_lossless">Lossless</string>
+    <string name="artist_description_popular_tracks_title">Brani popolari</string>
+    <string name="artist_description_albums_title">Album</string>
+    <string name="artist_description_appears_on_title">Compare in</string>
+    <string name="artist_description_play_label">Riproduci</string>
+    <string name="artist_description_shuffle_label">Casuale</string>
+    <string name="artist_description_follow_label">Preferiti</string>
+    <string name="artist_description_following_label">Nei preferiti</string>
+    <string name="artist_description_back_content_description">Indietro</string>
+    <string name="artist_description_shuffle_content_description">Riproduci artista in modo casuale</string>
+    <string name="artist_description_not_found_message">Nessun brano trovato per l’artista: %1$s.</string>
+    <string name="artist_description_empty_tracks_title">Nessun brano per questo artista</string>
+    <string name="artist_description_empty_tracks_message">Questo artista non espone brani riproducibili nell’indice locale.</string>
+    <string name="album_detail_download_content_description">Scarica album per la riproduzione offline</string>
+    <string name="album_detail_more_options_content_description">Opzioni album</string>
+    <string name="album_detail_track_more_options_content_description">Opzioni brano</string>
+    <string name="album_detail_now_playing_content_description">In riproduzione</string>
+    <string name="album_detail_shuffle_content_description">Riproduci album in modo casuale</string>
+    <string name="album_queued_next_success">Album in riproduzione successiva: %1$s</string>
+    <string name="album_added_to_queue_success">Album aggiunto alla coda: %1$s</string>
+    <string name="playlist_album_added_success">“%1$s” aggiunto a “%2$s”</string>
+    <string name="library_disc_label">Disco %1$d</string>
+    <string name="library_track_number_label">#%1$d</string>
+
+    <!-- Library / Player Formatters -->
+    <string name="format_file_size_bytes">%1$d %2$s</string>
+    <string name="format_file_size_scaled">%1$.1f %2$s</string>
+    <string name="format_duration_minutes_short">%1$d min</string>
+    <string name="format_quality_sample_rate_bit_depth">%1$.1f kHz • %2$d-bit</string>
+    <string name="format_quality_sample_rate">%1$.1f kHz</string>
+    <string name="format_quality_bit_depth">%1$d-bit</string>
+    <string name="unit_byte_abbreviation">B</string>
+    <string name="unit_kilobyte_abbreviation">KB</string>
+    <string name="unit_megabyte_abbreviation">MB</string>
+    <string name="unit_gigabyte_abbreviation">GB</string>
+    <string name="unit_terabyte_abbreviation">TB</string>
+
+    <!-- Placeholder Screens -->
+    <string name="placeholder_library_eyebrow">La tua raccolta</string>
+    <string name="placeholder_library_title">La libreria, ripensata per un ascolto profondo</string>
+    <string name="placeholder_library_message">Esplora album, artisti e brani in una vista del catalogo più ricca. Questa destinazione è pronta per il prossimo ciclo di sviluppo.</string>
+    <string name="placeholder_search_eyebrow">Scopri più rapidamente</string>
+    <string name="placeholder_search_title">La ricerca sta ricevendo un restyling evoluto</string>
+    <string name="placeholder_search_message">Presto potrai passare tra brani, album e artisti con un’esperienza di ricerca raffinata, pensata per grandi librerie locali.</string>
+    <string name="placeholder_settings_eyebrow">Ottimizza la tua configurazione</string>
+    <string name="placeholder_settings_title">Le impostazioni porteranno i controlli più vicino a te</string>
+    <string name="placeholder_settings_message">Preferenze audio, dettagli di uscita e controlli della libreria saranno disponibili qui in un layout Material 3 più pulito.</string>
+    <string name="placeholder_chip_material3">Material 3 Expressive</string>
+    <string name="placeholder_chip_audiophile">Pronto per gli audiofili</string>
+    <string name="placeholder_chip_in_progress">In corso</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_playback">Riproduzione Audiophile</string>
+
+    <!-- Lyrics -->
+    <string name="player_lyrics_action">Testo</string>
+    <string name="cd_open_lyrics">Vedi testo</string>
+    <string name="lyrics_loading">Caricamento testo…</string>
+    <string name="lyrics_not_found">Testo non disponibile per questo brano.</string>
+    <string name="lyrics_instrumental">Questo brano è solo strumentale.</string>
+    <string name="lyrics_retry">Ricarica</string>
+    <string name="lyrics_fetch_failed">Impossibile caricare il testo. Riprova.</string>
+    <string name="lyrics_plain_text_label">Plain lyrics</string>
+    <string name="lyrics_music_placeholder">♪</string>
+</resources>
