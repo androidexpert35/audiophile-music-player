@@ -101,9 +101,10 @@ private fun PlayerContent(model: PlayerUiModel, onEvent: (PlayerUiEvent) -> Unit
 - `TrackOptionsMenu` owns the shared play-next, add-to-queue, and optional
   add-to-playlist menu used by track rows. `TrackReorderState` owns the leading-handle
   drag gesture shared by playlist editing and the active queue editor.
-- The favorites collection uses the normal playlist row, picker, navigation, detail, playback,
-  and editing pipeline. `PlaylistArtwork` is the shared preview boundary: standard playlists
-  render a cover mosaic, while `PlaylistKind.FAVORITES` renders the reserved gradient heart.
+- The favorites collection uses the normal playlist row, navigation, detail, playback, and editing
+  pipeline, but is excluded from the add-to-playlist picker because likes are changed through heart
+  actions. `PlaylistArtwork` is the shared preview boundary: standard playlists render a cover
+  mosaic, while `PlaylistKind.FAVORITES` renders the reserved gradient heart.
 
 ---
 

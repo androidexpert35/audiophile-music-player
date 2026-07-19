@@ -11,8 +11,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  * @property tracks Ordered track list belonging to the album.
  * @property currentPlayingTrackId Identifier of the track currently loaded in playback
  *   when it belongs to this album; used to highlight the active row.
- * @property isLiked Whether the user has locally toggled the liked / saved state for
- *   this album. Resets when the ViewModel is cleared (no persistence layer yet).
+ * @property isLiked Whether every indexed track in this album belongs to the persisted
+ *   liked-songs collection.
  * @property totalDurationMs Combined duration of all album tracks in milliseconds.
  * @property totalSizeBytes Combined on-disk size of all album tracks in bytes.
  * @property discCount Number of discs represented by the album track list.

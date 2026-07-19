@@ -6,6 +6,7 @@ import com.androidexpert35.audiophilemusicplayer.TestStringResolver
 import com.androidexpert35.audiophilemusicplayer.TestUiErrorMapper
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.domain.model.playback.PlaybackState
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Album
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
@@ -17,11 +18,13 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToQueue
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTracksNextUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetTracksLikedUseCase
 import com.tony.coreui.data.strings.CoreUiStringProvider
 import com.tony.coreui.domain.resource.Resource
 import io.mockk.coEvery
@@ -35,9 +38,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -53,6 +56,8 @@ class AlbumOverviewViewModelTest {
     private val getTracksUseCase = mockk<GetTracksUseCase>()
     private val playTrackUseCase = mockk<PlayTrackUseCase>()
     private val observePlaybackStateUseCase = mockk<ObservePlaybackStateUseCase>()
+    private val observeLikedSongIdsUseCase = mockk<ObserveLikedSongIdsUseCase>()
+    private val setTracksLikedUseCase = mockk<SetTracksLikedUseCase>()
     private val observePlaylistsUseCase = mockk<ObservePlaylistsUseCase>()
     private val addTrackToPlaylistUseCase = mockk<AddTrackToPlaylistUseCase>()
     private val addTracksToPlaylistUseCase = mockk<AddTracksToPlaylistUseCase>()
@@ -74,9 +79,10 @@ class AlbumOverviewViewModelTest {
         sampleTrack(id = 2L, number = 2)
     )
     private val playlist = Playlist(
-        id = "favorites.m3u",
-        name = "Favorites",
-        trackUris = emptyList()
+        id = "road-trip.m3u",
+        name = "Road Trip",
+        trackUris = emptyList(),
+        kind = PlaylistKind.STANDARD
     )
 
     @Before
@@ -137,8 +143,38 @@ class AlbumOverviewViewModelTest {
         assertTrue(viewModel.uiState.value.data?.playlistPickerTracks?.isEmpty() == true)
     }
 
-    private fun stubLoadedAlbum() {
+    @Test
+    fun `given album is not fully liked when heart selected then every track is liked`() = runTest {
+        stubLoadedAlbum(likedIds = setOf(tracks.first().id))
+        coEvery {
+            setTracksLikedUseCase.invoke(tracks.map(Track::id), true)
+        } returns Resource.Success(Unit)
+        val viewModel = createViewModel()
+        initialize(viewModel)
+
+        assertEquals(false, viewModel.uiState.value.data?.isLiked)
+        viewModel.onEvent(AlbumOverviewUiEvent.ToggleLike)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            setTracksLikedUseCase.invoke(tracks.map(Track::id), true)
+        }
+        assertTrue(viewModel.uiState.value.data?.isLiked == true)
+    }
+
+    @Test
+    fun `given every album track is liked when album loads then album heart is selected`() = runTest {
+        stubLoadedAlbum(likedIds = tracks.mapTo(mutableSetOf(), Track::id))
+        val viewModel = createViewModel()
+
+        initialize(viewModel)
+
+        assertTrue(viewModel.uiState.value.data?.isLiked == true)
+    }
+
+    private fun stubLoadedAlbum(likedIds: Set<Long> = emptySet()) {
         every { observePlaybackStateUseCase.invoke() } returns flowOf(PlaybackState.IDLE)
+        every { observeLikedSongIdsUseCase.invoke() } returns flowOf(likedIds)
         every { observePlaylistsUseCase.invoke() } returns flowOf(listOf(playlist))
         coEvery { getAlbumsUseCase.invoke() } returns Resource.Success(listOf(album))
         coEvery { getArtistsUseCase.invoke() } returns Resource.Success(
@@ -159,6 +195,8 @@ class AlbumOverviewViewModelTest {
         getTracksUseCase = getTracksUseCase,
         playTrackUseCase = playTrackUseCase,
         observePlaybackStateUseCase = observePlaybackStateUseCase,
+        observeLikedSongIdsUseCase = observeLikedSongIdsUseCase,
+        setTracksLikedUseCase = setTracksLikedUseCase,
         observePlaylistsUseCase = observePlaylistsUseCase,
         addTrackToPlaylistUseCase = addTrackToPlaylistUseCase,
         addTracksToPlaylistUseCase = addTracksToPlaylistUseCase,

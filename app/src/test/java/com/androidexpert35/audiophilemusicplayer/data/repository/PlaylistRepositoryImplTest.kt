@@ -90,6 +90,35 @@ class PlaylistRepositoryImplTest {
     }
 
     @Test
+    fun `given partially liked album when album is liked then every track joins favorites`() = runTest {
+        val first = trackEntity(id = 21L, uri = "content://tracks/21")
+        val second = trackEntity(id = 22L, uri = "content://tracks/22")
+        val currentRows = listOf(LikedSongEntity(trackId = first.id, likedAt = 1L))
+        stubContext()
+        coEvery { libraryIndexDao.getTracksByIds(listOf(first.id, second.id)) } returns
+            listOf(first, second)
+        coEvery { libraryIndexDao.getTracksByIds(listOf(first.id)) } returns listOf(first)
+        coEvery { likedSongDao.getLikedSongs() } returns currentRows
+        coEvery { likedSongDao.replaceLikedSongs(any()) } returns Unit
+
+        val result = repository(testScheduler).setTracksLiked(
+            trackIds = listOf(first.id, second.id),
+            isLiked = true
+        )
+
+        assertTrue(result is Resource.Success)
+        assertEquals(
+            listOf(first.contentUri, second.contentUri),
+            favoritesFile().readLines().filterNot { line -> line.isBlank() || line.startsWith("#") }
+        )
+        coVerify(exactly = 1) {
+            likedSongDao.replaceLikedSongs(
+                match { rows -> rows.map(LikedSongEntity::trackId) == listOf(first.id, second.id) }
+            )
+        }
+    }
+
+    @Test
     fun `given favorite detail order saved then Room order mirrors M3U order`() = runTest {
         val first = trackEntity(id = 1L, uri = "content://tracks/1")
         val second = trackEntity(id = 2L, uri = "content://tracks/2")

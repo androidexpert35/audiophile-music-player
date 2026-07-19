@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.PlaylistArtwork
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.PlaylistUiModel
 
@@ -48,6 +49,7 @@ fun PlaylistPickerDialog(
     onDismiss: () -> Unit,
     onPlaylistSelected: (String) -> Unit
 ) {
+    val destinations = playlists.selectablePlaylistDestinations()
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
@@ -60,7 +62,7 @@ fun PlaylistPickerDialog(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 PlaylistPickerHeader(onDismiss = onDismiss)
-                if (playlists.isEmpty()) {
+                if (destinations.isEmpty()) {
                     PlaylistPickerEmptyState()
                 } else {
                     LazyColumn(
@@ -69,7 +71,7 @@ fun PlaylistPickerDialog(
                             .heightIn(max = 400.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(playlists, key = PlaylistUiModel::id) { playlist ->
+                        items(destinations, key = PlaylistUiModel::id) { playlist ->
                             PlaylistPickerItem(
                                 playlist = playlist,
                                 onClick = { onPlaylistSelected(playlist.id) }
@@ -89,6 +91,10 @@ fun PlaylistPickerDialog(
         }
     }
 }
+
+/** Excludes app-managed collections from user-selectable playlist destinations. */
+internal fun List<PlaylistUiModel>.selectablePlaylistDestinations(): List<PlaylistUiModel> =
+    filter { playlist -> playlist.kind == PlaylistKind.STANDARD }
 
 /** Renders the title, guidance, and close control for the destination selector. */
 @Composable

@@ -13,11 +13,13 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToQueue
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTracksNextUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetTracksLikedUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.common.PlaybackStrings
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.common.computeAudioStats
@@ -48,6 +50,8 @@ import javax.inject.Inject
  * @property getTracksUseCase Retrieves indexed tracks used to build the album queue.
  * @property playTrackUseCase Starts playback from a selected album track.
  * @property observePlaybackStateUseCase Observes the active playback snapshot for now-playing highlighting.
+ * @property observeLikedSongIdsUseCase Streams persisted liked membership for album-heart state.
+ * @property setTracksLikedUseCase Applies one liked status to every track in the album.
  * @property observePlaylistsUseCase Streams target playlists for the track action selector.
  * @property addTrackToPlaylistUseCase Appends a selected album track to an M3U playlist.
  * @property addTracksToPlaylistUseCase Appends the complete album to an M3U playlist in one update.
@@ -63,6 +67,8 @@ class AlbumOverviewViewModel @Inject constructor(
     private val getTracksUseCase: GetTracksUseCase,
     private val playTrackUseCase: PlayTrackUseCase,
     private val observePlaybackStateUseCase: ObservePlaybackStateUseCase,
+    private val observeLikedSongIdsUseCase: ObserveLikedSongIdsUseCase,
+    private val setTracksLikedUseCase: SetTracksLikedUseCase,
     private val observePlaylistsUseCase: ObservePlaylistsUseCase,
     private val addTrackToPlaylistUseCase: AddTrackToPlaylistUseCase,
     private val addTracksToPlaylistUseCase: AddTracksToPlaylistUseCase,
@@ -79,9 +85,12 @@ class AlbumOverviewViewModel @Inject constructor(
     uiErrorMapper = uiErrorMapper
 ) {
 
+    private var likedSongIds: Set<Long> = emptySet()
+
     init {
         updateUiData(AlbumOverviewUiModel())
         observePlaybackState()
+        observeLikedSongs()
         observePlaylists()
     }
 
@@ -277,6 +286,17 @@ class AlbumOverviewViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /** Keeps the album heart aligned with the persisted liked state of every album track. */
+    private fun observeLikedSongs() {
+        observeLikedSongIdsUseCase()
+            .onEach { likedIds ->
+                likedSongIds = likedIds
+                val model = uiState.value.data ?: return@onEach
+                updateUiData(model.copy(isLiked = model.tracks.areAllLiked(likedIds)))
+            }
+            .launchIn(viewModelScope)
+    }
+
     /**
      * Loads album metadata and its ordered track list from the indexed library.
      *
@@ -399,14 +419,33 @@ class AlbumOverviewViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Toggles the in-memory liked state for this album.
-     *
-     * The liked state is not persisted beyond the ViewModel lifetime.
-     */
+    /** Sets every album track to the same persisted liked status. */
     private fun toggleLike() {
         val model = uiState.value.data ?: return
-        updateUiData(model.copy(isLiked = !model.isLiked))
+        if (model.tracks.isEmpty()) return
+
+        val shouldBeLiked = !model.isLiked
+        val trackIds = model.tracks.map(Track::id)
+        viewModelScope.launch(exceptionHandler) {
+            setTracksLikedUseCase(trackIds, shouldBeLiked).fold(
+                onSuccess = {
+                    likedSongIds = if (shouldBeLiked) {
+                        likedSongIds + trackIds
+                    } else {
+                        likedSongIds - trackIds.toSet()
+                    }
+                    val current = uiState.value.data ?: return@fold
+                    updateUiData(current.copy(isLiked = current.tracks.areAllLiked(likedSongIds)))
+                },
+                onError = { error ->
+                    emitEffect(
+                        AlbumOverviewUiEffect.PlaybackError(
+                            error?.toUserMessage() ?: resolveString(R.string.liked_songs_update_failed)
+                        )
+                    )
+                }
+            )
+        }
     }
 
     /**
@@ -434,6 +473,7 @@ class AlbumOverviewViewModel @Inject constructor(
             album = album,
             tracks = tracks,
             currentPlayingTrackId = currentPlayingTrackId?.takeIf { id -> tracks.any { it.id == id } },
+            isLiked = tracks.areAllLiked(likedSongIds),
             totalDurationMs = tracks.sumOf { it.durationMs },
             totalSizeBytes = tracks.sumOf { it.fileSizeBytes },
             discCount = tracks.maxOfOrNull { it.discNumber.coerceAtLeast(1) } ?: 0,
@@ -447,3 +487,7 @@ class AlbumOverviewViewModel @Inject constructor(
         )
     }
 }
+
+/** Returns true only when a non-empty album is represented entirely in liked songs. */
+private fun List<Track>.areAllLiked(likedSongIds: Set<Long>): Boolean =
+    isNotEmpty() && all { track -> track.id in likedSongIds }

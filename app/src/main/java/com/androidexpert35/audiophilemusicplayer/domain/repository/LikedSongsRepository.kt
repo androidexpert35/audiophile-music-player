@@ -41,4 +41,16 @@ interface LikedSongsRepository {
      * @return [Resource.Success] on a successful write, [Resource.Error] otherwise.
      */
     suspend fun toggleLike(trackId: Long): Resource<Unit>
+
+    /**
+     * Sets the liked status of an ordered group of local tracks in one coordinated update.
+     *
+     * Existing liked tracks remain in their current position when liking a partially liked
+     * collection, while newly liked tracks are appended in the supplied order.
+     *
+     * @param trackIds Stable MediaStore identifiers of the tracks to update.
+     * @param isLiked Whether every supplied track should belong to the liked-songs collection.
+     * @return [Resource.Success] on a successful write, [Resource.Error] otherwise.
+     */
+    suspend fun setTracksLiked(trackIds: List<Long>, isLiked: Boolean): Resource<Unit>
 }

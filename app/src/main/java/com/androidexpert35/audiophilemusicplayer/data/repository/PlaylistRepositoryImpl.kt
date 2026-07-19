@@ -221,6 +221,58 @@ class PlaylistRepositoryImpl @Inject constructor(
         }
     }
 
+    /** @see LikedSongsRepository.setTracksLiked */
+    override suspend fun setTracksLiked(
+        trackIds: List<Long>,
+        isLiked: Boolean
+    ): Resource<Unit> = withContext(ioDispatcher) {
+        mutationMutex.withLock {
+            runCatching {
+                val requestedIds = trackIds.distinct()
+                require(requestedIds.isNotEmpty()) { "Select at least one track to update." }
+
+                val tracksById = libraryIndexDao.getTracksByIds(requestedIds)
+                    .associateBy { track -> track.id }
+                check(requestedIds.all(tracksById::containsKey)) {
+                    "One or more selected tracks are no longer present in the local library."
+                }
+
+                val currentRows = likedSongDao.getLikedSongs()
+                synchronizeFavoritesFile(currentRows.map(LikedSongEntity::trackId))
+                val requestedIdSet = requestedIds.toSet()
+                val currentUris = currentFavoritesUris()
+
+                if (isLiked) {
+                    val existingIds = currentRows.mapTo(mutableSetOf(), LikedSongEntity::trackId)
+                    val missingIds = requestedIds.filterNot(existingIds::contains)
+                    if (missingIds.isNotEmpty()) {
+                        val firstLikedAt = nextLikedAt(currentRows)
+                        val desiredRows = currentRows + missingIds.mapIndexed { index, id ->
+                            LikedSongEntity(trackId = id, likedAt = firstLikedAt + index)
+                        }
+                        val missingUris = missingIds.map { id -> tracksById.getValue(id).contentUri }
+                        val desiredUris = currentUris + missingUris.filterNot(currentUris::contains)
+                        persistFavorites(desiredRows, desiredUris)
+                    }
+                } else {
+                    val desiredRows = currentRows.filterNot { row -> row.trackId in requestedIdSet }
+                    if (desiredRows.size != currentRows.size) {
+                        val requestedUris = requestedIds
+                            .mapTo(mutableSetOf()) { id -> tracksById.getValue(id).contentUri }
+                        val desiredUris = currentUris.filterNot(requestedUris::contains)
+                        persistFavorites(desiredRows, desiredUris)
+                    }
+                }
+            }.fold(
+                onSuccess = {
+                    publishPlaylistChange()
+                    Resource.Success(Unit)
+                },
+                onFailure = { error -> Resource.Error(storageOrDatabaseError(error)) }
+            )
+        }
+    }
+
     /** Appends unique liked tracks and persists the resulting playlist/Room snapshot together. */
     private suspend fun appendFavorites(tracks: List<Track>) {
         val currentRows = likedSongDao.getLikedSongs()

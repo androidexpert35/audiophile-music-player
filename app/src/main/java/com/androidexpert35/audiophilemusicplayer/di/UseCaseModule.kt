@@ -56,6 +56,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemaster
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetRepeatModeUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetShuffleModeUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetTracksLikedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SkipNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SkipPreviousUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ToggleLikeSongUseCase
@@ -368,6 +369,12 @@ object UseCaseModule {
     fun provideToggleLikeSongUseCase(
         likedSongsRepository: LikedSongsRepository
     ): ToggleLikeSongUseCase = ToggleLikeSongUseCase(likedSongsRepository)
+
+    /** Provides [SetTracksLikedUseCase] for atomic collection-level liked updates. */
+    @Provides
+    fun provideSetTracksLikedUseCase(
+        likedSongsRepository: LikedSongsRepository
+    ): SetTracksLikedUseCase = SetTracksLikedUseCase(likedSongsRepository)
 
     /**
      * Provides [ObserveLikedSongIdsUseCase] backed by [LikedSongsRepository].
