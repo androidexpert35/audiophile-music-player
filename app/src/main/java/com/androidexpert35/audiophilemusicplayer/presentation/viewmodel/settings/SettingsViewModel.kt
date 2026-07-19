@@ -106,25 +106,24 @@ class SettingsViewModel @Inject constructor(
         observeAudioTelemetryUseCase()
             .onEach { telemetry ->
                 val current = uiState.value.data ?: return@onEach
-                val isUsbPassthroughActive = telemetry.isUsbPassthroughActive()
+                val isUsbPlaybackActive = telemetry.isUsbPlaybackActive()
                 setSuccessState(
                     current.copy(
                         sueStatus = telemetry.sueStatus,
-                        isUsbPassthroughPlaybackActive = isUsbPassthroughActive,
+                        isUsbPlaybackActive = isUsbPlaybackActive,
                         activeUsbPlaybackDeviceName = telemetry.bitPerfectDiagnostics
                             ?.activeDeviceName
-                            ?.takeIf { isUsbPassthroughActive },
+                            ?.takeIf { isUsbPlaybackActive },
                     )
                 )
             }
             .launchIn(viewModelScope)
     }
 
-    private fun AudioTelemetry.isUsbPassthroughActive(): Boolean =
+    private fun AudioTelemetry.isUsbPlaybackActive(): Boolean =
         isAudiophileEngineActive &&
             streamInfo !is OutputStreamInfo.Unknown &&
-            bitPerfectDiagnostics?.outputRouteKind == OutputRouteKind.USB &&
-            !isSoxrActive
+            bitPerfectDiagnostics?.outputRouteKind == OutputRouteKind.USB
 
     override fun handleEvent(event: SettingsUiEvent) {
         when (event) {

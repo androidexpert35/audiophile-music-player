@@ -21,8 +21,9 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStat
  * Card showing the currently connected USB DAC and permission state.
  *
  * @param status Current direct USB audio readiness snapshot.
- * @param isPassthroughPlaybackActive Whether playback telemetry confirms that
- *   the audiophile pipeline is actively sending passthrough audio to USB.
+ * @param isUsbPlaybackActive Whether playback telemetry confirms that the
+ *   audiophile pipeline is actively sending audio to USB, whether processed or
+ *   unprocessed.
  * @param activePlaybackDeviceName Runtime USB device name reported by
  *   telemetry, used when discovery state is stale.
  * @param isRefreshInProgress Whether a manual USB rescan is currently running.
@@ -33,25 +34,24 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStat
 @Composable
 fun UsbDeviceInfoCard(
     status: UsbAudioStatus,
-    isPassthroughPlaybackActive: Boolean,
+    isUsbPlaybackActive: Boolean,
     activePlaybackDeviceName: String?,
     isRefreshInProgress: Boolean,
     onRefresh: () -> Unit,
     onRequestPermission: () -> Unit,
 ) {
     val title = activePlaybackDeviceName
-        ?.takeIf { isPassthroughPlaybackActive }
+        ?.takeIf { isUsbPlaybackActive }
         ?: status.activeDeviceName
         ?: stringResource(
-            if (isPassthroughPlaybackActive) {
+            if (isUsbPlaybackActive) {
                 R.string.settings_usb_device_active
             } else {
                 R.string.settings_usb_device_none
             }
         )
     val supportingText = when {
-        isPassthroughPlaybackActive ->
-            stringResource(R.string.settings_usb_device_passthrough_active)
+        isUsbPlaybackActive -> stringResource(R.string.settings_usb_device_playback_active)
         status.isDirectOutputReady -> stringResource(R.string.settings_usb_device_ready)
         status.isDeviceConnected && status.isPermissionGranted && !status.isDirectUsbTransportSupported ->
             stringResource(R.string.settings_usb_device_not_supported)
@@ -92,7 +92,7 @@ fun UsbDeviceInfoCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!status.isDeviceConnected && !isPassthroughPlaybackActive) {
+                if (!status.isDeviceConnected && !isUsbPlaybackActive) {
                     OutlinedButton(
                         onClick = onRefresh,
                         enabled = !isRefreshInProgress,

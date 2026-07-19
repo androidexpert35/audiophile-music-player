@@ -240,7 +240,7 @@
     <string name="settings_usb_device_title">DAC USB</string>
     <string name="settings_usb_device_none">Nessun DAC USB compatibile collegato</string>
     <string name="settings_usb_device_active">DAC USB attivo</string>
-    <string name="settings_usb_device_passthrough_active">Tutto funziona correttamente. La musica è attualmente riprodotta tramite questo DAC in modalità passthrough.</string>
+    <string name="settings_usb_device_playback_active">Tutto funziona correttamente. La musica è attualmente riprodotta tramite questo DAC.</string>
     <string name="settings_usb_device_ready">L\'uscita USB diretta è pronta. Il motore audiophile è attivo su questo DAC.</string>
     <string name="settings_usb_device_permission_required">Questo DAC è collegato, ma è ancora necessaria l\'autorizzazione di Android prima di avviare la riproduzione USB diretta.</string>
     <string name="settings_usb_device_not_supported">DAC USB collegato, ma non è possibile utilizzare l\'engine Audiophile la riproduzione USB diretta. La riproduzione avverrà quindi attraverso Android, che potrebbe comunque instradarsi verso il DAC USB.</string>

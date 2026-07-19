@@ -240,7 +240,7 @@
     <string name="settings_usb_device_title">USB DAC</string>
     <string name="settings_usb_device_none">No compatible USB DAC connected</string>
     <string name="settings_usb_device_active">USB DAC active</string>
-    <string name="settings_usb_device_passthrough_active">Everything is working correctly. Music is currently playing through this DAC in passthrough mode.</string>
+    <string name="settings_usb_device_playback_active">Everything is working correctly. Music is currently playing through this DAC.</string>
     <string name="settings_usb_device_ready">Direct USB output is ready. The audiophile engine can claim this DAC immediately.</string>
     <string name="settings_usb_device_permission_required">This DAC is connected, but Android permission is still required before direct USB playback can start.</string>
     <string name="settings_usb_device_not_supported">This DAC is connected, but direct USB output path is not possible on this device. Playback can still continue through Android audio output, which may still route to the same USB DAC.</string>

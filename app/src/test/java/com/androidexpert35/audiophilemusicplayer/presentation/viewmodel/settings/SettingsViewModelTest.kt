@@ -1,20 +1,18 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.settings
 
-import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
-
 import app.cash.turbine.test
-import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.FakeNavigationManager
+import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.TestStringResolver
 import com.androidexpert35.audiophilemusicplayer.TestUiErrorMapper
-import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioCodec
+import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.BitPerfectDiagnostics
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputRouteKind
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputStreamInfo
+import com.androidexpert35.audiophilemusicplayer.domain.model.audio.SueStatus
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStatus
-import com.tony.coreui.domain.resource.Resource
-import com.tony.coreui.domain.resource.ResourceError
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
@@ -25,12 +23,14 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioP
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
+import com.tony.coreui.domain.resource.Resource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -133,7 +133,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `given scanner misses dac when telemetry confirms usb passthrough then settings shows active device`() = runTest {
+    fun `given scanner misses dac when telemetry confirms usb playback then settings shows active device`() = runTest {
         stubObservationUseCases()
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -155,12 +155,37 @@ class SettingsViewModelTest {
 
         val model = viewModel.uiState.value.data
         assertFalse(model?.usbAudioStatus?.isDeviceConnected ?: true)
-        assertTrue(model?.isUsbPassthroughPlaybackActive == true)
+        assertTrue(model?.isUsbPlaybackActive == true)
         assertEquals("External USB DAC", model?.activeUsbPlaybackDeviceName)
     }
 
     @Test
-    fun `given usb passthrough stops when telemetry becomes idle then runtime dac fallback is cleared`() = runTest {
+    fun `given lossy restoration is active over usb then settings keeps dac active`() = runTest {
+        assertProcessedUsbPlaybackIsActive(
+            codec = AudioCodec.MP3,
+            sueStatus = SueStatus(
+                isEnabled = true,
+                isActive = true,
+                isLossy = true,
+                isProvisioned = true,
+            )
+        )
+    }
+
+    @Test
+    fun `given hi res remaster is active over usb then settings keeps dac active`() = runTest {
+        assertProcessedUsbPlaybackIsActive(
+            codec = AudioCodec.FLAC,
+            sueStatus = SueStatus(
+                isHiResRemasterEnabled = true,
+                isHiResRemasterActive = true,
+                isProvisioned = true,
+            )
+        )
+    }
+
+    @Test
+    fun `given usb playback stops when telemetry becomes idle then runtime dac fallback is cleared`() = runTest {
         stubObservationUseCases()
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -183,8 +208,37 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         val model = viewModel.uiState.value.data
-        assertFalse(model?.isUsbPassthroughPlaybackActive ?: true)
+        assertFalse(model?.isUsbPlaybackActive ?: true)
         assertNull(model?.activeUsbPlaybackDeviceName)
+    }
+
+    private suspend fun TestScope.assertProcessedUsbPlaybackIsActive(
+        codec: AudioCodec,
+        sueStatus: SueStatus,
+    ) {
+        stubObservationUseCases()
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        telemetryFlow.value = AudioTelemetry(
+            streamInfo = OutputStreamInfo.Pcm(
+                codec = codec,
+                sampleRateHz = 96_000,
+                bitDepth = 32,
+                bitrateKbps = 0,
+            ),
+            bitPerfectDiagnostics = BitPerfectDiagnostics(
+                activeDeviceName = "External USB DAC",
+                outputRouteKind = OutputRouteKind.USB,
+            ),
+            isAudiophileEngineActive = true,
+            sueStatus = sueStatus,
+        )
+        advanceUntilIdle()
+
+        val model = viewModel.uiState.value.data
+        assertTrue(model?.isUsbPlaybackActive == true)
+        assertEquals("External USB DAC", model?.activeUsbPlaybackDeviceName)
     }
 
     private fun stubObservationUseCases() {

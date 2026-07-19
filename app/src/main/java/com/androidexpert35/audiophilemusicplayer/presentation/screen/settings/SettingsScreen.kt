@@ -166,7 +166,7 @@ private fun SettingsContent(
             SettingsSectionHeader(titleRes = R.string.settings_section_usb_settings)
             UsbDeviceInfoCard(
                 status = model.usbAudioStatus,
-                isPassthroughPlaybackActive = model.isUsbPassthroughPlaybackActive,
+                isUsbPlaybackActive = model.isUsbPlaybackActive,
                 activePlaybackDeviceName = model.activeUsbPlaybackDeviceName,
                 isRefreshInProgress = model.isUsbDeviceRefreshInProgress,
                 onRefresh = { onEvent(SettingsUiEvent.RefreshUsbAudioDevices) },
