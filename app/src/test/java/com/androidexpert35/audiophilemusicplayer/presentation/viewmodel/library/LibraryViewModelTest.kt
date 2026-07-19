@@ -6,6 +6,8 @@ import com.androidexpert35.audiophilemusicplayer.FakePlayerOverlayManager
 import com.androidexpert35.audiophilemusicplayer.TestStringResolver
 import com.androidexpert35.audiophilemusicplayer.TestUiErrorMapper
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.tony.coreui.domain.resource.Resource
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Album
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
@@ -263,6 +265,29 @@ class LibraryViewModelTest {
         advanceUntilIdle()
 
         assertEquals(AppRoutes.Settings.route, navigationManager.lastRoute)
+    }
+
+    @Test
+    fun `given favorites playlist when selected then playlist detail opens without starting playback`() = runTest {
+        val favorites = Playlist(
+            id = "favorites.m3u",
+            name = "Liked Songs",
+            trackUris = listOf(tracks.first().uri),
+            kind = PlaylistKind.FAVORITES
+        )
+        stubInitialLibrary()
+        every { observePlaylistsUseCase.invoke() } returns flowOf(listOf(favorites))
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        val playlist = viewModel.uiState.value.data?.playlists?.single()
+
+        viewModel.onEvent(LibraryUiEvent.OpenPlaylistOverview(requireNotNull(playlist)))
+        advanceUntilIdle()
+
+        assertEquals(AppRoutes.playlistOverviewRoute(favorites.id), navigationManager.lastRoute)
+        assertEquals(PlaylistKind.FAVORITES, playlist.kind)
+        coVerify(exactly = 0) { playTrackUseCase.invoke(any(), any()) }
     }
 
     private fun stubInitialLibrary() {

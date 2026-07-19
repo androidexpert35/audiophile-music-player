@@ -84,9 +84,6 @@ sealed interface LibraryUiEvent {
      */
     data class ToggleLikeSong(val track: Track) : LibraryUiEvent
 
-    /** Starts playback of the full liked-songs queue from the first liked track. */
-    data object PlayLikedSongs : LibraryUiEvent
-
     // --- Navigation intents ---
 
     /** Navigate to the search screen. */

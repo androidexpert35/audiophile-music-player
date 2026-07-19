@@ -133,7 +133,6 @@ class LibraryViewModel @Inject constructor(
             is LibraryUiEvent.ToggleViewMode -> toggleViewMode()
             is LibraryUiEvent.SetSortOrder -> setSortOrder(event.sortOrder)
             is LibraryUiEvent.ToggleLikeSong -> toggleLike(event.track.id)
-            is LibraryUiEvent.PlayLikedSongs -> playLikedSongs()
             is LibraryUiEvent.OpenSearch -> navigateToRoute(AppRoutes.Search.route)
             is LibraryUiEvent.OpenSettings -> navigateToRoute(AppRoutes.Settings.route)
             is LibraryUiEvent.OpenAlbumOverview -> navigateToRoute(
@@ -303,21 +302,6 @@ class LibraryViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    /**
-     * Plays the full liked-songs queue starting from the first liked track.
-     *
-     * Falls back to an empty-queue effect if the user has no liked tracks yet.
-     */
-    private fun playLikedSongs() {
-        val likedTracks = uiState.value.data?.likedTracks.orEmpty()
-        val firstTrack = likedTracks.firstOrNull()
-        if (firstTrack == null) {
-            emitEffect(LibraryUiEffect.PlaybackError(LibraryStrings.emptyLikedSongsTitle))
-            return
-        }
-        playTrack(track = firstTrack, queue = likedTracks)
     }
 
     /**
@@ -633,7 +617,8 @@ class LibraryViewModel @Inject constructor(
                 albumArtUris = playlist.trackUris
                     .asReversed()
                     .take(MAX_PLAYLIST_ARTWORKS)
-                    .mapNotNull { uri -> tracksByUri[uri]?.artUri }
+                    .mapNotNull { uri -> tracksByUri[uri]?.artUri },
+                kind = playlist.kind
             )
         }
     }

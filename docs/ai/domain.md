@@ -13,7 +13,8 @@ Grouped by concern: `audio/` (`AudioTelemetry`, `AudioFormat`, `AudioCodec`,
 `DsdRate`, `DsdOutputMode`, `UsbAudioFormat`, `TelemetryStatus`, …), `track/`
 (`Track`, `Album`, `Artist` + `TrackArtistParser`, `TrackSortExt`), `playback/`
 (`PlaybackState`, `QueueState`, `RepeatMode`, `ShuffleMode`, `PersistedPlaybackState`),
-`lyrics/` (`Lyrics`, `LyricLine`), `library/` (`LikedSong`, `RecentlyPlayedEntry`),
+`lyrics/` (`Lyrics`, `LyricLine`), `library/` (`LikedSong`, `Playlist`, `PlaylistKind`,
+`RecentlyPlayedEntry`),
 `indexing/` (`MediaIndexingProgress`), and `common/` (`Resource`, `ResourceError`).
 
 Rules:
@@ -32,6 +33,10 @@ Contracts only — implementations live in Data. Current set includes
 `MediaIndexRepository`, `SettingsRepository`, `LikedSongsRepository`,
 `RecentlyPlayedRepository`, `LyricsRepository`, `RemoteImageRepository`,
 `PlaybackPersistenceRepository`.
+
+`PlaylistRepository` and `LikedSongsRepository` are separate domain contracts but share one Data
+coordinator. The reserved favorites collection is exposed as `PlaylistKind.FAVORITES`, so Domain
+and Presentation can select system-playlist behaviour without depending on filenames.
 
 `RecentlyPlayedRepository` owns both recency ordering and persistent per-track
 play counts. `ObserveMostPlayedTracksUseCase` maps a caller-provided artist track

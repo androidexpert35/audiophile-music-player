@@ -142,6 +142,7 @@ private fun PlaylistOverviewContent(
                 item(key = "playlist_header") {
                     PlaylistDetailHeader(
                         name = model.playlistName,
+                        kind = model.playlistKind,
                         albumArtUris = model.albumArtUris,
                         trackCount = model.trackCount,
                         totalDurationMs = model.tracks.sumOf { it.durationMs },

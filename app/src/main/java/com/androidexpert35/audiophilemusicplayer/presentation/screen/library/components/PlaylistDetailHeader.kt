@@ -17,12 +17,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.paddingMedium
 
 /**
  * Presents a playlist hero with the same elevated artwork language as album overview.
  *
  * @param name Playlist title.
+ * @param kind Semantic role selecting standard mosaic or favorites heart artwork.
  * @param albumArtUris Artwork for the playlist's recent tracks, used to build the hero mosaic.
  * @param trackCount Number of songs in the M3U playlist.
  * @param totalDurationMs Sum of the playable song durations.
@@ -32,6 +34,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.theme.paddingMediu
 @Composable
 internal fun PlaylistDetailHeader(
     name: String,
+    kind: PlaylistKind,
     albumArtUris: List<String>,
     trackCount: Int,
     totalDurationMs: Long,
@@ -48,7 +51,8 @@ internal fun PlaylistDetailHeader(
             .padding(top = PLAYLIST_HERO_TOP_INSET)
     ) {
         DetailHeroArtwork {
-            PlaylistArtworkMosaic(
+            PlaylistArtwork(
+                kind = kind,
                 albumArtUris = albumArtUris,
                 modifier = Modifier.fillMaxSize()
             )

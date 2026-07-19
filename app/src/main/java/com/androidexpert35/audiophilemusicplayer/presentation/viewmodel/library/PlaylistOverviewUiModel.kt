@@ -1,6 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library
 
 import androidx.compose.runtime.Immutable
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
 
 /**
@@ -8,6 +9,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  *
  * @property playlistId Stable M3U filename identifier.
  * @property playlistName User-visible playlist title.
+ * @property playlistKind Semantic role used by the shared playlist hero artwork.
  * @property albumArtUris Artwork for up to four recently added playable tracks.
  * @property tracks Playable tracks in their persisted playlist order.
  * @property trackCount Number of entries in the playlist, including unavailable entries.
@@ -21,6 +23,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
 data class PlaylistOverviewUiModel(
     val playlistId: String = "",
     val playlistName: String = "",
+    val playlistKind: PlaylistKind = PlaylistKind.STANDARD,
     val albumArtUris: List<String> = emptyList(),
     val tracks: List<Track> = emptyList(),
     val trackCount: Int = 0,

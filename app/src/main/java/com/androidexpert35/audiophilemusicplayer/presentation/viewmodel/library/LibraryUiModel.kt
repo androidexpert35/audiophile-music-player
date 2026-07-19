@@ -46,14 +46,6 @@ data class LibraryUiModel(
     val playlistPickerTrack: Track? = null
 ) {
     /**
-     * Derived list of tracks the user has liked, preserving the current catalogue order.
-     *
-     * Computed as a derived property so the View never has to filter in Composable scope.
-     */
-    val likedTracks: List<Track>
-        get() = tracks.filter { it.id in likedSongIds }
-
-    /**
      * Derived ordered list of recently-played [Track] objects, most-recent first.
      *
      * Tracks that appear in [recentlyPlayedTrackIds] but are no longer in [tracks]

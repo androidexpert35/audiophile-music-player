@@ -32,7 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.androidexpert35.audiophilemusicplayer.R
-import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.PlaylistArtworkMosaic
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.PlaylistArtwork
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.PlaylistUiModel
 
 /**
@@ -159,7 +159,7 @@ private fun PlaylistPickerEmptyState() {
     }
 }
 
-/** Renders one touch-friendly playlist destination with its existing cover mosaic. */
+/** Renders one touch-friendly playlist destination with its semantic artwork. */
 @Composable
 private fun PlaylistPickerItem(
     playlist: PlaylistUiModel,
@@ -177,7 +177,8 @@ private fun PlaylistPickerItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            PlaylistArtworkMosaic(
+            PlaylistArtwork(
+                kind = playlist.kind,
                 albumArtUris = playlist.albumArtUris,
                 modifier = Modifier.size(52.dp)
             )

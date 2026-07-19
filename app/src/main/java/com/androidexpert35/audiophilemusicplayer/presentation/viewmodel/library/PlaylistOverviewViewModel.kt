@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessage
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.isUnknownArtistName
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
@@ -288,6 +289,7 @@ class PlaylistOverviewViewModel @Inject constructor(
         return PlaylistOverviewUiModel(
             playlistId = playlistId,
             playlistName = playlist?.name.orEmpty(),
+            playlistKind = playlist?.kind ?: PlaylistKind.STANDARD,
             albumArtUris = playlist?.trackUris
                 ?.asReversed()
                 ?.mapNotNull { uri -> tracksByUri[uri]?.artUri }

@@ -26,9 +26,8 @@ import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.
 /**
  * Scrollable single-column list view for all content types.
  *
- * The sort/toggle row appears first in the [LazyColumn]. The pinned Liked Songs
- * item is available only from the Playlists section, sharing the same scroll
- * physics as the catalogue rows below.
+ * The sort/toggle row appears first in the [LazyColumn]. Every collection in the
+ * Playlists section, including the M3U-backed favorites collection, uses the same row.
  *
  * `likedSongIds` is coerced into a [Set] once per model change so that each item's
  * `isLiked` lookup runs in O(1) instead of O(N) during scroll.
@@ -46,11 +45,6 @@ fun LibraryListContent(
 ) {
     // likedSongIds is already a Set<Long> — no copy needed; use the reference directly.
     val likedIds = model.likedSongIds
-
-    // likedTracks is a computed property that runs filter() on every access.
-    // Memoize once per (tracks, likedSongIds) pair so the three access sites below
-    // (size, isEmpty, items) all read from the same pre-built list.
-    val likedTracks = remember(model.tracks, model.likedSongIds) { model.likedTracks }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -72,20 +66,9 @@ fun LibraryListContent(
             )
         }
 
-        // Liked Songs belongs to the user's playlist collection, not every catalogue tab.
-        if (model.selectedContentType == LibraryContentType.PLAYLISTS) {
-            item(key = "liked_songs") {
-                LibraryFavoritesItem(
-                    trackCount = likedTracks.size,
-                    isGridView = false,
-                    onClick = { onEvent(LibraryUiEvent.PlayLikedSongs) }
-                )
-            }
-        }
-
         when (model.selectedContentType) {
             LibraryContentType.PLAYLISTS -> {
-                if (likedTracks.isEmpty() && model.playlists.isEmpty()) {
+                if (model.playlists.isEmpty()) {
                     item(key = "empty_liked") {
                         LibraryEmptyState(
                             icon = Icons.Filled.LibraryMusic,

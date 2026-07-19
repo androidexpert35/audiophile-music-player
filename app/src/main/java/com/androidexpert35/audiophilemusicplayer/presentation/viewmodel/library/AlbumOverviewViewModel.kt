@@ -245,7 +245,8 @@ class AlbumOverviewViewModel @Inject constructor(
                                 id = playlist.id,
                                 name = playlist.name,
                                 trackCount = playlist.trackUris.size,
-                                albumArtUris = emptyList()
+                                albumArtUris = emptyList(),
+                                kind = playlist.kind
                             )
                         }
                     )

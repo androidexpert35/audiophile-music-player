@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LikedSongEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -24,7 +25,7 @@ interface LikedSongDao {
      *
      * @return [Flow] emitting the full [List] of liked track IDs on every table change.
      */
-    @Query("SELECT trackId FROM liked_songs")
+    @Query("SELECT trackId FROM liked_songs ORDER BY likedAt ASC")
     fun observeLikedSongIds(): Flow<List<Long>>
 
     /**
@@ -32,32 +33,37 @@ interface LikedSongDao {
      *
      * @return List of all liked track IDs at the moment of the call.
      */
-    @Query("SELECT trackId FROM liked_songs")
+    @Query("SELECT trackId FROM liked_songs ORDER BY likedAt ASC")
     suspend fun getLikedSongIds(): List<Long>
 
     /**
-     * Checks whether the given track is currently liked.
+     * Reads the complete liked-song collection in playlist order.
      *
-     * @param trackId The track to check.
-     * @return `true` if a row exists for [trackId], `false` otherwise.
+     * @return Persisted liked rows ordered from earliest to latest addition.
      */
-    @Query("SELECT EXISTS(SELECT 1 FROM liked_songs WHERE trackId = :trackId)")
-    suspend fun isLiked(trackId: Long): Boolean
+    @Query("SELECT * FROM liked_songs ORDER BY likedAt ASC")
+    suspend fun getLikedSongs(): List<LikedSongEntity>
+
+    /** Removes every liked-song row before an ordered collection replacement. */
+    @Query("DELETE FROM liked_songs")
+    suspend fun clearLikedSongs()
 
     /**
-     * Inserts a liked-song row, ignoring the write if the track is already liked.
+     * Inserts an ordered liked-song snapshot after the previous collection is cleared.
      *
-     * @param entity The like entry to persist.
+     * @param entities Complete replacement rows in desired playlist order.
      */
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun likeSong(entity: LikedSongEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLikedSongs(entities: List<LikedSongEntity>)
 
     /**
-     * Removes the liked entry for the specified track.
+     * Atomically replaces liked membership and ordering to mirror the favorites M3U.
      *
-     * @param trackId Track to unlike.
+     * @param entities Complete liked-song snapshot in playlist order.
      */
-    @Query("DELETE FROM liked_songs WHERE trackId = :trackId")
-    suspend fun unlikeSong(trackId: Long)
+    @Transaction
+    suspend fun replaceLikedSongs(entities: List<LikedSongEntity>) {
+        clearLikedSongs()
+        insertLikedSongs(entities)
+    }
 }
-

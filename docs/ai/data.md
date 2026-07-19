@@ -25,16 +25,19 @@ Conventions:
 
 Current impls: `MusicRepositoryImpl`, `MediaIndexRepositoryImpl`,
 `PlaybackRepositoryImpl`, `PlaybackPersistenceRepositoryImpl`,
-`AudioTelemetryRepositoryImpl`, `LikedSongsRepositoryImpl`,
+`AudioTelemetryRepositoryImpl`,
 `RecentlyPlayedRepositoryImpl`, `LyricsRepositoryImpl`, `RemoteImageRepositoryImpl`,
 `SettingsRepositoryImpl`.
 
-`PlaylistRepositoryImpl` stores user-created playlists as UTF-8 extended M3U files in the
-app-private `files/playlists/` directory. The repository is the source of truth for playlist
-membership and order, writing MediaStore content URIs in M3U order and publishing its collection
-through `ObservePlaylistsUseCase`; use `CreatePlaylistUseCase`, `AddTrackToPlaylistUseCase`,
-`AddTracksToPlaylistUseCase`, `ReorderPlaylistTracksUseCase`, and
-`ReplacePlaylistTracksUseCase` instead of accessing these files from presentation code.
+`PlaylistRepositoryImpl` stores playlists as UTF-8 extended M3U files in the app-private
+`files/playlists/` directory and implements both `PlaylistRepository` and
+`LikedSongsRepository`. It reserves `favorites.m3u` for the liked-songs collection, keeps that
+file synchronized with ordered Room liked rows, and serializes cross-store updates so heart
+toggles, playlist-picker additions, and playlist-detail edits all mutate the same collection.
+Regular M3U files remain the source of truth for their own membership and order. Use
+`CreatePlaylistUseCase`, `AddTrackToPlaylistUseCase`, `AddTracksToPlaylistUseCase`,
+`ReorderPlaylistTracksUseCase`, and `ReplacePlaylistTracksUseCase` instead of accessing these
+files from presentation code.
 
 ---
 

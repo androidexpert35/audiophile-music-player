@@ -1,7 +1,6 @@
 package com.androidexpert35.audiophilemusicplayer.di
 
 import com.androidexpert35.audiophilemusicplayer.data.repository.AudioTelemetryRepositoryImpl
-import com.androidexpert35.audiophilemusicplayer.data.repository.LikedSongsRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.LyricsRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.MediaIndexRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.MusicRepositoryImpl
@@ -101,13 +100,11 @@ abstract class RepositoryModule {
         impl: RemoteImageRepositoryImpl
     ): RemoteImageRepository
 
-    /**
-     * Binds [LikedSongsRepositoryImpl] as the singleton [LikedSongsRepository] provider.
-     */
+    /** Binds the shared playlist coordinator as the liked-song persistence provider. */
     @Binds
     @Singleton
     abstract fun bindLikedSongsRepository(
-        impl: LikedSongsRepositoryImpl
+        impl: PlaylistRepositoryImpl
     ): LikedSongsRepository
 
     /**
@@ -142,4 +139,3 @@ abstract class RepositoryModule {
         impl: LyricsRepositoryImpl
     ): LyricsRepository
 }
-
