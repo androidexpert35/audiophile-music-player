@@ -221,10 +221,10 @@
     <string name="settings_section_general">General</string>
     <string name="settings_section_smart_effects">Audio Effects</string>
     <string name="settings_section_usb_settings">USB Audio Settings</string>
-    <string name="settings_audiophile_mode_title">Modalità audiophile</string>
-    <string name="settings_audiophile_mode_enabled_description">Pipeline bit-perfect con FFmpeg + AudioTrack. Massima fedeltà, con un maggiore consumo di CPU e batteria.</string>
+    <string name="settings_audiophile_mode_title">Modalità audiofilo</string>
+    <string name="settings_audiophile_mode_enabled_description">Utilizza il motore di riproduzione interno di Audiophile al posto del motore standard di Android. Quando è collegato un DAC USB, Android viene bypassato completamente e il segnale inalterato e bit-perfect viene inviato direttamente al DAC.</string>
     <string name="settings_audiophile_mode_disabled_description">Pipeline standard ExoPlayer. Minore uso della CPU e maggiore autonomia; il routing bit-perfect è disattivato.</string>
-    <string name="settings_audiophile_mode_switching_enabled">Passaggio alla modalità audiophile… la posizione di riproduzione verrà mantenuta.</string>
+    <string name="settings_audiophile_mode_switching_enabled">Passaggio alla Modalità audiofilo… la posizione di riproduzione verrà mantenuta.</string>
     <string name="settings_audiophile_mode_switching_disabled">Passaggio alla modalità standard… la posizione di riproduzione verrà mantenuta.</string>
     <string name="settings_audiophile_toggle_error_fallback">Impossibile cambiare motore di riproduzione in questo momento. Riprova.</string>
     <!-- SoX Resampler -->

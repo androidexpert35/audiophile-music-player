@@ -201,10 +201,10 @@
     <string name="settings_section_general">General</string>
     <string name="settings_section_smart_effects">Audio Effects</string>
     <string name="settings_section_usb_settings">USB Audio Settings</string>
-    <string name="settings_audiophile_mode_title">Enable Direct USB Audio (Audiophile Mode)</string>
-    <string name="settings_audiophile_mode_enabled_description">Prefer the direct USB FFmpeg pipeline whenever a permitted DAC is connected. Playback falls back to the standard engine when no DAC is available.</string>
+    <string name="settings_audiophile_mode_title">Audiophile Mode</string>
+    <string name="settings_audiophile_mode_enabled_description">Uses Audiophile\'s internal playback engine instead of Android\'s standard engine. When a USB DAC is connected, Android is bypassed completely and the unaltered, bit-perfect signal is sent directly to the DAC.</string>
     <string name="settings_audiophile_mode_disabled_description">Use the standard ExoPlayer pipeline for battery-saving playback through Android\'s normal audio routing.</string>
-    <string name="settings_audiophile_mode_switching_enabled">Switching to audiophile mode… playback position is preserved.</string>
+    <string name="settings_audiophile_mode_switching_enabled">Switching to Audiophile Mode… playback position is preserved.</string>
     <string name="settings_audiophile_mode_switching_disabled">Switching to standard mode… playback position is preserved.</string>
     <string name="settings_audiophile_toggle_error_fallback">Could not change the playback engine right now. Please try again.</string>
     <!-- SoX Resampler -->
