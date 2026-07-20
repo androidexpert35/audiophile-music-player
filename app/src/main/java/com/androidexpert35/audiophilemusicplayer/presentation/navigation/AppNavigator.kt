@@ -2,12 +2,18 @@ package com.androidexpert35.audiophilemusicplayer.presentation.navigation
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -43,14 +49,40 @@ import com.tony.coreui.presentation.navigation.compose.CoreUiNavigator
  * animation is invisible. On the next open, `translationY` animates from `screenHeight`
  * to `0f` for a jank-free GPU-layer slide-in.
  *
+ * **Startup cost control**:
+ * - When [startDestination] resolves to [AppStartDestination.Main], the graph is
+ *   entered through [AppRoutes.MainRoot] so onboarding is never composed and its
+ *   navigation transition never runs — the library gets the first frame to itself.
+ * - The heavy player overlay (its `PlayerViewModel` flow collection and the
+ *   `BlurredBackground` GPU layer) is not composed until the first library frame has
+ *   been drawn. It is still pre-warmed off-screen well before the user can open it,
+ *   so the slide-in stays jank-free, but it no longer competes with the initial
+ *   composition burst that made the engine stutter on launch.
+ *
  * @param navigationManager The manager that provides navigation commands.
  * @param playerOverlayManager Coordinator for player open requests outside the NavHost.
+ * @param startDestination Resolved launch graph; while [AppStartDestination.Deciding]
+ *   a plain themed background is shown so no onboarding UI flashes.
  */
 @Composable
 fun AppNavigator(
     navigationManager: NavigationManager,
-    playerOverlayManager: PlayerOverlayManager
+    playerOverlayManager: PlayerOverlayManager,
+    startDestination: AppStartDestination
 ) {
+    if (startDestination is AppStartDestination.Deciding) {
+        // Brief window while the persisted indexing flag is read: paint the eventual
+        // background so the transition into the real start destination is invisible.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        )
+        return
+    }
+
+    val startsOnMain = startDestination is AppStartDestination.Main
+
     val navController = rememberNavController()
 
     val shellViewModel: AppShellViewModel = hiltViewModel()
@@ -59,7 +91,10 @@ fun AppNavigator(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val activeRoute = currentRoute ?: AppRoutes.Onboarding.route
+    // Before the NavHost reports its first entry, fall back to the route implied by
+    // the chosen start destination so the shell chrome does not flip on launch.
+    val defaultRoute = if (startsOnMain) AppRoutes.Library.route else AppRoutes.Onboarding.route
+    val activeRoute = currentRoute ?: defaultRoute
 
     val showShellChrome = activeRoute != AppRoutes.Onboarding.route
 
@@ -81,13 +116,24 @@ fun AppNavigator(
         label = "PlayerOverlayY"
     )
 
+    // Defer composing the heavy player overlay until the first library frame has been
+    // drawn, then keep it composed for the jank-free slide-in. Opening the player very
+    // early (e.g. via an ACTION_VIEW intent) forces it in immediately.
+    var playerWarmedUp by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { } // let the initial library frame render first
+        withFrameNanos { } // and settle before adding the overlay's GPU layer
+        playerWarmedUp = true
+    }
+    val composePlayer = playerWarmedUp || isPlayerOpen
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         // ── Layer 1: Shell + NavHost ─────────────────────────────────────────
         AppShell(showShellChrome) {
             CoreUiNavigator(
                 navigationManager = navigationManager,
-                root = AppRoutes.Root,
+                root = if (startsOnMain) AppRoutes.MainRoot else AppRoutes.Root,
                 navController = navController,
             ) {
                 appNavigationGraph(navigationManager)
@@ -100,10 +146,12 @@ fun AppNavigator(
                 .fillMaxSize()
                 .graphicsLayer { translationY = playerTranslationY }
         ) {
-            PlayerScreen(
-                isOpen = isPlayerOpen,
-                onDismissRequest = { shellViewModel.onEvent(AppShellUiEvent.ClosePlayer) }
-            )
+            if (composePlayer) {
+                PlayerScreen(
+                    isOpen = isPlayerOpen,
+                    onDismissRequest = { shellViewModel.onEvent(AppShellUiEvent.ClosePlayer) }
+                )
+            }
         }
     }
 }

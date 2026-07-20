@@ -121,6 +121,25 @@ private fun PlayerContent(model: PlayerUiModel, onEvent: (PlayerUiEvent) -> Unit
 - ❌ Never touch `NavController` from a ViewModel or call `navController.navigate()`
   from arbitrary composables.
 
+### Launch graph gate (startup cost)
+
+`MainActivity.resolveStartDestination()` picks the launch graph **before** the NavHost
+is composed and passes it to `AppNavigator` as an `AppStartDestination`
+(`Deciding`/`Onboarding`/`Main`). When media permission is granted **and**
+`IsMediaLibraryIndexedUseCase()` is true, the app enters through `AppRoutes.MainRoot`
+(start = `MainFlow`) instead of `AppRoutes.Root` (start = `Onboarding`), so the
+onboarding screen is never composed and its enter transition never overlaps the
+library's first composition. Onboarding stays the sole owner of the first-time
+permission + scan flow; the gate only avoids re-entering it when there is nothing to do
+(new-file re-indexing is handled independently by `LibraryViewModel`'s MediaStore
+`ContentObserver`, not by onboarding). While `Deciding` (the brief async index read)
+`AppNavigator` paints only a themed background so nothing flashes.
+
+`AppNavigator` also defers composing the player overlay (`PlayerViewModel` flow
+collection + `BlurredBackground` GPU layer) until two frames after launch, then keeps it
+pre-warmed off-screen for the jank-free slide-in — an early `ACTION_VIEW` open forces it
+in immediately.
+
 ---
 
 ## Performance & motion

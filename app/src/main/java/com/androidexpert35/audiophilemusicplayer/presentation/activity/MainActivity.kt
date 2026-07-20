@@ -1,7 +1,10 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.activity
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -15,6 +18,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.androidexpert35.audiophilemusicplayer.data.playback.AudioTelemetryCollector
 import com.androidexpert35.audiophilemusicplayer.data.playback.usb.UsbVolumeController
@@ -22,6 +26,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.DsdOutputMode
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputStreamInfo
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.activity.MainActivity.Companion.DEFAULT_OVERLAY_VOLUME_PCT
 import com.androidexpert35.audiophilemusicplayer.presentation.activity.MainActivity.Companion.FAST_STEP
@@ -29,6 +34,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.activity.MainActiv
 import com.androidexpert35.audiophilemusicplayer.presentation.activity.MainActivity.Companion.FINE_STEP
 import com.androidexpert35.audiophilemusicplayer.presentation.activity.MainActivity.Companion.OVERLAY_DISMISS_DELAY_MS
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppNavigator
+import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppStartDestination
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.overlay.PlayerOverlayManager
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.components.UsbVolumeOverlay
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
@@ -89,6 +95,13 @@ class MainActivity : ComponentActivity() {
      */
     @Inject
     lateinit var playTrackUseCase: PlayTrackUseCase
+
+    /**
+     * Use case that reports whether a cached Room library index already exists, used
+     * to decide the launch graph before the [AppNavigator] composes its NavHost.
+     */
+    @Inject
+    lateinit var isMediaLibraryIndexedUseCase: IsMediaLibraryIndexedUseCase
 
     /**
      * Volume controller for the direct libusb audio path.
@@ -154,6 +167,16 @@ class MainActivity : ComponentActivity() {
     /** Auto-hide job that dismisses the overlay after [OVERLAY_DISMISS_DELAY_MS]. */
     private var overlayDismissJob: Job? = null
 
+    /**
+     * Launch graph the [AppNavigator] should enter, resolved once per cold start.
+     *
+     * Starts as [AppStartDestination.Deciding] because the persisted indexing flag is
+     * read asynchronously; [resolveStartDestination] updates it to the real value. When
+     * it resolves to [AppStartDestination.Main] the onboarding screen is never composed,
+     * removing the composition + navigation-transition burst that stuttered on launch.
+     */
+    private var startDestination by mutableStateOf<AppStartDestination>(AppStartDestination.Deciding)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -162,12 +185,17 @@ class MainActivity : ComponentActivity() {
         // control the system STREAM_MUSIC volume without showing the system HUD.
         audioManager = getSystemService(AudioManager::class.java)
 
+        // Decide the launch graph before the first composition so an already-indexed
+        // library goes straight to the main flow, skipping onboarding entirely.
+        resolveStartDestination()
+
         setContent {
             AudiophileMusicPlayerTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
                     AppNavigator(
                         navigationManager = navigationManager,
-                        playerOverlayManager = playerOverlayManager
+                        playerOverlayManager = playerOverlayManager,
+                        startDestination = startDestination
                     )
 
                     UsbVolumeOverlay(
@@ -300,6 +328,51 @@ class MainActivity : ComponentActivity() {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────
+
+    /**
+     * Resolves which navigation graph [AppNavigator] should enter on this launch.
+     *
+     * The media-permission check is synchronous, so a missing permission resolves to
+     * [AppStartDestination.Onboarding] immediately (before the first composition). When
+     * permission is present the persisted indexing flag is read on a coroutine — a fast
+     * single-row Room lookup — and the result flips [startDestination] to either
+     * [AppStartDestination.Main] (skip onboarding) or [AppStartDestination.Onboarding]
+     * (run the first scan). The [AppStartDestination.Deciding] window shows only a plain
+     * themed background, so nothing flashes during the brief asynchronous read.
+     *
+     * Onboarding remains the single owner of the first-time permission and scan flow;
+     * this gate only avoids re-entering it once there is genuinely nothing to do.
+     */
+    private fun resolveStartDestination() {
+        val hasMediaPermission = ContextCompat.checkSelfPermission(
+            this,
+            requiredMediaPermission()
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasMediaPermission) {
+            startDestination = AppStartDestination.Onboarding
+            return
+        }
+
+        lifecycleScope.launch {
+            startDestination = if (isMediaLibraryIndexedUseCase()) {
+                AppStartDestination.Main
+            } else {
+                AppStartDestination.Onboarding
+            }
+        }
+    }
+
+    /**
+     * Resolves the runtime permission gating audio-library access for the current
+     * platform: `READ_MEDIA_AUDIO` on Android 13+, `READ_EXTERNAL_STORAGE` below it.
+     */
+    private fun requiredMediaPermission(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
 
     /**
      * Adjusts the active audio path volume by one or more steps and refreshes the overlay.
