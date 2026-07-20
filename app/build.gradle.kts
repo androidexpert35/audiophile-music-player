@@ -31,8 +31,14 @@ android {
         applicationId = "com.androidexpert35.audiophilemusicplayer"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+
+        // ── Versioning (single source of truth) ──
+        // Bump these three values for each release; versionCode is derived automatically.
+        val major = 1
+        val minor = 0
+        val patch = 2
+        versionCode = major * 10000 + minor * 100 + patch   // e.g. 1.2.3 → 10203
+        versionName = "$major.$minor.$patch"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
