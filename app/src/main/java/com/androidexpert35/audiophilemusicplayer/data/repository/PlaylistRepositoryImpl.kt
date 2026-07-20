@@ -176,6 +176,27 @@ class PlaylistRepositoryImpl @Inject constructor(
             }
         }
 
+    /** @see PlaylistRepository.deletePlaylist */
+    override suspend fun deletePlaylist(playlistId: String): Resource<Unit> = withContext(ioDispatcher) {
+        mutationMutex.withLock {
+            runCatching {
+                check(playlistId != FAVORITES_PLAYLIST_ID) {
+                    "The favorites playlist can't be deleted."
+                }
+                val playlist = requirePlaylist(playlistId)
+                check(playlistDirectory().resolve(playlist.id).delete()) {
+                    "Unable to delete the playlist file."
+                }
+            }.fold(
+                onSuccess = {
+                    publishPlaylistChange()
+                    Resource.Success(Unit)
+                },
+                onFailure = { error -> Resource.Error(playlistMutationError(playlistId, error)) }
+            )
+        }
+    }
+
     /** @see LikedSongsRepository.observeLikedSongIds */
     override fun observeLikedSongIds(): Flow<Set<Long>> = likedSongDao.observeLikedSongIds()
         .map(List<Long>::toSet)

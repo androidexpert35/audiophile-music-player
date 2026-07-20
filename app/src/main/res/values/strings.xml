@@ -358,6 +358,11 @@
     <string name="playlist_created_success">Playlist “%1$s” created</string>
     <string name="playlist_track_added_success">“%1$s” added to “%2$s”</string>
     <string name="playlist_updated_success">Playlist updated</string>
+    <string name="cd_delete_playlist">Delete playlist</string>
+    <string name="playlist_delete_title">Delete playlist?</string>
+    <string name="playlist_delete_message">This will permanently delete “%1$s” and remove all its tracks from this playlist. This action can\'t be undone.</string>
+    <string name="playlist_delete_action">Delete</string>
+    <string name="playlist_deleted_success">Playlist deleted</string>
     <string name="cd_track_more_options">Track options</string>
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>

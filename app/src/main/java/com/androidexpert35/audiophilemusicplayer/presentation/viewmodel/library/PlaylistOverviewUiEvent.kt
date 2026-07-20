@@ -50,4 +50,13 @@ sealed interface PlaylistOverviewUiEvent {
 
     /** Returns to the previous destination. */
     data object NavigateBack : PlaylistOverviewUiEvent
+
+    /** Opens the delete-confirmation dialog for this playlist. */
+    data object ShowDeletePlaylistDialog : PlaylistOverviewUiEvent
+
+    /** Closes the delete-confirmation dialog without deleting the playlist. */
+    data object DismissDeletePlaylistDialog : PlaylistOverviewUiEvent
+
+    /** Confirms permanent deletion of this playlist. */
+    data object ConfirmDeletePlaylist : PlaylistOverviewUiEvent
 }

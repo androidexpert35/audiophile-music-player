@@ -146,6 +146,27 @@ class PlaylistRepositoryImplTest {
         }
     }
 
+    @Test
+    fun `given standard playlist when deleted then playlist file is removed`() = runTest {
+        stubContext()
+        val repo = repository(testScheduler)
+        val playlistId = (repo.createPlaylist("Road Trip") as Resource.Success).data.id
+
+        val result = repo.deletePlaylist(playlistId)
+
+        assertTrue(result is Resource.Success)
+        assertTrue(!File(temporaryFolder.root, "playlists/$playlistId").exists())
+    }
+
+    @Test
+    fun `given favorites playlist when deleted then request is rejected`() = runTest {
+        stubContext()
+
+        val result = repository(testScheduler).deletePlaylist(FAVORITES_ID)
+
+        assertTrue(result is Resource.Error)
+    }
+
     private fun repository(testScheduler: TestCoroutineScheduler): PlaylistRepositoryImpl =
         PlaylistRepositoryImpl(
             context = context,

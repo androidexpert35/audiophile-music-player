@@ -61,4 +61,12 @@ interface PlaylistRepository {
      * @return Success when the M3U contents have been replaced, or a storage error.
      */
     suspend fun replaceTracks(playlistId: String, trackUris: List<String>): Resource<Unit>
+
+    /**
+     * Permanently deletes a local playlist and its stored M3U file.
+     *
+     * @param playlistId Stable identifier of the playlist to remove.
+     * @return Success when the playlist has been deleted, or a validation/storage error.
+     */
+    suspend fun deletePlaylist(playlistId: String): Resource<Unit>
 }
