@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.LocalShellBottomPadding
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.components.rememberTrackReorderState
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.DeletePlaylistDialog
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.LibraryEmptyState
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.PlaylistDetailActionRow
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.PlaylistDetailHeader
@@ -75,6 +77,13 @@ fun PlaylistOverviewScreen(
                     Toast.makeText(
                         context,
                         context.getString(R.string.playlist_updated_success),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                PlaylistOverviewUiEffect.PlaylistDeleted -> {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.playlist_deleted_success),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -154,7 +163,12 @@ private fun PlaylistOverviewContent(
                         isEditing = model.isEditing,
                         onPlayClick = { onEvent(PlaylistOverviewUiEvent.PlayPlaylist) },
                         onShuffleClick = { onEvent(PlaylistOverviewUiEvent.ShufflePlaylist) },
-                        onEditClick = { onEvent(PlaylistOverviewUiEvent.ToggleEditing) }
+                        onEditClick = { onEvent(PlaylistOverviewUiEvent.ToggleEditing) },
+                        onDeleteClick = if (model.playlistKind == PlaylistKind.STANDARD) {
+                            { onEvent(PlaylistOverviewUiEvent.ShowDeletePlaylistDialog) }
+                        } else {
+                            null
+                        }
                     )
                 }
             }
@@ -209,6 +223,14 @@ private fun PlaylistOverviewContent(
                 .navigationBarsPadding()
                 .padding(bottom = shellBottomPadding + 8.dp)
         )
+
+        if (model.isDeletePlaylistDialogVisible) {
+            DeletePlaylistDialog(
+                playlistName = model.playlistName,
+                onDismiss = { onEvent(PlaylistOverviewUiEvent.DismissDeletePlaylistDialog) },
+                onConfirm = { onEvent(PlaylistOverviewUiEvent.ConfirmDeletePlaylist) }
+            )
+        }
     }
 }
 

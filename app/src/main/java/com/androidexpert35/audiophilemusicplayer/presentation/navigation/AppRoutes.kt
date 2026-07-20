@@ -1,5 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.navigation
 
+import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.MainFlow
+import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.Root
 import com.tony.coreui.presentation.navigation.graph.destinationNode
 import com.tony.coreui.presentation.navigation.graph.flowNode
 import com.tony.coreui.presentation.navigation.graph.rootNode
@@ -53,6 +55,18 @@ object AppRoutes {
     val Root = rootNode(
         route = "audiophile_root",
         startDestination = Onboarding
+    )
+
+    /**
+     * Root graph used when onboarding can be skipped because media permission is
+     * granted and the library is already indexed. Starts directly on [MainFlow] so
+     * the app never mounts the onboarding screen or plays the onboarding→home
+     * navigation transition on launch. Shares [Root]'s route so the hosted graph
+     * definition is identical; only the entry point differs.
+     */
+    val MainRoot = rootNode(
+        route = "audiophile_root",
+        startDestination = MainFlow
     )
 
     /** Builds a concrete album overview route. */

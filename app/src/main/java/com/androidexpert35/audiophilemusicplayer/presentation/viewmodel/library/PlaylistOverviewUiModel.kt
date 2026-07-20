@@ -18,6 +18,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  * @property isSearchActive Whether the page is currently dedicated to playlist search results.
  * @property isEditing Whether manual track ordering is enabled.
  * @property currentPlayingTrackId Identifier of the currently playing playlist track, if any.
+ * @property isDeletePlaylistDialogVisible Whether the delete-confirmation dialog is open.
  */
 @Immutable
 data class PlaylistOverviewUiModel(
@@ -31,7 +32,8 @@ data class PlaylistOverviewUiModel(
     val searchQuery: String = "",
     val isSearchActive: Boolean = false,
     val isEditing: Boolean = false,
-    val currentPlayingTrackId: Long? = null
+    val currentPlayingTrackId: Long? = null,
+    val isDeletePlaylistDialogVisible: Boolean = false
 ) {
     /** Tracks matching [searchQuery] by title, artist, or album; the full list when blank. */
     val visibleTracks: List<Track>

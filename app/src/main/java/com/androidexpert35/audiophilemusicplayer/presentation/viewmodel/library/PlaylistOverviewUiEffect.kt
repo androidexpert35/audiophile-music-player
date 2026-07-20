@@ -11,4 +11,7 @@ sealed interface PlaylistOverviewUiEffect {
 
     /** Confirms that a playlist edit was saved to the local M3U file. */
     data object PlaylistUpdated : PlaylistOverviewUiEffect
+
+    /** Confirms that the playlist was permanently deleted. */
+    data object PlaylistDeleted : PlaylistOverviewUiEffect
 }

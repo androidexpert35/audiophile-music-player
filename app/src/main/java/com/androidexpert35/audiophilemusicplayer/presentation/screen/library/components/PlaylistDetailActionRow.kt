@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
@@ -26,12 +27,14 @@ import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophilePrimary
 
 /**
- * Offers play, shuffle, and manual-order controls for a playlist.
+ * Offers play, shuffle, manual-order, and delete controls for a playlist.
  *
  * @param isEditing Whether manual ordering is active.
  * @param onPlayClick Starts sequential playback.
  * @param onShuffleClick Starts shuffled playback.
  * @param onEditClick Toggles manual ordering.
+ * @param onDeleteClick Invoked when the listener requests deletion; omitted for playlists that
+ *   can't be deleted, such as favorites.
  * @param modifier Optional modifier applied to the row.
  */
 @Composable
@@ -40,11 +43,13 @@ internal fun PlaylistDetailActionRow(
     onPlayClick: () -> Unit,
     onShuffleClick: () -> Unit,
     onEditClick: () -> Unit,
+    onDeleteClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Surface(
             onClick = onEditClick,
@@ -62,6 +67,23 @@ internal fun PlaylistDetailActionRow(
                 tint = if (isEditing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp)
             )
+            }
+        }
+        if (onDeleteClick != null) {
+            Surface(
+                onClick = onDeleteClick,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.cd_delete_playlist),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.weight(1f))

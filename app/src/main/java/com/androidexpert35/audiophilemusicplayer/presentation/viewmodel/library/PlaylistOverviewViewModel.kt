@@ -8,6 +8,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKi
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.isUnknownArtistName
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.DeletePlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
@@ -37,6 +38,7 @@ import javax.inject.Inject
  * @property replacePlaylistTracksUseCase Persists confirmed membership and order changes.
  * @property playNextUseCase Inserts a playlist track after the active queue item.
  * @property addTrackToQueueUseCase Appends a playlist track to the active queue.
+ * @property deletePlaylistUseCase Permanently removes the local playlist and its M3U file.
  */
 @HiltViewModel
 class PlaylistOverviewViewModel @Inject constructor(
@@ -47,6 +49,7 @@ class PlaylistOverviewViewModel @Inject constructor(
     private val replacePlaylistTracksUseCase: ReplacePlaylistTracksUseCase,
     private val playNextUseCase: PlayNextUseCase,
     private val addTrackToQueueUseCase: AddTrackToQueueUseCase,
+    private val deletePlaylistUseCase: DeletePlaylistUseCase,
     navigationManager: NavigationManager,
     stringResolver: StringResolver,
     uiErrorMapper: UiErrorMapper
@@ -82,6 +85,9 @@ class PlaylistOverviewViewModel @Inject constructor(
         is PlaylistOverviewUiEvent.MoveTrack -> moveTrack(event.fromIndex, event.toIndex)
         is PlaylistOverviewUiEvent.RemoveTrack -> removeTrack(event.index)
         PlaylistOverviewUiEvent.NavigateBack -> navigateUp()
+        PlaylistOverviewUiEvent.ShowDeletePlaylistDialog -> updateDeletePlaylistDialogVisibility(true)
+        PlaylistOverviewUiEvent.DismissDeletePlaylistDialog -> updateDeletePlaylistDialogVisibility(false)
+        PlaylistOverviewUiEvent.ConfirmDeletePlaylist -> deletePlaylist()
     }
 
     /** Starts loading the selected playlist and resolves its M3U entries against the local index. */
@@ -193,6 +199,32 @@ class PlaylistOverviewViewModel @Inject constructor(
                 onError = { error ->
                     emitEffect(PlaylistOverviewUiEffect.Message(
                         error?.toUserMessage() ?: "Unable to save the playlist order."
+                    ))
+                }
+            )
+        }
+    }
+
+    /** Keeps the delete-confirmation dialog state in the screen's immutable UDF model. */
+    private fun updateDeletePlaylistDialogVisibility(isVisible: Boolean) {
+        val model = uiState.value.data ?: return
+        updateUiData(model.copy(isDeletePlaylistDialogVisible = isVisible))
+    }
+
+    /** Permanently removes the playlist and returns to the previous destination on success. */
+    private fun deletePlaylist() {
+        val model = uiState.value.data ?: return
+        viewModelScope.launch(exceptionHandler) {
+            deletePlaylistUseCase(model.playlistId).fold(
+                onSuccess = {
+                    updateUiData(model.copy(isDeletePlaylistDialogVisible = false))
+                    emitEffect(PlaylistOverviewUiEffect.PlaylistDeleted)
+                    navigateUp()
+                },
+                onError = { error ->
+                    updateUiData(model.copy(isDeletePlaylistDialogVisible = false))
+                    emitEffect(PlaylistOverviewUiEffect.Message(
+                        error?.toUserMessage() ?: "Unable to delete the playlist."
                     ))
                 }
             )

@@ -338,6 +338,11 @@
     <string name="track_go_to_artist_action">Vai all\'artista</string>
     <string name="track_queued_next_success">“%1$s” verrà riprodotto come prossimo</string>
     <string name="track_added_to_queue_success">“%1$s” aggiunto alla coda</string>
+    <string name="cd_delete_playlist">Elimina playlist</string>
+    <string name="playlist_delete_title">Eliminare la playlist?</string>
+    <string name="playlist_delete_message">“%1$s” e tutti i suoi brani verranno eliminati definitivamente da questa playlist. Questa azione non può essere annullata.</string>
+    <string name="playlist_delete_action">Elimina</string>
+    <string name="playlist_deleted_success">Playlist eliminata</string>
     <string name="cd_track_more_options">Opzioni brano</string>
     <string name="action_ok">OK</string>
     <string name="action_cancel">Annulla</string>

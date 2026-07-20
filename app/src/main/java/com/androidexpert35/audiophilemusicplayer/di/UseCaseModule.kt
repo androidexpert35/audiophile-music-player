@@ -16,6 +16,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueU
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToPlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToQueueUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.CreatePlaylistUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.DeletePlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumArtUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUseCase
@@ -110,6 +111,12 @@ object UseCaseModule {
     fun provideReplacePlaylistTracksUseCase(
         playlistRepository: PlaylistRepository
     ): ReplacePlaylistTracksUseCase = ReplacePlaylistTracksUseCase(playlistRepository)
+
+    /** Provides [DeletePlaylistUseCase] backed by the local M3U playlist repository. */
+    @Provides
+    fun provideDeletePlaylistUseCase(
+        playlistRepository: PlaylistRepository
+    ): DeletePlaylistUseCase = DeletePlaylistUseCase(playlistRepository)
 
     /**
      * Provides [GetTracksUseCase] backed by [MusicRepository].
