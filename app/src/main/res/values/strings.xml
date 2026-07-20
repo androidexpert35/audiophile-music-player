@@ -201,6 +201,7 @@
     <string name="settings_section_general">General</string>
     <string name="settings_section_smart_effects">Audio Effects</string>
     <string name="settings_section_usb_settings">USB Audio Settings</string>
+    <string name="settings_section_about">About</string>
     <string name="settings_audiophile_mode_title">Audiophile Mode</string>
     <string name="settings_audiophile_mode_enabled_description">Uses Audiophile\'s internal playback engine instead of Android\'s standard engine. When a USB DAC is connected, Android is bypassed completely and the unaltered, bit-perfect signal is sent directly to the DAC.</string>
     <string name="settings_audiophile_mode_disabled_description">Use the standard ExoPlayer pipeline for battery-saving playback through Android\'s normal audio routing.</string>
@@ -258,6 +259,11 @@
     <string name="settings_dsd_output_mode_dop_supporting">DoP carrier available up to %1$s PCM.</string>
     <string name="settings_dsd_output_mode_unsupported_supporting">The active output path cannot carry DSD natively and does not expose a high-rate DoP carrier.</string>
     <string name="settings_dsd256_dop_note">DSD256 DoP requires a 705.6 kHz PCM carrier. When the current DAC cannot sustain that rate, the app will downsample DSD256 to DSD128 before DoP and report the change in the playback pipeline details.</string>
+
+    <!-- Open Source -->
+    <string name="settings_open_source_title">View source code</string>
+    <string name="settings_open_source_description">Audiophile Music Player is open source. Browse the code, report issues, or contribute on GitHub.</string>
+
     <!-- Audio Output Control -->
     <string name="cd_audio_output_control">Audio output control</string>
     <string name="cd_playback_viz_bars">Playback visualization bars</string>
