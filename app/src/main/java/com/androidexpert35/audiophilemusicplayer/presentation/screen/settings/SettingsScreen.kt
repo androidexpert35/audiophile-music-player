@@ -34,6 +34,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.comp
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.AudiophileEngineToggleCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.DspInfoDialog
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.HiResRemasterCard
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.OpenSourceCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SettingsSectionHeader
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SueEnhancerCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.UsbDeviceInfoCard
@@ -174,6 +175,8 @@ private fun SettingsContent(
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SettingsSectionHeader(titleRes = R.string.settings_section_about)
+            OpenSourceCard()
         }
     }
 

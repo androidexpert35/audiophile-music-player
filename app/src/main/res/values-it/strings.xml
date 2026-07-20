@@ -218,9 +218,10 @@
     <string name="nav_impostazioni">Impostazioni</string>
 
     <!-- Settings -->
-    <string name="settings_section_general">General</string>
-    <string name="settings_section_smart_effects">Audio Effects</string>
-    <string name="settings_section_usb_settings">USB Audio Settings</string>
+    <string name="settings_section_general">Generali</string>
+    <string name="settings_section_smart_effects">Effetti audio</string>
+    <string name="settings_section_usb_settings">Impostazioni audio USB</string>
+    <string name="settings_section_about">Informazioni</string>
     <string name="settings_audiophile_mode_title">Modalità audiofilo</string>
     <string name="settings_audiophile_mode_enabled_description">Utilizza il motore di riproduzione interno di Audiophile al posto del motore standard di Android. Quando è collegato un DAC USB, Android viene bypassato completamente e il segnale inalterato e bit-perfect viene inviato direttamente al DAC.</string>
     <string name="settings_audiophile_mode_disabled_description">Pipeline standard ExoPlayer. Minore uso della CPU e maggiore autonomia; il routing bit-perfect è disattivato.</string>
@@ -258,6 +259,10 @@
     <string name="settings_dsd_output_mode_dop_supporting">Carrier DoP disponibile fino a %1$s PCM.</string>
     <string name="settings_dsd_output_mode_unsupported_supporting">Il percorso di uscita attivo non può trasportare DSD nativo e non espone un carrier DoP ad alta frequenza.</string>
     <string name="settings_dsd256_dop_note">DSD256 DoP richiede un carrier PCM a 705,6 kHz. Quando il DAC corrente non supporta questa frequenza, l’app riduce DSD256 a DSD128 prima del DoP e segnala il cambiamento nei dettagli della pipeline di riproduzione.</string>
+
+    <!-- Open Source -->
+    <string name="settings_open_source_title">Vedi il codice sorgente</string>
+    <string name="settings_open_source_description">Audiophile Music Player è open source. Sfoglia il codice, segnala problemi o contribuisci su GitHub.</string>
 
     <!-- Audio Output Control -->
     <string name="cd_audio_output_control">Controllo uscita audio</string>
