@@ -1,21 +1,25 @@
 name: Release
 
 # Builds a signed release and publishes a GitHub Release whenever a commit
-# lands on the default branch. The signing secrets are exposed ONLY to the
-# gradle build step (not the whole job) to shrink the blast radius if a
-# third-party action is ever compromised.
+# lands on the default branch. Split into three jobs so each gets only what
+# it needs:
+#   - unit-tests: fast feedback, no signing secrets, no protected environment
+#   - build: produces the signed AAB/APK; the only job with signing secrets
+#     and gated behind the protected `release` environment
+#   - publish: creates the GitHub Release from the build's artifacts; the
+#     only job with `contents: write`
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
-#   RELEASE_KEYSTORE_BASE64   - base64 of your .jks/.keystore  (see note below)
-#   RELEASE_STORE_PASSWORD    - keystore password
-#   RELEASE_KEY_ALIAS         - key alias
-#   RELEASE_KEY_PASSWORD      - key password
 #   GPR_USER                  - GitHub username with read access to the
 #                               androidexpert35/CoreUI package registry
 #   GPR_TOKEN                 - PAT (classic, scope read:packages; or
 #                               fine-grained with Packages: Read on CoreUI)
 #                               for the private CoreUI dependency on GitHub
 #                               Packages (see settings.gradle.kts)
+#   RELEASE_KEYSTORE_BASE64   - base64 of your .jks/.keystore  (see note below)
+#   RELEASE_STORE_PASSWORD    - keystore password
+#   RELEASE_KEY_ALIAS         - key alias
+#   RELEASE_KEY_PASSWORD      - key password
 #
 # Create RELEASE_KEYSTORE_BASE64 locally with:
 #   macOS/Linux:  base64 -i upload-keystore.jks | pbcopy
@@ -39,17 +43,59 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write   # needed to create the GitHub Release and tag
-
 jobs:
-  release:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # TEMPORARY: isolates whether the CoreUI 401 is a credentials problem or
+      # a Gradle-specific one, without spending a full Gradle run on it.
+      # Remove once GitHub Packages auth is confirmed working.
+      - name: Debug - verify GitHub Packages credentials
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: |
+          echo "GPR_USER is set: $([ -n "$GPR_USER" ] && echo yes || echo no) (length: ${#GPR_USER})"
+          echo "GPR_TOKEN is set: $([ -n "$GPR_TOKEN" ] && echo yes || echo no) (length: ${#GPR_TOKEN})"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$GPR_USER:$GPR_TOKEN" \
+            "https://maven.pkg.github.com/androidexpert35/CoreUI/com/tony/coreui/coreui/1.0.5/coreui-1.0.5.pom")
+          echo "HTTP status from maven.pkg.github.com: $STATUS"
+
+      - name: Run unit tests
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace --no-configuration-cache -Pgpr.user="$GPR_USER" -Pgpr.key="$GPR_TOKEN"
+
+  build:
+    name: Build signed AAB and APK
+    needs: unit-tests
     runs-on: ubuntu-latest
     # Gate the signing secrets behind a protected environment: add required
     # reviewers under Settings → Environments → release so a bare push cannot
     # trigger a signed build without approval. Remove this line to run unattended.
     environment: release
-    timeout-minutes: 45
+    timeout-minutes: 30
+    outputs:
+      version-tag: ${{ steps.version.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -69,12 +115,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Run unit tests
-        env:
-          GPR_USER: ${{ secrets.GPR_USER }}
-          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace --no-configuration-cache -Pgpr.user="$GPR_USER" -Pgpr.key="$GPR_TOKEN"
 
       - name: Decode keystore and write local.properties
         env:
@@ -103,6 +143,33 @@ jobs:
           VERSION_NAME=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
           echo "tag=v${VERSION_NAME}+${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # needed to create the GitHub Release and tag
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts
+
       - name: Build release notes from the commit message
         id: notes
         run: |
@@ -125,9 +192,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.build.outputs.version-tag }}
           name: ${{ steps.notes.outputs.subject }}
           body_path: RELEASE_NOTES.md
           files: |
-            app/build/outputs/bundle/release/app-release.aab
-            app/build/outputs/apk/release/app-release.apk
+            release-artifacts/app/build/outputs/bundle/release/app-release.aab
+            release-artifacts/app/build/outputs/apk/release/app-release.apk
