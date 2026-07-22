@@ -10,6 +10,12 @@ name: Release
 #   RELEASE_STORE_PASSWORD    - keystore password
 #   RELEASE_KEY_ALIAS         - key alias
 #   RELEASE_KEY_PASSWORD      - key password
+#   GPR_USER                  - GitHub username with read access to the
+#                               androidexpert35/CoreUI package registry
+#   GPR_TOKEN                 - PAT (classic, scope read:packages; or
+#                               fine-grained with Packages: Read on CoreUI)
+#                               for the private CoreUI dependency on GitHub
+#                               Packages (see settings.gradle.kts)
 #
 # Create RELEASE_KEYSTORE_BASE64 locally with:
 #   macOS/Linux:  base64 -i upload-keystore.jks | pbcopy
@@ -65,7 +71,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace --no-configuration-cache -Pgpr.user="$GPR_USER" -Pgpr.key="$GPR_TOKEN"
 
       - name: Decode keystore and write local.properties
         env:
@@ -83,7 +92,10 @@ jobs:
           } >> local.properties
 
       - name: Build signed AAB and APK
-        run: ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace --no-configuration-cache -Pgpr.user="$GPR_USER" -Pgpr.key="$GPR_TOKEN"
 
       - name: Read app version
         id: version
