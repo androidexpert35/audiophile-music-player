@@ -30,6 +30,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.library.MusicFolde
  *   enabled in settings.
  * @property musicFolders Storage locations the library is scanned from. Empty means the
  *   catalogue cannot be rebuilt until the user adds a folder.
+ * @property clearQueueOnExit Whether removing the app task from recents also clears the queue.
  */
 data class SettingsUiModel(
     val audiophileEngineEnabled: Boolean = false,
@@ -42,4 +43,5 @@ data class SettingsUiModel(
     val sueStatus: SueStatus? = null,
     val hiResRemasterEnabled: Boolean = true,
     val musicFolders: List<MusicFolder> = emptyList(),
+    val clearQueueOnExit: Boolean = false,
 )

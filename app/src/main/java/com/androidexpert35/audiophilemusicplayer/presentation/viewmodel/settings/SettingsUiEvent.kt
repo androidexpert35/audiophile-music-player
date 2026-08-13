@@ -4,6 +4,9 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.setting
  * User intents emitted from the Settings screen.
  */
 sealed interface SettingsUiEvent {
+    /** Select whether removing the app task from recents clears the playback queue. */
+    data class SetClearQueueOnExit(val enabled: Boolean) : SettingsUiEvent
+
     /** Toggle the audiophile (bit-perfect) playback engine. */
     data class SetAudiophileEngineEnabled(val enabled: Boolean) : SettingsUiEvent
 

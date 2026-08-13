@@ -209,6 +209,8 @@
     <string name="settings_music_folders_empty">No folder is granted yet, so the library cannot be rebuilt. Add one below.</string>
     <string name="settings_music_folders_add_action">Add music folder</string>
     <string name="settings_section_general">General</string>
+    <string name="settings_clear_queue_on_exit_title">Clear queue when closing the app</string>
+    <string name="settings_clear_queue_on_exit_description">Clear the playback queue when you remove the app from Recents.</string>
     <string name="settings_section_smart_effects">Audio Effects</string>
     <string name="settings_section_usb_settings">USB Audio Settings</string>
     <string name="settings_section_about">About</string>
@@ -308,6 +310,10 @@
     <string name="player_queue_edit_content_description">Edit playback queue</string>
     <string name="player_queue_finish_edit_content_description">Finish editing playback queue</string>
     <string name="player_queue_reorder_handle_content_description">Drag to reorder queued track</string>
+    <string name="player_queue_clear_content_description">Clear playback queue</string>
+    <string name="player_queue_clear_title">Clear queue?</string>
+    <string name="player_queue_clear_message">This stops playback and removes all queued tracks. The queue will not be restored the next time you open the app.</string>
+    <string name="player_queue_clear_action">Clear queue</string>
 
     <!-- Playback Fallback Messages -->
     <string name="playback_failed">Playback failed</string>

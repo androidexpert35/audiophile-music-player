@@ -14,6 +14,12 @@ import kotlinx.coroutines.flow.Flow
  */
 interface SettingsRepository {
 
+    /** Observes whether task removal should clear the active playback queue. */
+    fun observeClearQueueOnExit(): Flow<Boolean>
+
+    /** Persists whether task removal should clear the active playback queue. */
+    suspend fun setClearQueueOnExit(enabled: Boolean): Resource<Unit>
+
     /** Retrieves the persisted sort and layout selections for the library sections. */
     suspend fun getLibraryDisplayPreferences(): Resource<LibraryDisplayPreferences>
 

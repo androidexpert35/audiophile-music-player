@@ -27,6 +27,10 @@ manager, telemetry, and factories.
 deliberately not requested or observed: OEM focus transitions, screen lock/unlock,
 notifications, and competing apps never mutate playback state. Session restore is
 handled by `PlaybackControllerSessionRestorer` + `PlaybackPersistenceRepository`.
+The listener may disable that restore through the **Clear queue when closing the app**
+setting: task removal from Recents clears both the Media3 queue and its singleton
+persistence row before the service releases the audio path. The Queue sheet also offers
+the same action manually, with confirmation.
 
 ---
 

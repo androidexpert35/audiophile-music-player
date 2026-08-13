@@ -33,5 +33,9 @@ interface PlaybackStateDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPlaybackState(entity: PlaybackStateEntity)
+
+    /** Deletes the singleton session so no queue is restored after a fresh launch. */
+    @Query("DELETE FROM playback_state WHERE id = :id")
+    suspend fun clearPlaybackState(id: Int = PlaybackStateEntity.SINGLETON_ID)
 }
 

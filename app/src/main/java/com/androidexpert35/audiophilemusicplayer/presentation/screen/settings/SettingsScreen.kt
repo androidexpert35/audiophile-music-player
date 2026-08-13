@@ -38,6 +38,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.co
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.HiResRemasterCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.MusicFoldersCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.OpenSourceCard
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.QueueRetentionCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SettingsSectionHeader
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SueEnhancerCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.UsbDeviceInfoCard
@@ -161,6 +162,11 @@ private fun SettingsContent(
                 enabled = model.audiophileEngineEnabled,
                 inProgress = model.isAudiophileEngineSwitchInProgress,
                 onToggle = { onEvent(SettingsUiEvent.SetAudiophileEngineEnabled(it)) },
+            )
+
+            QueueRetentionCard(
+                enabled = model.clearQueueOnExit,
+                onToggle = { onEvent(SettingsUiEvent.SetClearQueueOnExit(it)) },
             )
 
             SettingsSectionHeader(titleRes = R.string.settings_section_smart_effects)

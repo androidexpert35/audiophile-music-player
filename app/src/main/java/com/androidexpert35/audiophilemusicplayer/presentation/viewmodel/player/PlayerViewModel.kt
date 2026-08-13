@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessage
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ClearQueueUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLyricsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.MoveQueueItemUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
@@ -72,6 +73,7 @@ import javax.inject.Inject
  * @property observeAudioTelemetryUseCase Observes real-time audio telemetry.
  * @property observeQueueStateUseCase Observes queue state changes.
  * @property moveQueueItemUseCase Repositions one item in the active playback queue.
+ * @property clearQueueUseCase Removes every track from the active playback queue.
  * @property toggleLikeSongUseCase Toggles the liked state of a track.
  * @property observeLikedSongIdsUseCase Live stream of liked track IDs, used to
  *   keep the heart icon in the now-playing panel in sync with the library.
@@ -91,6 +93,7 @@ class PlayerViewModel @Inject constructor(
     private val observeAudioTelemetryUseCase: ObserveAudioTelemetryUseCase,
     private val observeQueueStateUseCase: ObserveQueueStateUseCase,
     private val moveQueueItemUseCase: MoveQueueItemUseCase,
+    private val clearQueueUseCase: ClearQueueUseCase,
     private val toggleLikeSongUseCase: ToggleLikeSongUseCase,
     private val observeLikedSongIdsUseCase: ObserveLikedSongIdsUseCase,
     private val getLyricsUseCase: GetLyricsUseCase,
@@ -212,6 +215,7 @@ class PlayerViewModel @Inject constructor(
             is PlayerUiEvent.SetRepeatMode -> executeAsync { setRepeatModeUseCase(event.mode) }
             is PlayerUiEvent.SetShuffleMode -> executeAsync { setShuffleModeUseCase(event.mode) }
             is PlayerUiEvent.MoveQueueItem -> moveQueueItem(event.fromIndex, event.toIndex)
+            PlayerUiEvent.ClearQueue -> clearQueue()
             is PlayerUiEvent.NavigateToAlbum -> openAlbumOverview(event.albumId)
             is PlayerUiEvent.NavigateToArtist -> openArtistProfile(event.artistName)
             is PlayerUiEvent.ToggleLikeSong -> toggleLike(event.trackId)
@@ -336,6 +340,17 @@ class PlayerViewModel @Inject constructor(
     private fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         viewModelScope.launch(exceptionHandler) {
             moveQueueItemUseCase(fromIndex, toIndex)
+                .onError { error ->
+                    val message = error?.toUserMessage() ?: PlaybackStrings.playbackCommandFailed
+                    emitEffect(PlayerUiEffect.PlaybackError(message))
+                }
+        }
+    }
+
+    /** Clears the active queue and reports an error if the playback service rejects it. */
+    private fun clearQueue() {
+        viewModelScope.launch(exceptionHandler) {
+            clearQueueUseCase()
                 .onError { error ->
                     val message = error?.toUserMessage() ?: PlaybackStrings.playbackCommandFailed
                     emitEffect(PlayerUiEffect.PlaybackError(message))

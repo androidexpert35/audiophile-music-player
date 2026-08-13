@@ -46,6 +46,12 @@ object SettingsPreferences {
     /** Hi-Res Dynamic Remaster is opt-in so lossless playback remains unprocessed by default. */
     const val DEFAULT_HIRES_REMASTER_ENABLED: Boolean = false
 
+    /** SharedPreferences key controlling whether the queue is retained after task removal. */
+    const val KEY_CLEAR_QUEUE_ON_EXIT: String = "clear_queue_on_exit"
+
+    /** Preserve the current session by default to retain existing listener behaviour. */
+    const val DEFAULT_CLEAR_QUEUE_ON_EXIT: Boolean = false
+
     /** Stores the encoded per-section sort and list/grid choices for the library. */
     const val KEY_LIBRARY_DISPLAY_PREFERENCES: String = "library_display_preferences"
 

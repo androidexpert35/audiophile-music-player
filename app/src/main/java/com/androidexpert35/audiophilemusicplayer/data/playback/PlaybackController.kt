@@ -339,6 +339,24 @@ class PlaybackController @Inject constructor(
         }
     }
 
+    /**
+     * Clears the loaded Media3 queue and immediately publishes the empty player state.
+     *
+     * The service-side [PlaybackStateManager] observes the resulting timeline change and removes
+     * the saved session, ensuring a manually cleared queue cannot return on the next launch.
+     */
+    suspend fun clearQueue() {
+        val ctrl = getController()
+        commandMutex.withLock {
+            if (ctrl.mediaItemCount == 0) return@withLock
+            ctrl.clearMediaItems()
+            trackMap.clear()
+            stopPositionTicker()
+            _queueState.value = QueueState.EMPTY
+            _playbackState.value = PlaybackState.IDLE
+        }
+    }
+
     /** Adds one domain track to Media3 and publishes an immediate queue snapshot. */
     private suspend fun insertQueueTrack(
         ctrl: MediaController,

@@ -45,6 +45,41 @@ class SettingsRepositoryImpl @Inject constructor(
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : SettingsRepository {
 
+    override fun observeClearQueueOnExit(): Flow<Boolean> = callbackFlow {
+        trySend(
+            prefs.getBoolean(
+                SettingsPreferences.KEY_CLEAR_QUEUE_ON_EXIT,
+                SettingsPreferences.DEFAULT_CLEAR_QUEUE_ON_EXIT,
+            )
+        )
+
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == SettingsPreferences.KEY_CLEAR_QUEUE_ON_EXIT) {
+                trySend(
+                    sp.getBoolean(
+                        SettingsPreferences.KEY_CLEAR_QUEUE_ON_EXIT,
+                        SettingsPreferences.DEFAULT_CLEAR_QUEUE_ON_EXIT,
+                    )
+                )
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    override suspend fun setClearQueueOnExit(enabled: Boolean): Resource<Unit> {
+        val committed = withContext(ioDispatcher) {
+            prefs.edit()
+                .putBoolean(SettingsPreferences.KEY_CLEAR_QUEUE_ON_EXIT, enabled)
+                .commit()
+        }
+        return if (committed) {
+            Resource.Success(Unit)
+        } else {
+            Resource.Error(ResourceError.StorageError("Unable to save the queue retention setting."))
+        }
+    }
+
     override suspend fun getLibraryDisplayPreferences(): Resource<LibraryDisplayPreferences> =
         withContext(ioDispatcher) {
             runCatching {

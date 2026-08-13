@@ -25,6 +25,14 @@ interface PlaybackPersistenceRepository {
     suspend fun savePlaybackState(state: PersistedPlaybackState): Resource<Unit>
 
     /**
+     * Deletes the saved session so a previously cleared queue cannot be restored.
+     *
+     * @return [Resource.Success] when no restorable session remains, or [Resource.Error] when
+     *   the persistence store could not be updated.
+     */
+    suspend fun clearPlaybackState(): Resource<Unit>
+
+    /**
      * Reads the last persisted playback session.
      *
      * @return [Resource.Success] wrapping the saved [PersistedPlaybackState], or `null`

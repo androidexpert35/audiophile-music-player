@@ -17,6 +17,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.library.MusicFolde
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveSueEnabledUseCase
@@ -25,6 +26,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.RefreshUsbAudioD
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RemoveMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioPermissionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
@@ -56,10 +58,12 @@ class SettingsViewModelTest {
     private val observeUsbAudioStatusUseCase = mockk<ObserveUsbAudioStatusUseCase>()
     private val observeSueEnabledUseCase = mockk<ObserveSueEnabledUseCase>()
     private val observeHiResRemasterEnabledUseCase = mockk<ObserveHiResRemasterEnabledUseCase>()
+    private val observeClearQueueOnExitUseCase = mockk<ObserveClearQueueOnExitUseCase>()
     private val observeAudioTelemetryUseCase = mockk<ObserveAudioTelemetryUseCase>()
     private val setAudiophileEngineEnabledUseCase = mockk<SetAudiophileEngineEnabledUseCase>()
     private val setSueEnabledUseCase = mockk<SetSueEnabledUseCase>()
     private val setHiResRemasterEnabledUseCase = mockk<SetHiResRemasterEnabledUseCase>()
+    private val setClearQueueOnExitUseCase = mockk<SetClearQueueOnExitUseCase>()
     private val refreshUsbAudioDevicesUseCase = mockk<RefreshUsbAudioDevicesUseCase>()
     private val requestUsbAudioPermissionUseCase = mockk<RequestUsbAudioPermissionUseCase>()
     private val observeMusicFoldersUseCase = mockk<ObserveMusicFoldersUseCase>()
@@ -71,6 +75,7 @@ class SettingsViewModelTest {
     private val usbAudioStatusFlow = MutableStateFlow(UsbAudioStatus())
     private val sueEnabledFlow = MutableStateFlow(true)
     private val hiResEnabledFlow = MutableStateFlow(true)
+    private val clearQueueOnExitFlow = MutableStateFlow(false)
     private val telemetryFlow = MutableStateFlow(AudioTelemetry())
     private val musicFoldersFlow = MutableStateFlow(emptyList<MusicFolder>())
 
@@ -124,6 +129,20 @@ class SettingsViewModelTest {
 
         coVerify(exactly = 1) { setSueEnabledUseCase.invoke(false) }
         assertFalse(viewModel.uiState.value.data?.sueEnabled ?: true)
+    }
+
+    @Test
+    fun `given clear queue on exit is enabled when selected then preference is saved and reflected`() = runTest {
+        stubObservationUseCases()
+        coEvery { setClearQueueOnExitUseCase.invoke(true) } returns Resource.Success(Unit)
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SettingsUiEvent.SetClearQueueOnExit(true))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { setClearQueueOnExitUseCase.invoke(true) }
+        assertTrue(viewModel.uiState.value.data?.clearQueueOnExit == true)
     }
 
     @Test
@@ -361,6 +380,7 @@ class SettingsViewModelTest {
         every { observeUsbAudioStatusUseCase.invoke() } returns usbAudioStatusFlow
         every { observeSueEnabledUseCase.invoke() } returns sueEnabledFlow
         every { observeHiResRemasterEnabledUseCase.invoke() } returns hiResEnabledFlow
+        every { observeClearQueueOnExitUseCase.invoke() } returns clearQueueOnExitFlow
         every { observeAudioTelemetryUseCase.invoke() } returns telemetryFlow
         every { observeMusicFoldersUseCase.invoke() } returns musicFoldersFlow
     }
@@ -370,10 +390,12 @@ class SettingsViewModelTest {
         observeUsbAudioStatusUseCase = observeUsbAudioStatusUseCase,
         observeSueEnabledUseCase = observeSueEnabledUseCase,
         observeHiResRemasterEnabledUseCase = observeHiResRemasterEnabledUseCase,
+        observeClearQueueOnExitUseCase = observeClearQueueOnExitUseCase,
         observeAudioTelemetryUseCase = observeAudioTelemetryUseCase,
         setAudiophileEngineEnabledUseCase = setAudiophileEngineEnabledUseCase,
         setSueEnabledUseCase = setSueEnabledUseCase,
         setHiResRemasterEnabledUseCase = setHiResRemasterEnabledUseCase,
+        setClearQueueOnExitUseCase = setClearQueueOnExitUseCase,
         refreshUsbAudioDevicesUseCase = refreshUsbAudioDevicesUseCase,
         requestUsbAudioPermissionUseCase = requestUsbAudioPermissionUseCase,
         observeMusicFoldersUseCase = observeMusicFoldersUseCase,

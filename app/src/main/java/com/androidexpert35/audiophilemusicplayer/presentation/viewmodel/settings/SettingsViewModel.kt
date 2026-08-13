@@ -9,6 +9,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessa
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveSueEnabledUseCase
@@ -17,6 +18,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.RefreshUsbAudioD
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RemoveMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioPermissionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
@@ -47,11 +49,13 @@ import javax.inject.Inject
  * @property observeSueEnabledUseCase Source of truth for the SUE toggle.
  * @property observeHiResRemasterEnabledUseCase Source of truth for the Hi-Res
  *   Dynamic Remaster toggle.
+ * @property observeClearQueueOnExitUseCase Source of truth for the queue-retention toggle.
  * @property observeAudioTelemetryUseCase Provides real-time audio-pipeline
  *   telemetry so the Settings screen can surface the active SUE state.
  * @property setAudiophileEngineEnabledUseCase Writes the new preference value.
  * @property setSueEnabledUseCase Writes the SUE preference.
  * @property setHiResRemasterEnabledUseCase Writes the Hi-Res Remaster preference.
+ * @property setClearQueueOnExitUseCase Writes the queue-retention preference.
  * @property refreshUsbAudioDevicesUseCase Re-runs USB DAC discovery on demand.
  * @property requestUsbAudioPermissionUseCase Dispatches the USB permission
  *   prompt when a DAC is connected.
@@ -67,10 +71,12 @@ class SettingsViewModel @Inject constructor(
     private val observeUsbAudioStatusUseCase: ObserveUsbAudioStatusUseCase,
     observeSueEnabledUseCase: ObserveSueEnabledUseCase,
     observeHiResRemasterEnabledUseCase: ObserveHiResRemasterEnabledUseCase,
+    observeClearQueueOnExitUseCase: ObserveClearQueueOnExitUseCase,
     private val observeAudioTelemetryUseCase: ObserveAudioTelemetryUseCase,
     private val setAudiophileEngineEnabledUseCase: SetAudiophileEngineEnabledUseCase,
     private val setSueEnabledUseCase: SetSueEnabledUseCase,
     private val setHiResRemasterEnabledUseCase: SetHiResRemasterEnabledUseCase,
+    private val setClearQueueOnExitUseCase: SetClearQueueOnExitUseCase,
     private val refreshUsbAudioDevicesUseCase: RefreshUsbAudioDevicesUseCase,
     private val requestUsbAudioPermissionUseCase: RequestUsbAudioPermissionUseCase,
     observeMusicFoldersUseCase: ObserveMusicFoldersUseCase,
@@ -111,6 +117,13 @@ class SettingsViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
+        observeClearQueueOnExitUseCase()
+            .onEach { clearQueueOnExit ->
+                val current = uiState.value.data ?: return@onEach
+                setSuccessState(current.copy(clearQueueOnExit = clearQueueOnExit))
+            }
+            .launchIn(viewModelScope)
+
         // Observe the granted music folders separately so the list stays live while the
         // user adds or removes folders without leaving the screen.
         observeMusicFoldersUseCase()
@@ -148,6 +161,7 @@ class SettingsViewModel @Inject constructor(
 
     override fun handleEvent(event: SettingsUiEvent) {
         when (event) {
+            is SettingsUiEvent.SetClearQueueOnExit -> handleSetClearQueueOnExit(event.enabled)
             is SettingsUiEvent.SetAudiophileEngineEnabled -> handleSetAudiophileEngineEnabled(event.enabled)
             is SettingsUiEvent.SetSueEnabled -> handleSetSueEnabled(event.enabled)
             is SettingsUiEvent.SetHiResRemasterEnabled -> handleSetHiResRemasterEnabled(event.enabled)
@@ -156,6 +170,22 @@ class SettingsViewModel @Inject constructor(
             SettingsUiEvent.AddMusicFolderTapped -> emitEffect(SettingsUiEffect.PickMusicFolder)
             is SettingsUiEvent.MusicFolderPicked -> handleMusicFolderPicked(event.folderId)
             is SettingsUiEvent.RemoveMusicFolder -> handleRemoveMusicFolder(event.folderId)
+        }
+    }
+
+    /** Persists whether task removal from recents should also discard the active queue. */
+    private fun handleSetClearQueueOnExit(enabled: Boolean) {
+        if (uiState.value.data?.clearQueueOnExit == enabled) return
+
+        viewModelScope.launch {
+            when (val result = setClearQueueOnExitUseCase(enabled)) {
+                is Resource.Success -> {
+                    val current = uiState.value.data ?: return@launch
+                    setSuccessState(current.copy(clearQueueOnExit = enabled))
+                }
+
+                is Resource.Error -> emitError(result)
+            }
         }
     }
 

@@ -23,10 +23,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +78,7 @@ import java.util.Locale
  * @param currentIndex Zero-based index of the currently active track.
  * @param onDismiss Callback invoked when the sheet is dismissed.
  * @param onMove Callback receiving a queue item move while edit mode is active.
+ * @param onClear Callback invoked after the listener confirms that the queue should be cleared.
  * @param onTrackSelected Callback invoked when the user taps a queue row to jump to that track.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,12 +88,14 @@ internal fun PlaybackQueueSheet(
     currentIndex: Int,
     onDismiss: () -> Unit,
     onMove: (Int, Int) -> Unit,
+    onClear: () -> Unit,
     onTrackSelected: (Track) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
     val reorderState = rememberTrackReorderState(listState)
     var isEditing by remember { mutableStateOf(false) }
+    var showClearConfirmation by remember { mutableStateOf(false) }
     val entryKeys = remember(tracks) { tracks.toStableTrackEntryKeys() }
 
     // Scroll to the current track when the sheet first appears so the user
@@ -148,6 +154,19 @@ internal fun PlaybackQueueSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            if (tracks.isNotEmpty()) {
+                IconButton(
+                    enabled = !isEditing,
+                    onClick = { showClearConfirmation = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.DeleteSweep,
+                        contentDescription = stringResource(R.string.player_queue_clear_content_description),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             IconButton(onClick = { isEditing = !isEditing }) {
@@ -266,6 +285,29 @@ internal fun PlaybackQueueSheet(
                 }
             }
         }
+    }
+
+    if (showClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation = false },
+            title = { Text(stringResource(R.string.player_queue_clear_title)) },
+            text = { Text(stringResource(R.string.player_queue_clear_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearConfirmation = false
+                        onClear()
+                    }
+                ) {
+                    Text(stringResource(R.string.player_queue_clear_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmation = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
 
@@ -485,6 +527,7 @@ private fun PlaybackQueueSheetPreview() {
             currentIndex = 2,
             onDismiss = {},
             onMove = { _, _ -> },
+            onClear = {},
             onTrackSelected = {}
         )
     }

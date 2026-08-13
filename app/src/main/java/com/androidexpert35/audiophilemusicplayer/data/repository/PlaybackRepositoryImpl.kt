@@ -60,6 +60,11 @@ class PlaybackRepositoryImpl @Inject constructor(
             playbackController.moveQueueItem(fromIndex, toIndex)
         }
 
+    override suspend fun clearQueue(): Resource<Unit> =
+        queueMutation(errorMessage = "Failed to clear playback queue") {
+            playbackController.clearQueue()
+        }
+
     override suspend fun pause(): Resource<Unit> = runCatching {
         playbackController.pause()
         Resource.Success(Unit)

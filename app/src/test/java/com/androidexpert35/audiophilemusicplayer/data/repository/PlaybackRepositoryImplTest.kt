@@ -1,12 +1,10 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
-import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
-
 import com.androidexpert35.audiophilemusicplayer.data.playback.PlaybackController
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
-import com.tony.coreui.domain.resource.Resource
-import com.tony.coreui.domain.resource.ResourceError
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
+import com.tony.coreui.domain.resource.Resource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -113,6 +111,16 @@ class PlaybackRepositoryImplTest {
 
         assertTrue(result is Resource.Success)
         coVerify(exactly = 1) { playbackController.moveQueueItem(3, 1) }
+    }
+
+    @Test
+    fun `given active queue when clear invoked then repository delegates queue removal`() = runTest {
+        coEvery { playbackController.clearQueue() } returns Unit
+
+        val result = repository.clearQueue()
+
+        assertTrue(result is Resource.Success)
+        coVerify(exactly = 1) { playbackController.clearQueue() }
     }
 
     @Test

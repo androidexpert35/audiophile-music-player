@@ -1,6 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.data.playback.service
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
@@ -12,6 +13,7 @@ import com.androidexpert35.audiophilemusicplayer.data.playback.AudioTelemetryCol
 import com.androidexpert35.audiophilemusicplayer.data.playback.AudiophileSimpleBasePlayer
 import com.androidexpert35.audiophilemusicplayer.data.playback.PlaybackStateManager
 import com.androidexpert35.audiophilemusicplayer.data.playback.observeBecomingNoisy
+import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPreferences
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
@@ -50,6 +52,9 @@ class AudioPlaybackService : MediaSessionService() {
 
     @Inject
     lateinit var playbackStateManager: PlaybackStateManager
+
+    @Inject
+    lateinit var settingsPreferences: SharedPreferences
 
     private var mediaSession: MediaSession? = null
 
@@ -144,9 +149,21 @@ class AudioPlaybackService : MediaSessionService() {
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        // Persist the current queue position and playhead so the next cold start
-        // restores exactly where the user left off.
-        mediaSession?.player?.let { playbackStateManager.saveNow(it) }
+        val clearQueueOnExit = settingsPreferences.getBoolean(
+            SettingsPreferences.KEY_CLEAR_QUEUE_ON_EXIT,
+            SettingsPreferences.DEFAULT_CLEAR_QUEUE_ON_EXIT,
+        )
+        mediaSession?.player?.let { player ->
+            if (clearQueueOnExit) {
+                // Clearing before service teardown also stops the audio pipeline promptly.
+                player.clearMediaItems()
+                playbackStateManager.clearNow()
+            } else {
+                // Persist the current queue position and playhead so the next cold start
+                // restores exactly where the user left off.
+                playbackStateManager.saveNow(player)
+            }
+        }
         // Stopping the service here triggers onDestroy(), which releases the
         // Media3 session, the engine, and ultimately the USB FD via sink.close().
         stopSelf()

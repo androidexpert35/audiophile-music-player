@@ -7,6 +7,7 @@ import com.androidexpert35.audiophilemusicplayer.data.playback.PlaybackStateMana
 import com.androidexpert35.audiophilemusicplayer.di.ApplicationScope
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import com.androidexpert35.audiophilemusicplayer.domain.model.playback.PersistedPlaybackState
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ClearPlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SavePlaybackStateUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -14,6 +15,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,6 +39,7 @@ import javax.inject.Singleton
 @Singleton
 class PlaybackStateManager @Inject constructor(
     private val savePlaybackStateUseCase: SavePlaybackStateUseCase,
+    private val clearPlaybackStateUseCase: ClearPlaybackStateUseCase,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     @param:ApplicationScope private val mainScope: CoroutineScope,
 ) {
@@ -52,6 +57,12 @@ class PlaybackStateManager @Inject constructor(
      * [PERIODIC_SAVE_INTERVAL_MS] while audio flows caps that loss.
      */
     private var periodicSaveJob: Job? = null
+
+    /** Serializes session writes and deletion so a cleared queue cannot be saved again. */
+    private val persistenceMutex = Mutex()
+
+    /** Invalidates queued asynchronous saves after a queue-clear operation. */
+    private val persistenceGeneration = AtomicLong(0L)
 
     /**
      * Attaches the session-save listener to [player].
@@ -80,10 +91,32 @@ class PlaybackStateManager @Inject constructor(
      */
     fun saveNow(player: Player) {
         val snapshot = capturePlayerState(player) ?: return
+        val generation = persistenceGeneration.get()
         runBlocking {
-            savePlaybackStateUseCase(snapshot)
-            logSavedSnapshot(prefix = "Sync", snapshot = snapshot)
+            persistenceMutex.withLock {
+                if (generation == persistenceGeneration.get()) {
+                    savePlaybackStateUseCase(snapshot)
+                    logSavedSnapshot(prefix = "Sync", snapshot = snapshot)
+                }
+            }
         }
+    }
+
+    /**
+     * Synchronously deletes the restorable playback session.
+     *
+     * Used during task removal, where Android may terminate the process immediately after the
+     * service finishes its teardown. Incrementing [persistenceGeneration] prevents an older
+     * asynchronous save from recreating the deleted queue afterward.
+     */
+    fun clearNow() {
+        runBlocking {
+            persistenceMutex.withLock {
+                persistenceGeneration.incrementAndGet()
+                clearPlaybackStateUseCase()
+            }
+        }
+        Log.d(TAG, "Persisted playback session cleared")
     }
 
     private fun createSaveListener(player: Player): Player.Listener =
@@ -115,6 +148,12 @@ class PlaybackStateManager @Inject constructor(
                 // the next session continues with the user's selected traversal.
                 scheduleAsyncSave(player)
             }
+
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                if (player.mediaItemCount == 0) {
+                    clearNow()
+                }
+            }
         }
 
     /** Starts the while-playing ticker; the snapshot is captured on the main thread. */
@@ -133,9 +172,14 @@ class PlaybackStateManager @Inject constructor(
 
     private fun scheduleAsyncSave(player: Player) {
         val snapshot = capturePlayerState(player) ?: return
+        val generation = persistenceGeneration.get()
         saveScope.launch {
-            savePlaybackStateUseCase(snapshot)
-            logSavedSnapshot(prefix = "Async", snapshot = snapshot)
+            persistenceMutex.withLock {
+                if (generation == persistenceGeneration.get()) {
+                    savePlaybackStateUseCase(snapshot)
+                    logSavedSnapshot(prefix = "Async", snapshot = snapshot)
+                }
+            }
         }
     }
 

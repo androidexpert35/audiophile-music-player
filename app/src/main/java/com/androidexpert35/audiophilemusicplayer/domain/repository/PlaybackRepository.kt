@@ -69,6 +69,16 @@ interface PlaybackRepository {
     suspend fun moveQueueItem(fromIndex: Int, toIndex: Int): Resource<Unit>
 
     /**
+     * Removes every item from the active playback queue and stops playback.
+     *
+     * The cleared queue must not be restored during the next app launch.
+     *
+     * @return [Resource.Success] when the queue and its restorable session state are cleared,
+     *   or [Resource.Error] when the playback service cannot apply the change.
+     */
+    suspend fun clearQueue(): Resource<Unit>
+
+    /**
      * Pauses the currently playing track.
      *
      * @return [Resource.Success] on success, [Resource.Error] if no media is loaded.

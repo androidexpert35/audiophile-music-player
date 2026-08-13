@@ -41,6 +41,17 @@ class PlaybackPersistenceRepositoryImpl @Inject constructor(
             )
         }
 
+    override suspend fun clearPlaybackState(): Resource<Unit> = runCatching {
+        playbackStateDao.clearPlaybackState()
+        Resource.Success(Unit)
+    }.getOrElse { throwable ->
+        Resource.Error(
+            ResourceError.DatabaseError(
+                throwable.message ?: "Failed to clear playback state"
+            )
+        )
+    }
+
     override suspend fun restorePlaybackState(): Resource<PersistedPlaybackState?> =
         runCatching {
             Resource.Success(playbackStateDao.getPlaybackState()?.toDomain())

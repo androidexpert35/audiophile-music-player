@@ -58,6 +58,9 @@ sealed interface PlayerUiEvent {
      */
     data class MoveQueueItem(val fromIndex: Int, val toIndex: Int) : PlayerUiEvent
 
+    /** Clears every track from the active playback queue. */
+    data object ClearQueue : PlayerUiEvent
+
     /**
      * Opens the album overview destination for the currently playing track.
      *

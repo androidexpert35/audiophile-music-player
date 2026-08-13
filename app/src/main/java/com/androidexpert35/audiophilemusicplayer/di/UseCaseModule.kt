@@ -17,6 +17,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToPlayli
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToPlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToQueueUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ClearPlaybackStateUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ClearQueueUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.CreatePlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.DeletePlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumArtUseCase
@@ -31,6 +33,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIn
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.MoveQueueItemUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
@@ -59,6 +62,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMedi
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SearchTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SeekToPositionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetRepeatModeUseCase
@@ -289,6 +293,12 @@ object UseCaseModule {
         playbackRepository: PlaybackRepository
     ): MoveQueueItemUseCase = MoveQueueItemUseCase(playbackRepository)
 
+    /** Provides [ClearQueueUseCase] for removing the active playback queue. */
+    @Provides
+    fun provideClearQueueUseCase(
+        playbackRepository: PlaybackRepository
+    ): ClearQueueUseCase = ClearQueueUseCase(playbackRepository)
+
     /**
      * Provides [PausePlaybackUseCase] backed by [PlaybackRepository].
      *
@@ -399,6 +409,12 @@ object UseCaseModule {
     fun provideSavePlaybackStateUseCase(
         playbackPersistenceRepository: PlaybackPersistenceRepository
     ): SavePlaybackStateUseCase = SavePlaybackStateUseCase(playbackPersistenceRepository)
+
+    /** Provides [ClearPlaybackStateUseCase] for deleting a restorable queue session. */
+    @Provides
+    fun provideClearPlaybackStateUseCase(
+        playbackPersistenceRepository: PlaybackPersistenceRepository
+    ): ClearPlaybackStateUseCase = ClearPlaybackStateUseCase(playbackPersistenceRepository)
 
     /**
      * Provides [RestorePlaybackStateUseCase] backed by the [PlaybackPersistenceRepository].
@@ -539,6 +555,18 @@ object UseCaseModule {
         settingsRepository: SettingsRepository
     ): ObserveSueEnabledUseCase =
         ObserveSueEnabledUseCase(settingsRepository)
+
+    /** Provides the reactive task-removal queue policy for the Settings screen. */
+    @Provides
+    fun provideObserveClearQueueOnExitUseCase(
+        settingsRepository: SettingsRepository
+    ): ObserveClearQueueOnExitUseCase = ObserveClearQueueOnExitUseCase(settingsRepository)
+
+    /** Provides the writer for the task-removal queue policy. */
+    @Provides
+    fun provideSetClearQueueOnExitUseCase(
+        settingsRepository: SettingsRepository
+    ): SetClearQueueOnExitUseCase = SetClearQueueOnExitUseCase(settingsRepository)
 
     /**
      * Provides [SetSueEnabledUseCase] backed by [SettingsRepository].

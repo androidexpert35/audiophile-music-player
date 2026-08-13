@@ -209,7 +209,9 @@ DataStore. `SettingsPreferences` is the single key/default registry — add new 
 defaults there, never inline string keys at call sites.
 
 Settings currently include: audiophile engine toggle, SUE (Sonic Upscaling
-Enhancer) toggle, and Hi-Res remaster toggle. Each is exposed reactively through
+Enhancer) toggle, Hi-Res remaster toggle, and a task-removal queue-retention toggle.
+When the latter is enabled, removing the app from Recents clears the playback queue
+and its persisted session instead of restoring it at the next launch. Each is exposed reactively through
 `Observe*UseCase` / `Set*UseCase` pairs and consumed by the engine coordinators
 in [`playback.md`](playback.md). Direct USB PCM format negotiation is always
 automatic and source-native; no manual format override is exposed.

@@ -82,6 +82,10 @@ internal fun PlayerContextSection(
             onMove = { fromIndex, toIndex ->
                 onEvent(PlayerUiEvent.MoveQueueItem(fromIndex, toIndex))
             },
+            onClear = {
+                showQueueSheet = false
+                onEvent(PlayerUiEvent.ClearQueue)
+            },
             onTrackSelected = { selectedTrack ->
                 showQueueSheet = false
                 onEvent(PlayerUiEvent.Play(selectedTrack, queueState.tracks))
