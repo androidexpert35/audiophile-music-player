@@ -135,6 +135,31 @@ class MediaIndexRepositoryImplTest {
         assertFalse(createRepository().isLibraryIndexed())
     }
 
+    @Test
+    fun `given a user upgrading with no folder yet then the old catalogue is not served`() = runTest {
+        // The exact upgrade path: migration leaves the stored signature empty, and the user
+        // has granted no folder yet, so the current signature is empty too. Comparing the two
+        // for equality would call the whole-device catalogue valid and skip the folder step
+        // entirely — the app would open straight into the library it was meant to replace.
+        coEvery { libraryIndexDao.getLibraryIndexState() } returns indexState(folderSignature = "")
+        coEvery { musicFolderRegistry.folderSignature() } returns ""
+
+        assertFalse(createRepository().isLibraryIndexed())
+    }
+
+    @Test
+    fun `given the last folder was removed then the emptied library still needs a folder`() =
+        runTest {
+            // Same empty-vs-empty shape, reached from the other direction: the index is a
+            // legitimately empty one, but the user still has to name a folder before there is
+            // anything to show.
+            coEvery { libraryIndexDao.getLibraryIndexState() } returns
+                indexState(folderSignature = "").copy(indexedTrackCount = 0)
+            coEvery { musicFolderRegistry.folderSignature() } returns ""
+
+            assertFalse(createRepository().isLibraryIndexed())
+        }
+
     private fun createRepository(): MediaIndexRepositoryImpl = MediaIndexRepositoryImpl(
         scanner = scanner,
         dsdFileScanner = dsdFileScanner,

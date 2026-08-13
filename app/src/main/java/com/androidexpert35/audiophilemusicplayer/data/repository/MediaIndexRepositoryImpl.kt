@@ -207,16 +207,31 @@ class MediaIndexRepositoryImpl @Inject constructor(
     }
 
     /**
-     * A cached index counts as usable only when it was built from the folders granted *now*.
+     * A cached index counts as usable only when it was built from the folders granted *now*,
+     * and only when there is a real folder behind it.
      *
      * Comparing the stored signature is what makes a folder removed in Settings actually
      * disappear: the catalogue is declared stale on the next launch even if nothing was
-     * running to observe the change when it happened. Indexes written before folder-scoped
-     * scanning carry an empty signature and are therefore always rebuilt.
+     * running to observe the change when it happened.
+     *
+     * An **empty** signature never counts as a match, even against an equally empty current
+     * scope. Two different situations both produce an empty signature, and serving a
+     * catalogue in either would be wrong:
+     * - a library indexed before folder scoping existed, i.e. the whole-device scan full of
+     *   messenger voice notes — an upgrading user must be sent through the folder step
+     *   rather than dropped straight into that stale catalogue;
+     * - a user who removed their last folder, whose library is legitimately empty and who
+     *   needs to be asked for a folder before anything can be shown.
+     *
+     * In both cases the caller should route to onboarding, which is exactly what returning
+     * `false` here does.
      */
     override suspend fun isLibraryIndexed(): Boolean = runCatching {
         val state = libraryIndexDao.getLibraryIndexState() ?: return@runCatching false
-        state.isCompleted && state.folderSignature == musicFolderRegistry.folderSignature()
+        val currentSignature = musicFolderRegistry.folderSignature()
+        state.isCompleted &&
+            currentSignature.isNotEmpty() &&
+            state.folderSignature == currentSignature
     }.getOrDefault(false)
 
     /**
