@@ -39,6 +39,13 @@ Regular M3U files remain the source of truth for their own membership and order.
 `ReorderPlaylistTracksUseCase`, and `ReplacePlaylistTracksUseCase` instead of accessing these
 files from presentation code.
 
+`.m3u`/`.m3u8` files discovered inside the granted music folders (`PlaylistKind.IMPORTED`) are a
+second, disk-backed source `PlaylistRepositoryImpl.observePlaylists()` merges in from
+`ImportedPlaylistDao` — see [`M3uFileScanner`](#mediastore-scanning--indexing-datascanner) below.
+Unlike the app-private collection, mutating an imported playlist writes straight back to its
+original document via the SAF permission already granted on its parent tree (`ContentResolver
+.openOutputStream(uri, "wt")` / `DocumentsContract.deleteDocument`), not to an app-private copy.
+
 ---
 
 ## Room persistence (`data/local/`)
@@ -48,14 +55,15 @@ truth for indexed library, session state, liked songs, playback history/counts, 
 
 - **Entities** (`entity/`): `TrackEntity`, `AlbumEntity`, `ArtistEntity`,
   `LibraryIndexStateEntity`, `PlaybackStateEntity`, `LikedSongEntity`,
-  `RecentlyPlayedEntity`, `LyricsCacheEntity`.
+  `RecentlyPlayedEntity`, `LyricsCacheEntity`, `ImportedPlaylistEntity`.
 - **DAOs** (`dao/`): `LibraryIndexDao`, `PlaybackStateDao`, `LikedSongDao`,
-  `RecentlyPlayedDao`, `LyricsCacheDao`. Provided in `AppModule`.
-- **Converters** (`converter/`): `LongListTypeConverter` (queue ID lists).
+  `RecentlyPlayedDao`, `LyricsCacheDao`, `ImportedPlaylistDao`. Provided in `AppModule`.
+- **Converters** (`converter/`): `LongListTypeConverter` (queue ID lists),
+  `StringListTypeConverter` (imported-playlist track URIs).
 
 ### Migrations are mandatory
-Current schema **version is 9** with explicit migrations `MIGRATION_1_2` …
-`MIGRATION_8_9`, registered in both `AudiophileDatabase` and `AppModule`'s
+Current schema **version is 10** with explicit migrations `MIGRATION_1_2` …
+`MIGRATION_9_10`, registered in both `AudiophileDatabase` and `AppModule`'s
 `databaseBuilder`. When you change any entity:
 
 1. Bump `@Database(version = N)`.
@@ -127,12 +135,21 @@ index complete without stamping its signature.
   through `SeekableDocumentSource` (positioned reads over the document's `FileChannel`,
   because `RandomAccessFile` cannot open these files), and caches embedded APIC artwork
   into `cacheDir` (referenced by `TrackEntity.artUri`).
+- `M3uFileScanner` finds `.m3u`/`.m3u8` playlists MediaStore never indexes the same way
+  `DsdFileScanner` finds DSD files — walking the granted document trees — then resolves
+  each entry's path against the same scan pass's combined MediaStore+DSD result (exact
+  path, then suffix, then unambiguous-filename fallback; unresolved entries are skipped).
+  Results are cached in `ImportedPlaylistDao`, not the track/album/artist tables, and
+  merged into `PlaylistRepositoryImpl.observePlaylists()` as `PlaylistKind.IMPORTED`.
 - `MetadataFallbackReader` fills gaps when MediaStore metadata is missing.
 - `ScanAndIndexMediaUseCase` drives a full scan → Room index pass; progress is exposed
   via `MediaIndexingProgress`. `ObserveMediaStoreChangesUseCase` watches for library
   changes (wrap the `ContentObserver` in a `callbackFlow`) **merged with folder-set
   changes**, so adding or removing a folder in Settings re-indexes the same way copying
-  files onto the device does.
+  files onto the device does. `SettingsViewModel` additionally navigates to
+  `AppRoutes.Onboarding` after a folder add/remove succeeds, so that rescan is visible on
+  the same indexing screen used on first launch instead of only happening in the
+  background — see [`presentation.md`](presentation.md#launch-graph-gate-startup-cost).
 - `MediaIndexRepositoryImpl.scanAndIndexMedia()` is a `callbackFlow` (not `flow {}`) so it
   can forward the `onProgress` callback `MediaStoreScanner.scanAudioFilesForIndexing()`
   invokes per file during its ID3v2.2 fallback pass — the real per-file I/O cost, and the

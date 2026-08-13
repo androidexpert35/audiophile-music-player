@@ -48,6 +48,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+                Let Android present Audiophile alongside other USB-audio apps when a
+                DAC is attached. Selecting the app from this system-owned chooser also
+                grants USB host access for that attachment, so it must not be raced by
+                an app-owned permission prompt.
+            -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_audio_device_filter" />
+
             <!-- Handle audio files opened from file managers or other apps -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

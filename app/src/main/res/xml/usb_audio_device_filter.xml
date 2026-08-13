@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Match USB Audio Class devices. Android also checks the device's interfaces,
+    which covers DACs that declare class information per interface rather than on
+    the device descriptor itself.
+-->
+<resources>
+    <usb-device class="1" />
+</resources>

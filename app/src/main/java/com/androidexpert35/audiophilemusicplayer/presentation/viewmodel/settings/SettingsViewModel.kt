@@ -19,6 +19,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioP
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
 import com.tony.coreui.data.strings.StringResolver
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.presentation.error.UiErrorMapper
@@ -159,11 +160,14 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Persists a folder chosen in the system chooser.
+     * Persists a folder chosen in the system chooser, then opens the same indexing screen
+     * shown during onboarding so the resulting rescan is visible rather than silent.
      *
-     * The library re-indexes on its own: the folder set is one of the signals behind
-     * [com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase],
-     * so the Library screen rebuilds its catalogue without any extra trigger here.
+     * [com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.onboarding.OnboardingViewModel]
+     * re-evaluates its own state on that screen: permission and folder steps are already
+     * satisfied at this point, so it goes straight into
+     * [com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.onboarding.OnboardingState.Scanning]
+     * and returns to the home flow when the scan it drives completes.
      *
      * @param folderId Chosen folder identifier, or `null` when the chooser was dismissed.
      */
@@ -172,21 +176,23 @@ class SettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             when (val result = addMusicFolderUseCase(folderId)) {
-                is Resource.Success -> Unit
+                is Resource.Success -> navigateToRoute(AppRoutes.Onboarding.route)
                 is Resource.Error -> emitError(result)
             }
         }
     }
 
     /**
-     * Drops a folder from the library scan scope.
+     * Drops a folder from the library scan scope, then opens the same indexing screen used
+     * for adding one so the listener sees the remaining library being rebuilt rather than
+     * having it happen silently in the background.
      *
      * @param folderId Identifier of the folder to stop scanning.
      */
     private fun handleRemoveMusicFolder(folderId: String) {
         viewModelScope.launch {
             when (val result = removeMusicFolderUseCase(folderId)) {
-                is Resource.Success -> Unit
+                is Resource.Success -> navigateToRoute(AppRoutes.Onboarding.route)
                 is Resource.Error -> emitError(result)
             }
         }

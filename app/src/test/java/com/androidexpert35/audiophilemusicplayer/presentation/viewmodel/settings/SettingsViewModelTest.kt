@@ -27,6 +27,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioP
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
 import io.mockk.coEvery
@@ -277,6 +278,34 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { addMusicFolderUseCase.invoke(FOLDER_ID) }
+    }
+
+    @Test
+    fun `given folder picked when grant succeeds then the indexing screen opens`() = runTest {
+        stubObservationUseCases()
+        coEvery { addMusicFolderUseCase.invoke(FOLDER_ID) } returns Resource.Success(Unit)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SettingsUiEvent.MusicFolderPicked(FOLDER_ID))
+        advanceUntilIdle()
+
+        assertEquals(AppRoutes.Onboarding.route, navigationManager.lastRoute)
+    }
+
+    @Test
+    fun `given folder removal succeeds when handled then the indexing screen opens`() = runTest {
+        stubObservationUseCases()
+        coEvery { removeMusicFolderUseCase.invoke(FOLDER_ID) } returns Resource.Success(Unit)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SettingsUiEvent.RemoveMusicFolder(FOLDER_ID))
+        advanceUntilIdle()
+
+        assertEquals(AppRoutes.Onboarding.route, navigationManager.lastRoute)
     }
 
     @Test

@@ -24,7 +24,7 @@ import javax.inject.Singleton
  * keeping broadcast-receiver logic out of ViewModels and UI classes.
  *
  * Responsibilities:
- * - request USB permission when the audiophile engine is preferred and a DAC appears,
+ * - refresh the active audiophile pipeline when a DAC appears,
  * - refresh the active audiophile pipeline when USB direct-output availability changes,
  * - re-evaluate the preferred engine whenever USB availability changes.
  */
@@ -74,7 +74,13 @@ class UsbAudioLifecycleManager @Inject constructor(
                     when (event) {
                         is UsbAudioEvent.DeviceAttached -> {
                             Log.d(TAG, "USB DAC attached: ${event.device.deviceName}")
-                            requestUsbPermissionIfNeeded(event.device.deviceId)
+                            // The manifest's USB-attach intent filter makes Android show
+                            // its app chooser when several DAC-capable apps are installed.
+                            // Do not call UsbManager.requestPermission() here: its prompt
+                            // can otherwise appear on top of that chooser. When the user
+                            // selects Audiophile, Android grants USB host access as part of
+                            // the attach flow; Settings retains an explicit manual grant
+                            // action for every other permission path.
                             refreshAudiophileOutputIfNeeded()
                         }
 

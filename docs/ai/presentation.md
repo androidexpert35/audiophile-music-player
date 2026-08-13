@@ -129,11 +129,20 @@ is composed and passes it to `AppNavigator` as an `AppStartDestination`
 `IsMediaLibraryIndexedUseCase()` is true, the app enters through `AppRoutes.MainRoot`
 (start = `MainFlow`) instead of `AppRoutes.Root` (start = `Onboarding`), so the
 onboarding screen is never composed and its enter transition never overlaps the
-library's first composition. Onboarding stays the sole owner of the first-time
-permission + scan flow; the gate only avoids re-entering it when there is nothing to do
-(new-file re-indexing is handled independently by `LibraryViewModel`'s MediaStore
-`ContentObserver`, not by onboarding). While `Deciding` (the brief async index read)
+library's first composition. While `Deciding` (the brief async index read)
 `AppNavigator` paints only a themed background so nothing flashes.
+
+`AppRoutes.Onboarding` is not exclusively a first-launch destination: `SettingsViewModel`
+also navigates there (a plain forward `navigateToRoute(AppRoutes.Onboarding.route)`, same
+primitive `PlayerViewModel` uses) after `AddMusicFolderUseCase`/`RemoveMusicFolderUseCase`
+succeeds, so a folder add/remove is visibly re-indexed instead of happening silently.
+`OnboardingViewModel.initialize()`/`resumeAfterPermission()` re-evaluate state on every
+entry, so with permission and a folder already granted this lands straight in
+`OnboardingState.Scanning` and returns to `MainFlow` via the same
+`OnboardingUiEffect.NavigateToHome` path used on first launch — no separate screen or
+ViewModel was added for this. `LibraryViewModel`'s MediaStore `ContentObserver` still
+independently re-indexes on external content changes that don't go through Settings
+(e.g. files copied onto the device without touching the folder list).
 
 `AppNavigator` also defers composing the player overlay (`PlayerViewModel` flow
 collection + `BlurredBackground` GPU layer) until two frames after launch, then keeps it
