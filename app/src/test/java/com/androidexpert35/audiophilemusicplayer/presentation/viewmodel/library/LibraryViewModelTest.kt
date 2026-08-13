@@ -1,40 +1,40 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library
 
-import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.FakeNavigationManager
 import com.androidexpert35.audiophilemusicplayer.FakePlayerOverlayManager
+import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.TestStringResolver
 import com.androidexpert35.audiophilemusicplayer.TestUiErrorMapper
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
-import com.tony.coreui.domain.resource.Resource
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Album
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToPlaylistUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.CreatePlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToPlaylistUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.CreatePlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveRecentlyPlayedUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ToggleLikeSongUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
+import com.tony.coreui.domain.resource.Resource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -265,6 +265,25 @@ class LibraryViewModelTest {
         advanceUntilIdle()
 
         assertEquals(AppRoutes.Settings.route, navigationManager.lastRoute)
+    }
+
+    @Test
+    fun `given different sort choices when switching sections then each section retains its own choice`() = runTest {
+        stubInitialLibrary()
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(LibraryUiEvent.SetSortOrder(LibrarySortOrder.ALPHABETICAL))
+        viewModel.onEvent(LibraryUiEvent.SelectContentType(LibraryContentType.ALBUMS))
+        viewModel.onEvent(LibraryUiEvent.SetSortOrder(LibrarySortOrder.RECENTLY_PLAYED))
+        viewModel.onEvent(LibraryUiEvent.SelectContentType(LibraryContentType.TRACKS))
+
+        assertEquals(LibrarySortOrder.ALPHABETICAL, viewModel.uiState.value.data?.sortOrder)
+
+        viewModel.onEvent(LibraryUiEvent.SelectContentType(LibraryContentType.ALBUMS))
+
+        assertEquals(LibrarySortOrder.RECENTLY_PLAYED, viewModel.uiState.value.data?.sortOrder)
     }
 
     @Test

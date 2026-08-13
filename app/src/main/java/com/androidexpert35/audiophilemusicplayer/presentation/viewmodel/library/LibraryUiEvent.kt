@@ -71,7 +71,7 @@ sealed interface LibraryUiEvent {
     data object ToggleViewMode : LibraryUiEvent
 
     /**
-     * Changes the active sort order for all catalogue sections.
+     * Changes the retained sort order for the currently visible catalogue section.
      *
      * @property sortOrder New sort strategy to apply immediately.
      */

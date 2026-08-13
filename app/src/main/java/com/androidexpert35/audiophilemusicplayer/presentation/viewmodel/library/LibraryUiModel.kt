@@ -23,8 +23,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  *   Defaults to the first chip, [LibraryContentType.TRACKS], when the library opens.
  * @property isGridView Whether the content should be rendered as a two-column grid.
  *   Defaults to `false` (list view).
- * @property sortOrder Active sort strategy applied to all catalogue sections.
- *   Defaults to [LibrarySortOrder.RECENTLY_ADDED].
+ * @property sortOrders Sort strategy retained independently for every catalogue section.
+ *   Every section defaults to [LibrarySortOrder.RECENTLY_ADDED].
  * @property isRefreshing `true` while a user-requested or MediaStore-change re-index is in
  *   progress; drives the spinning animation on the header icon.
  * @property isCreatePlaylistDialogVisible Whether the create-playlist dialog is open.
@@ -40,11 +40,16 @@ data class LibraryUiModel(
     val recentlyPlayedTrackIds: List<Long> = emptyList(),
     val selectedContentType: LibraryContentType = LibraryContentType.TRACKS,
     val isGridView: Boolean = false,
-    val sortOrder: LibrarySortOrder = LibrarySortOrder.RECENTLY_ADDED,
+    val sortOrders: Map<LibraryContentType, LibrarySortOrder> =
+        LibraryContentType.entries.associateWith { LibrarySortOrder.RECENTLY_ADDED },
     val isRefreshing: Boolean = false,
     val isCreatePlaylistDialogVisible: Boolean = false,
     val playlistPickerTrack: Track? = null
 ) {
+    /** Sort strategy currently selected for the visible catalogue section. */
+    val sortOrder: LibrarySortOrder
+        get() = sortOrders[selectedContentType] ?: LibrarySortOrder.RECENTLY_ADDED
+
     /**
      * Derived ordered list of recently-played [Track] objects, most-recent first.
      *

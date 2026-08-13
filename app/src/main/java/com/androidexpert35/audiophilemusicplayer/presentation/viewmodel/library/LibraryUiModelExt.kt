@@ -3,48 +3,43 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library
 /**
  * Sorting and derived-list extensions for [LibraryUiModel].
  *
- * Extracted from [LibraryViewModel] so that the transformation logic lives
- * in a dedicated `*Ext.kt` file close to the type it extends, per the project's
- * component-separation guidelines.
- *
- * @see LibraryViewModel
+ * Applies every catalogue section's retained sort strategy before its immutable snapshot
+ * reaches Compose. Recently played can only reorder tracks because playback history is
+ * recorded at the track level.
  */
+internal fun LibraryUiModel.withSortApplied(): LibraryUiModel {
+    val recentlyPlayedIndex = recentlyPlayedTrackIds
+        .withIndex()
+        .associate { (index, id) -> id to index }
 
-/**
- * Returns a copy of this model with all list items sorted according to [LibraryUiModel.sortOrder].
- *
- * - [LibrarySortOrder.RECENTLY_ADDED]: tracks sorted descending by [Track.dateAdded];
- *   albums sorted descending by [Album.year] as a proxy for recency.
- * - [LibrarySortOrder.ALPHABETICAL]: all lists sorted case-insensitively by name / title.
- * - [LibrarySortOrder.RECENTLY_PLAYED]: tracks re-ordered so played tracks come first
- *   (in order of most-recent play), followed by any unplayed tracks. Albums and
- *   artists are unaffected — play history is tracked at the track level only.
- *
- * @return A new [LibraryUiModel] with all applicable lists re-sorted.
- */
-internal fun LibraryUiModel.withSortApplied(): LibraryUiModel = when (sortOrder) {
-    LibrarySortOrder.RECENTLY_ADDED -> copy(
-        tracks = tracks.sortedByDescending { it.dateAdded },
-        albums = albums.sortedByDescending { it.year }
-    )
-    LibrarySortOrder.ALPHABETICAL -> copy(
-        tracks = tracks.sortedBy { it.title.lowercase() },
-        albums = albums.sortedBy { it.title.lowercase() },
-        artists = artists.sortedBy { it.name.lowercase() }
-    )
-    LibrarySortOrder.RECENTLY_PLAYED -> {
-        // Build an index from trackId → position in recently-played list so the
-        // sort is O(n log n) rather than O(n²) for large libraries.
-        val recentlyPlayedIndex = recentlyPlayedTrackIds
-            .withIndex()
-            .associate { (index, id) -> id to index }
-        copy(
-            tracks = tracks.sortedWith { a, b ->
-                val aPos = recentlyPlayedIndex[a.id] ?: Int.MAX_VALUE
-                val bPos = recentlyPlayedIndex[b.id] ?: Int.MAX_VALUE
-                aPos.compareTo(bPos)
-            }
-        )
+    val sortedTracks = when (sortOrders[LibraryContentType.TRACKS]) {
+        LibrarySortOrder.RECENTLY_ADDED -> tracks.sortedByDescending { it.dateAdded }
+        LibrarySortOrder.ALPHABETICAL -> tracks.sortedBy { it.title.lowercase() }
+        LibrarySortOrder.RECENTLY_PLAYED -> tracks.sortedWith { first, second ->
+            val firstPosition = recentlyPlayedIndex[first.id] ?: Int.MAX_VALUE
+            val secondPosition = recentlyPlayedIndex[second.id] ?: Int.MAX_VALUE
+            firstPosition.compareTo(secondPosition)
+        }
+        null -> tracks
     }
-}
+    val sortedAlbums = when (sortOrders[LibraryContentType.ALBUMS]) {
+        LibrarySortOrder.RECENTLY_ADDED -> albums.sortedByDescending { it.year }
+        LibrarySortOrder.ALPHABETICAL -> albums.sortedBy { it.title.lowercase() }
+        else -> albums
+    }
+    val sortedArtists = when (sortOrders[LibraryContentType.ARTISTS]) {
+        LibrarySortOrder.ALPHABETICAL -> artists.sortedBy { it.name.lowercase() }
+        else -> artists
+    }
+    val sortedPlaylists = when (sortOrders[LibraryContentType.PLAYLISTS]) {
+        LibrarySortOrder.ALPHABETICAL -> playlists.sortedBy { it.name.lowercase() }
+        else -> playlists
+    }
 
+    return copy(
+        tracks = sortedTracks,
+        albums = sortedAlbums,
+        artists = sortedArtists,
+        playlists = sortedPlaylists
+    )
+}

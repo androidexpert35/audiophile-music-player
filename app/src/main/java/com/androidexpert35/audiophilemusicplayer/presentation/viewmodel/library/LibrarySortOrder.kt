@@ -3,8 +3,8 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library
 /**
  * Enumerates the sort strategies available for the library catalogue.
  *
- * The active strategy is stored in [LibraryUiModel.sortOrder] and applied by
- * the ViewModel before the sorted snapshot reaches the UI.
+ * Each section's active strategy is stored in [LibraryUiModel.sortOrders] and applied
+ * by the ViewModel before the sorted snapshot reaches the UI.
  */
 enum class LibrarySortOrder {
 

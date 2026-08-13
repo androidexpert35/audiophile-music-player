@@ -8,5 +8,12 @@ enum class PlaylistKind {
     STANDARD,
 
     /** The reserved M3U playlist whose membership mirrors liked-song state. */
-    FAVORITES
+    FAVORITES,
+
+    /**
+     * Discovered from a `.m3u`/`.m3u8` file inside a granted music folder. Fully
+     * editable like [STANDARD], but edits are written back to that original file
+     * instead of an app-private copy.
+     */
+    IMPORTED
 }

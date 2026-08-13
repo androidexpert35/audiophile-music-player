@@ -278,13 +278,17 @@ class LibraryViewModel @Inject constructor(
     }
 
     /**
-     * Applies a new sort order to the catalogue and re-sorts all item lists immediately.
+     * Retains a new sort order for the visible section and re-sorts the catalogue immediately.
      *
      * @param sortOrder New sort strategy to persist in the UI model.
      */
     private fun setSortOrder(sortOrder: LibrarySortOrder) {
         val current = uiState.value.data ?: return
-        setSuccessState(current.copy(sortOrder = sortOrder).withSortApplied())
+        setSuccessState(
+            current.copy(
+                sortOrders = current.sortOrders + (current.selectedContentType to sortOrder)
+            ).withSortApplied()
+        )
     }
 
     /**
