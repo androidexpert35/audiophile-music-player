@@ -9,7 +9,9 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Album
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
+import com.androidexpert35.audiophilemusicplayer.domain.model.track.extractNavigableArtistNames
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.isUnknownArtistName
+import java.util.Locale
 
 /**
  * Maps indexed-library storage models between MediaStore scan results, Room entities, and domain models.
@@ -70,20 +72,38 @@ fun List<ScannedAudioFile>.toAlbumEntities(): List<AlbumEntity> =
  * @return Derived [ArtistEntity] rows ordered by name.
  */
 fun List<ScannedAudioFile>.toArtistEntities(): List<ArtistEntity> =
-    groupBy { it.artistId }
+    flatMap { file ->
+        extractNavigableArtistNames(file.artistName).map { artistName ->
+            artistName to file
+        }
+    }
+        .groupBy { (artistName, _) -> artistName.lowercase(Locale.ROOT) }
         .values
-        .map { items ->
-            val distinctAlbums = items.map { it.albumId }.distinct().size
-            val first = items.first()
+        .map { credits ->
+            val artistName = credits.first().first
+            val items = credits.map { (_, file) -> file }
             ArtistEntity(
-                id = first.artistId,
-                name = first.artistName,
-                albumCount = distinctAlbums,
+                id = stableArtistId(artistName),
+                name = artistName,
+                albumCount = items.distinctBy { it.albumId }.size,
                 trackCount = items.size,
                 totalDurationMs = items.sumOf { it.durationMs }
             )
         }
-        .sortedBy { it.name.lowercase() }
+        .sortedBy { it.name.lowercase(Locale.ROOT) }
+
+/** Produces a deterministic 64-bit key for a normalized artist identity. */
+private fun stableArtistId(artistName: String): Long {
+    var hash = FNV_OFFSET_BASIS
+    artistName.lowercase(Locale.ROOT).forEach { character ->
+        hash = hash xor character.code.toLong()
+        hash *= FNV_PRIME
+    }
+    return hash
+}
+
+private const val FNV_OFFSET_BASIS = -3750763034362895579L
+private const val FNV_PRIME = 1099511628211L
 
 /**
  * Maps a cached [TrackEntity] into the domain [Track] used by the rest of the app.

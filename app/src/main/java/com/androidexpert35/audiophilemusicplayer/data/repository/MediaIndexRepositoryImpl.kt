@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.ImportedPlaylistDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity
+import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity.Companion.CURRENT_ARTIST_NORMALIZATION_VERSION
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
 import com.androidexpert35.audiophilemusicplayer.data.mapper.toAlbumEntities
 import com.androidexpert35.audiophilemusicplayer.data.mapper.toArtistEntities
@@ -246,7 +247,8 @@ class MediaIndexRepositoryImpl @Inject constructor(
         val currentSignature = musicFolderRegistry.folderSignature()
         state.isCompleted &&
             currentSignature.isNotEmpty() &&
-            state.folderSignature == currentSignature
+            state.folderSignature == currentSignature &&
+            state.artistNormalizationVersion == CURRENT_ARTIST_NORMALIZATION_VERSION
     }.getOrDefault(false)
 
     /**

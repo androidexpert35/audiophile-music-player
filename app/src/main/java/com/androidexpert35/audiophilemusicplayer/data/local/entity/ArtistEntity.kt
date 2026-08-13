@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 /**
  * Room entity representing an indexed artist derived from scanned tracks.
  *
- * @property id Stable MediaStore artist identifier.
+ * @property id Stable identifier derived from the normalized artist name.
  * @property name Human-readable artist name.
  * @property albumCount Number of indexed albums attributed to the artist.
  * @property trackCount Number of indexed tracks attributed to the artist.

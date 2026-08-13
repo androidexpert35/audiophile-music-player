@@ -62,8 +62,8 @@ truth for indexed library, session state, liked songs, playback history/counts, 
   `StringListTypeConverter` (imported-playlist track URIs).
 
 ### Migrations are mandatory
-Current schema **version is 10** with explicit migrations `MIGRATION_1_2` …
-`MIGRATION_9_10`, registered in both `AudiophileDatabase` and `AppModule`'s
+Current schema **version is 11** with explicit migrations `MIGRATION_1_2` …
+`MIGRATION_10_11`, registered in both `AudiophileDatabase` and `AppModule`'s
 `databaseBuilder`. When you change any entity:
 
 1. Bump `@Database(version = N)`.
@@ -101,6 +101,10 @@ This is load-bearing for two separate reasons and must not be relaxed:
   `HasMusicFoldersUseCase`, `AddMusicFolderUseCase`, `RemoveMusicFolderUseCase`.
 - Both the onboarding folder step and the Settings **Music folders** card add and remove
   folders through those use cases; neither is the sole entry point.
+- Schema-11 upgrades deliberately retire every previously stored folder URI and release its
+  persisted read grant once. This forces the user through the folder picker again under the
+  folder-scoped indexing contract; fresh installs record the same selection version with no
+  legacy grants to remove.
 
 ### An empty scope has two causes — do not conflate them
 `MediaIndexRepositoryImpl` branches on `MusicFolderRegistry.hasStoredFolders()`:
@@ -142,6 +146,11 @@ index complete without stamping its signature.
   Results are cached in `ImportedPlaylistDao`, not the track/album/artist tables, and
   merged into `PlaylistRepositoryImpl.observePlaylists()` as `PlaylistKind.IMPORTED`.
 - `MetadataFallbackReader` fills gaps when MediaStore metadata is missing.
+- Artist catalogue aggregation expands semicolon (`;`), slash (`/`), and vertical-bar
+  (`|`) credits into separate artist rows while preserving ampersands inside names.
+  Schema 11 clears the reconstructible track/album/artist/imported-playlist index and its
+  completion row. User data outside that cache remains intact, and onboarding rebuilds the
+  catalogue only after the user selects folders again.
 - `ScanAndIndexMediaUseCase` drives a full scan → Room index pass; progress is exposed
   via `MediaIndexingProgress`. `ObserveMediaStoreChangesUseCase` watches for library
   changes (wrap the `ContentObserver` in a `callbackFlow`) **merged with folder-set

@@ -3,10 +3,10 @@ package com.androidexpert35.audiophilemusicplayer.domain.model.track
 /**
  * Extracts individually navigable artist names from a track-level artist credit.
  *
- * MediaStore artist fields frequently contain collaboration text such as
- * "Artist A feat. Artist B" or "Artist A & Artist B". The player uses these
- * parsed names to offer direct navigation targets for the album artist and for
- * each featured collaborator.
+ * MediaStore artist fields frequently contain multi-value tag text such as
+ * "Artist A; Artist B", "Artist A / Artist B", or "Artist A | Artist B". The
+ * player uses these parsed names to offer direct navigation targets for each
+ * credited artist.
  *
  * The parser intentionally normalizes whitespace, strips empty fragments, and
  * de-duplicates names case-insensitively while preserving the original display
@@ -71,6 +71,5 @@ private val FEATURE_SEPARATOR_REGEX = Regex(
     option = RegexOption.IGNORE_CASE
 )
 private val COLLABORATOR_SEPARATOR_REGEX = Regex(
-    pattern = """\s*(?:,|&|/|;|\bx\b|\band\b)\s*""",
-    option = RegexOption.IGNORE_CASE
+    pattern = """\s*[;/|]\s*"""
 )

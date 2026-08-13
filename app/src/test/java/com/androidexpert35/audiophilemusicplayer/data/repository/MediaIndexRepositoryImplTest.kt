@@ -6,6 +6,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.AlbumEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.ArtistEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity
+import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity.Companion.CURRENT_ARTIST_NORMALIZATION_VERSION
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
 import com.androidexpert35.audiophilemusicplayer.data.scanner.DsdFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner
@@ -132,6 +133,15 @@ class MediaIndexRepositoryImplTest {
     }
 
     @Test
+    fun `given index predates split artist normalization then it is rebuilt`() = runTest {
+        coEvery { libraryIndexDao.getLibraryIndexState() } returns
+            indexState(SIGNATURE).copy(artistNormalizationVersion = 0)
+        coEvery { musicFolderRegistry.folderSignature() } returns SIGNATURE
+
+        assertFalse(createRepository().isLibraryIndexed())
+    }
+
+    @Test
     fun `given an index predating folder scoping then it is rebuilt rather than served`() = runTest {
         // Empty signature marks a catalogue from the old whole-device scan — the one full of
         // messenger voice notes that folder scoping exists to keep out.
@@ -183,6 +193,7 @@ class MediaIndexRepositoryImplTest {
             indexedTrackCount = 12,
             lastIndexedAtEpochMs = 1_000L,
             folderSignature = folderSignature,
+            artistNormalizationVersion = CURRENT_ARTIST_NORMALIZATION_VERSION,
         )
 
     private fun musicFolder(): MusicFolderScope = MusicFolderScope(

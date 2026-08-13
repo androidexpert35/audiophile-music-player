@@ -333,7 +333,7 @@ class ArtistDescriptionViewModel @Inject constructor(
         val primaryAlbums = allAlbums
             .filter { album ->
                 album.id in artistAlbumIds &&
-                    album.artistName.trim().equals(artistName.trim(), ignoreCase = true)
+                    containsNavigableArtist(album.artistName, artistName)
             }
             .sortedByDescending { it.year }
 
@@ -342,7 +342,7 @@ class ArtistDescriptionViewModel @Inject constructor(
         val appearsOnAlbums = allAlbums
             .filter { album ->
                 album.id in artistAlbumIds &&
-                    !album.artistName.trim().equals(artistName.trim(), ignoreCase = true)
+                    !containsNavigableArtist(album.artistName, artistName)
             }
             .sortedByDescending { it.year }
 

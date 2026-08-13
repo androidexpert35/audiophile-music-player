@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_10_11
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_1_2
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_2_3
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_3_4
@@ -51,6 +52,8 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  *   so an index built from a different set of music folders is recognised as stale.
  * - Version 10: added the `imported_playlists` table via [MIGRATION_9_10], caching
  *   `.m3u`/`.m3u8` playlists discovered inside granted music folders.
+ * - Version 11: added the artist-normalization version via [MIGRATION_10_11] and
+ *   discarded the reconstructible catalogue so upgrades re-enter folder onboarding.
  */
 @Database(
     entities = [
@@ -64,7 +67,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         LyricsCacheEntity::class,
         ImportedPlaylistEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(LongListTypeConverter::class, StringListTypeConverter::class)
@@ -277,6 +280,28 @@ abstract class AudiophileDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /**
+         * Migration from schema version 10 to 11.
+         *
+         * Adds the artist-credit normalization marker and removes the reconstructible library
+         * snapshot. Likes, app-managed playlists, playback history, lyrics, and playback state
+         * remain intact; tracks, albums, artists, imported-playlist cache, and index completion
+         * state are rebuilt after the user explicitly selects folders in onboarding.
+         */
+        val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE library_index_state ADD COLUMN " +
+                        "artistNormalizationVersion INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL("DELETE FROM tracks")
+                db.execSQL("DELETE FROM albums")
+                db.execSQL("DELETE FROM artists")
+                db.execSQL("DELETE FROM imported_playlists")
+                db.execSQL("DELETE FROM library_index_state")
             }
         }
     }

@@ -5,7 +5,7 @@ import java.util.Locale
 /**
  * Domain model representing a music artist.
  *
- * @property id Unique MediaStore identifier for this artist.
+ * @property id Stable indexed identifier for this artist.
  * @property name Display name of the artist.
  * @property albumCount Number of albums attributed to this artist.
  * @property trackCount Number of tracks attributed to this artist.

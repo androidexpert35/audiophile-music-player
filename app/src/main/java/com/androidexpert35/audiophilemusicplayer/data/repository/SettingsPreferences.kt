@@ -63,6 +63,12 @@ object SettingsPreferences {
      */
     const val KEY_MUSIC_FOLDER_URIS: String = "music_folder_uris"
 
+    /** Records which mandatory folder-selection flow the installation has completed. */
+    const val KEY_MUSIC_FOLDER_SELECTION_VERSION: String = "music_folder_selection_version"
+
+    /** Current folder-selection contract required before the library may be indexed. */
+    const val CURRENT_MUSIC_FOLDER_SELECTION_VERSION: Int = 1
+
     /** Prefix for the USB software-volume preference stored independently per DAC. */
     const val KEY_USB_VOLUME_PCT_PREFIX: String = "usb_volume_pct_device_"
 

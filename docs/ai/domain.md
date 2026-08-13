@@ -22,6 +22,8 @@ Rules:
 - ✅ Domain models abstract away MediaStore, Media3, Room, and USB framework types.
 - ✅ Pure helper logic that belongs to a model goes in a `*Ext.kt` / `*Parser.kt`
   beside it (e.g. `TrackArtistParser`, `TrackSortExt`) and stays unit-testable.
+- `TrackArtistParser` treats semicolon (`;`), slash (`/`), and vertical bar (`|`) as
+  multi-value artist separators. Ampersands remain part of artist names.
 - ✅ Document `@property` for every public data-class field.
 
 ---

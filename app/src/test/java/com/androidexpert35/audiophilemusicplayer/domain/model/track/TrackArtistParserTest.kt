@@ -18,10 +18,17 @@ class TrackArtistParserTest {
     }
 
     @Test
-    fun `given collaboration delimiters when extracting navigable artists then splits all collaborators`() {
-        val result = extractNavigableArtistNames("Skrillex, Fred again.. & Flowdan")
+    fun `given tag delimiters when extracting navigable artists then splits all credited artists`() {
+        val result = extractNavigableArtistNames("Artist One; Artist Two / Artist Three | Artist Four")
 
-        assertEquals(listOf("Skrillex", "Fred again..", "Flowdan"), result)
+        assertEquals(listOf("Artist One", "Artist Two", "Artist Three", "Artist Four"), result)
+    }
+
+    @Test
+    fun `given ampersand in artist name when extracting navigable artists then preserves full name`() {
+        val result = extractNavigableArtistNames("Bob Marley & the Wailers")
+
+        assertEquals(listOf("Bob Marley & the Wailers"), result)
     }
 
     @Test

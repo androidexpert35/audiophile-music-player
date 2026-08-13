@@ -183,7 +183,47 @@ class MusicFolderRegistry @Inject constructor(
     }
 
     private fun storedUriStrings(): Set<String> =
-        prefs.getStringSet(SettingsPreferences.KEY_MUSIC_FOLDER_URIS, emptySet()).orEmpty()
+        if (ensureCurrentFolderSelectionVersion()) {
+            prefs.getStringSet(SettingsPreferences.KEY_MUSIC_FOLDER_URIS, emptySet()).orEmpty()
+        } else {
+            emptySet()
+        }
+
+    /**
+     * Retires folder grants saved before the mandatory folder-scoped onboarding contract.
+     *
+     * This one-time upgrade gate runs before every registry read, including onboarding's
+     * initial [hasStoredFolders] check. Consequently an upgraded installation cannot reuse
+     * an old selection and skip the folder picker. Fresh installations take the same path
+     * harmlessly with an empty legacy set.
+     *
+     * @return `true` when the current selection version is persisted successfully.
+     */
+    private fun ensureCurrentFolderSelectionVersion(): Boolean {
+        val currentVersion = prefs.getInt(
+            SettingsPreferences.KEY_MUSIC_FOLDER_SELECTION_VERSION,
+            LEGACY_FOLDER_SELECTION_VERSION,
+        )
+        if (currentVersion >= SettingsPreferences.CURRENT_MUSIC_FOLDER_SELECTION_VERSION) {
+            return true
+        }
+
+        val legacyUris = prefs
+            .getStringSet(SettingsPreferences.KEY_MUSIC_FOLDER_URIS, emptySet())
+            .orEmpty()
+            .toSet()
+        legacyUris.forEach { uriString ->
+            runCatching { uriString.toUri() }.getOrNull()?.let(::releaseGrant)
+        }
+
+        return prefs.edit()
+            .remove(SettingsPreferences.KEY_MUSIC_FOLDER_URIS)
+            .putInt(
+                SettingsPreferences.KEY_MUSIC_FOLDER_SELECTION_VERSION,
+                SettingsPreferences.CURRENT_MUSIC_FOLDER_SELECTION_VERSION,
+            )
+            .commit()
+    }
 
     private fun writeUriStrings(uris: Set<String>): Boolean = prefs.edit()
         // Defensive copy: the set handed to SharedPreferences must not be one we mutate.
@@ -205,4 +245,8 @@ class MusicFolderRegistry @Inject constructor(
      */
     private fun MusicFolderScope.covers(other: MusicFolderScope): Boolean =
         volumeName == other.volumeName && other.relativePath.startsWith(relativePath)
+
+    private companion object {
+        const val LEGACY_FOLDER_SELECTION_VERSION: Int = 0
+    }
 }
