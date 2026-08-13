@@ -22,6 +22,17 @@ sealed interface OnboardingUiEvent {
      */
     data class PermissionResult(val granted: Boolean) : OnboardingUiEvent
 
+    /** Requests that the UI launch the system folder chooser. */
+    data object AddMusicFolderTapped : OnboardingUiEvent
+
+    /**
+     * Delivers the result from the system folder chooser.
+     *
+     * @property folderId Identifier of the chosen folder, or `null` when the user
+     *   dismissed the chooser without picking one.
+     */
+    data class MusicFolderPicked(val folderId: String?) : OnboardingUiEvent
+
     /** Retries the scan-and-index flow after an indexing failure. */
     data object RetryIndexing : OnboardingUiEvent
 }

@@ -48,6 +48,19 @@ object SettingsPreferences {
 
 
     /**
+     * SharedPreferences key holding the document-tree URIs of every folder the user
+     * authorised as a music location.
+     *
+     * Stored as a `StringSet`. The library scan is scoped **exclusively** to these
+     * folders: an empty set means no catalogue can be built and onboarding must ask
+     * the user to pick a folder. Each entry has a matching long-lived read grant taken
+     * through `ContentResolver.takePersistableUriPermission`, which is also the only
+     * mechanism that makes DSD containers readable — Android does not classify
+     * `.dsf` / `.dff` as audio and therefore never covers them with `READ_MEDIA_AUDIO`.
+     */
+    const val KEY_MUSIC_FOLDER_URIS: String = "music_folder_uris"
+
+    /**
      * SharedPreferences key for the USB software volume level.
      *
      * Stores an integer percentage in `[0, 100]` that is loaded by

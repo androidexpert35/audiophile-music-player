@@ -6,12 +6,15 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemet
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputRouteKind
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputStreamInfo
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessage
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveSueEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveUsbAudioStatusUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RefreshUsbAudioDevicesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.RemoveMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioPermissionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
@@ -51,6 +54,11 @@ import javax.inject.Inject
  * @property refreshUsbAudioDevicesUseCase Re-runs USB DAC discovery on demand.
  * @property requestUsbAudioPermissionUseCase Dispatches the USB permission
  *   prompt when a DAC is connected.
+ * @property observeMusicFoldersUseCase Source of truth for the folders the library is
+ *   scanned from.
+ * @property addMusicFolderUseCase Brings a folder chosen here into the library scan
+ *   scope, so the user is not limited to the folder they picked during onboarding.
+ * @property removeMusicFolderUseCase Drops a folder from the library scan scope.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -64,6 +72,9 @@ class SettingsViewModel @Inject constructor(
     private val setHiResRemasterEnabledUseCase: SetHiResRemasterEnabledUseCase,
     private val refreshUsbAudioDevicesUseCase: RefreshUsbAudioDevicesUseCase,
     private val requestUsbAudioPermissionUseCase: RequestUsbAudioPermissionUseCase,
+    observeMusicFoldersUseCase: ObserveMusicFoldersUseCase,
+    private val addMusicFolderUseCase: AddMusicFolderUseCase,
+    private val removeMusicFolderUseCase: RemoveMusicFolderUseCase,
     navigationManager: NavigationManager,
     stringResolver: StringResolver,
     uiErrorMapper: UiErrorMapper
@@ -96,6 +107,15 @@ class SettingsViewModel @Inject constructor(
             .onEach { hiResEnabled ->
                 val current = uiState.value.data ?: return@onEach
                 setSuccessState(current.copy(hiResRemasterEnabled = hiResEnabled))
+            }
+            .launchIn(viewModelScope)
+
+        // Observe the granted music folders separately so the list stays live while the
+        // user adds or removes folders without leaving the screen.
+        observeMusicFoldersUseCase()
+            .onEach { folders ->
+                val current = uiState.value.data ?: return@onEach
+                setSuccessState(current.copy(musicFolders = folders))
             }
             .launchIn(viewModelScope)
 
@@ -132,6 +152,43 @@ class SettingsViewModel @Inject constructor(
             is SettingsUiEvent.SetHiResRemasterEnabled -> handleSetHiResRemasterEnabled(event.enabled)
             SettingsUiEvent.RefreshUsbAudioDevices -> handleRefreshUsbDevices()
             SettingsUiEvent.RequestUsbAudioPermission -> handleRequestUsbPermission()
+            SettingsUiEvent.AddMusicFolderTapped -> emitEffect(SettingsUiEffect.PickMusicFolder)
+            is SettingsUiEvent.MusicFolderPicked -> handleMusicFolderPicked(event.folderId)
+            is SettingsUiEvent.RemoveMusicFolder -> handleRemoveMusicFolder(event.folderId)
+        }
+    }
+
+    /**
+     * Persists a folder chosen in the system chooser.
+     *
+     * The library re-indexes on its own: the folder set is one of the signals behind
+     * [com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase],
+     * so the Library screen rebuilds its catalogue without any extra trigger here.
+     *
+     * @param folderId Chosen folder identifier, or `null` when the chooser was dismissed.
+     */
+    private fun handleMusicFolderPicked(folderId: String?) {
+        if (folderId.isNullOrBlank()) return
+
+        viewModelScope.launch {
+            when (val result = addMusicFolderUseCase(folderId)) {
+                is Resource.Success -> Unit
+                is Resource.Error -> emitError(result)
+            }
+        }
+    }
+
+    /**
+     * Drops a folder from the library scan scope.
+     *
+     * @param folderId Identifier of the folder to stop scanning.
+     */
+    private fun handleRemoveMusicFolder(folderId: String) {
+        viewModelScope.launch {
+            when (val result = removeMusicFolderUseCase(folderId)) {
+                is Resource.Success -> Unit
+                is Resource.Error -> emitError(result)
+            }
         }
     }
 

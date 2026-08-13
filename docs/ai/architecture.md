@@ -34,8 +34,10 @@ data/
     service/        AudioPlaybackService (MediaSessionService)
     usb/            libusb sinks, UAC2 descriptor parsing, USB routing/volume
   remote/           Retrofit api/ + dto/ (Deezer, LRCLIB)
-  repository/       *RepositoryImpl, SettingsPreferences/SettingsRepositoryImpl
-  scanner/          MediaStoreScanner, DsdFileScanner, MetadataFallbackReader
+  repository/       *RepositoryImpl, SettingsPreferences/SettingsRepositoryImpl,
+                    MusicFolderRegistry (user-granted scan scope)
+  scanner/          MediaStoreScanner, DsdFileScanner, MetadataFallbackReader,
+                    MusicFolderScope(+Resolver), SeekableDocumentSource
 
 di/                 Hilt modules (App, Dispatcher, Network, Coil, Repository, UseCase, Navigation)
 

@@ -1,5 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.screen.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +36,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.comp
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.AudiophileEngineToggleCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.DspInfoDialog
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.HiResRemasterCard
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.MusicFoldersCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.OpenSourceCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SettingsSectionHeader
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SueEnhancerCard
@@ -61,6 +64,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     var isLossyRestorerDialogVisible by rememberSaveable { mutableStateOf(false) }
     var isHiResRemasterDialogVisible by rememberSaveable { mutableStateOf(false) }
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        viewModel.onEvent(SettingsUiEvent.MusicFolderPicked(treeUri?.toString()))
+    }
 
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collect { effect ->
@@ -68,6 +76,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 is SettingsUiEffect.ToggleError -> {
                     snackbarHostState.showSnackbar(effect.message)
                 }
+
+                // No initial URI: the chooser opens where the user last browsed, which
+                // beats a hardcoded Music/ root for anyone keeping albums elsewhere.
+                SettingsUiEffect.PickMusicFolder -> folderPickerLauncher.launch(null)
             }
         }
     }
@@ -142,6 +154,7 @@ private fun SettingsContent(
                 ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+
             SettingsSectionHeader(titleRes = R.string.settings_section_general)
 
             AudiophileEngineToggleCard(
@@ -172,6 +185,15 @@ private fun SettingsContent(
                 isRefreshInProgress = model.isUsbDeviceRefreshInProgress,
                 onRefresh = { onEvent(SettingsUiEvent.RefreshUsbAudioDevices) },
                 onRequestPermission = { onEvent(SettingsUiEvent.RequestUsbAudioPermission) },
+            )
+
+            SettingsSectionHeader(titleRes = R.string.settings_section_library)
+            MusicFoldersCard(
+                folders = model.musicFolders,
+                onAddFolder = { onEvent(SettingsUiEvent.AddMusicFolderTapped) },
+                onRemoveFolder = { folderId ->
+                    onEvent(SettingsUiEvent.RemoveMusicFolder(folderId))
+                },
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

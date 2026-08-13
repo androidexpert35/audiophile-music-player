@@ -89,6 +89,11 @@ These are the non-negotiables. The module docs expand each one.
    `@IoDispatcher`). No XML layouts/DataBinding — Compose only.
 8. **Document public APIs with complete KDoc** whose first line states *business
    purpose*, not the symbol name. One public type per file.
+9. **Scan only the user-granted music folders.** The library is indexed from the
+   document trees the user adds (onboarding or Settings), never from the whole volume.
+   That scope keeps messenger voice notes out of the catalogue and is the *only* way DSD
+   `.dsf`/`.dff` files are readable at all — `READ_MEDIA_AUDIO` does not cover them. Never
+   add a "scan everything" fallback; see [`docs/ai/data.md`](docs/ai/data.md).
 
 See [`docs/ai/conventions.md`](docs/ai/conventions.md) for the full forbidden-patterns table.
 

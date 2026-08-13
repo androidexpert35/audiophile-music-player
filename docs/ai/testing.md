@@ -14,6 +14,7 @@ Real, committed tests already cover representative logic — follow their style:
   `SettingsViewModelTest`.
 - **Use cases / repositories**: `PlaybackRepositoryImplTest`.
 - **Pure logic**: `TrackArtistParserTest`, `SeekBarStateResolverTest`,
+  `MediaStoreColumnsTest` (folder-scoped scan query),
   `DspInfoBodyParserTest`, `SueProfileResolverTest`.
 - **Playback/engine units**: `AudioTelemetryCollectorTest`, `AudioEngineManagerTest`,
   `HiResRemasterSettingsCoordinatorTest`, `StandardEngineTelemetryMapperTest`,

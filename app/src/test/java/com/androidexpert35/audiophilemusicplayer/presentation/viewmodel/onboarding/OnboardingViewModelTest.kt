@@ -1,14 +1,18 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.onboarding
 
-import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.FakeNavigationManager
+import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.TestStringResolver
 import com.androidexpert35.audiophilemusicplayer.TestUiErrorMapper
-import com.tony.coreui.domain.resource.Resource
 import com.androidexpert35.audiophilemusicplayer.domain.model.indexing.MediaIndexingProgress
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
+import com.tony.coreui.domain.resource.Resource
+import com.tony.coreui.domain.resource.ResourceError
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineStart
@@ -19,6 +23,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,6 +35,8 @@ class OnboardingViewModelTest {
 
     private val scanAndIndexMediaUseCase = mockk<ScanAndIndexMediaUseCase>()
     private val isMediaLibraryIndexedUseCase = mockk<IsMediaLibraryIndexedUseCase>()
+    private val hasMusicFoldersUseCase = mockk<HasMusicFoldersUseCase>()
+    private val addMusicFolderUseCase = mockk<AddMusicFolderUseCase>()
     private val navigationManager = FakeNavigationManager()
 
     @Test
@@ -58,7 +65,98 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `given permission granted and no music folder when initialized then state requires a folder`() = runTest {
+        coEvery { hasMusicFoldersUseCase.invoke() } returns false
+
+        val viewModel = createViewModel()
+
+        viewModel.onEvent(OnboardingUiEvent.Initialize(hasMediaPermission = true))
+        advanceUntilIdle()
+
+        assertEquals(
+            OnboardingState.RequiresMusicFolder(),
+            viewModel.uiState.value.data?.state
+        )
+    }
+
+    @Test
+    fun `given no music folder when cached index exists then indexing is not skipped`() = runTest {
+        // A library indexed before folders existed came from a whole-device scan and must
+        // not be trusted: the user is sent back to the folder step instead.
+        coEvery { hasMusicFoldersUseCase.invoke() } returns false
+        coEvery { isMediaLibraryIndexedUseCase.invoke() } returns true
+
+        val viewModel = createViewModel()
+
+        viewModel.onEvent(OnboardingUiEvent.Initialize(hasMediaPermission = true))
+        advanceUntilIdle()
+
+        assertEquals(
+            OnboardingState.RequiresMusicFolder(),
+            viewModel.uiState.value.data?.state
+        )
+    }
+
+    @Test
+    fun `given folder chooser dismissed when result handled then folder step reports the failed attempt`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.onEvent(OnboardingUiEvent.MusicFolderPicked(folderId = null))
+        advanceUntilIdle()
+
+        assertEquals(
+            OnboardingState.RequiresMusicFolder(hasFailedAttempt = true),
+            viewModel.uiState.value.data?.state
+        )
+    }
+
+    @Test
+    fun `given folder picked when grant succeeds then indexing runs and onboarding completes`() = runTest {
+        coEvery { addMusicFolderUseCase.invoke(FOLDER_ID) } returns Resource.Success(Unit)
+        every { scanAndIndexMediaUseCase.invoke() } returns flowOf(
+            Resource.Success(
+                MediaIndexingProgress(
+                    progress = 1f,
+                    currentFile = "Music/DSD/01 - So What.dsf",
+                    indexedFiles = 1,
+                    totalFiles = 1
+                )
+            )
+        )
+
+        val viewModel = createViewModel()
+        val effectDeferred = async(start = CoroutineStart.UNDISPATCHED) {
+            viewModel.uiEffect.first()
+        }
+
+        viewModel.onEvent(OnboardingUiEvent.MusicFolderPicked(folderId = FOLDER_ID))
+
+        assertEquals(OnboardingUiEffect.NavigateToHome, effectDeferred.await())
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { addMusicFolderUseCase.invoke(FOLDER_ID) }
+        assertEquals(OnboardingState.Completed, viewModel.uiState.value.data?.state)
+    }
+
+    @Test
+    fun `given folder picked when grant fails then folder step stays actionable`() = runTest {
+        coEvery { addMusicFolderUseCase.invoke(FOLDER_ID) } returns Resource.Error(
+            ResourceError.StorageError("grant lost")
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.onEvent(OnboardingUiEvent.MusicFolderPicked(folderId = FOLDER_ID))
+        advanceUntilIdle()
+
+        assertTrue(
+            viewModel.uiState.value.data?.state is OnboardingState.RequiresMusicFolder
+        )
+    }
+
+    @Test
     fun `given permission granted and indexing needed when initialized then state completes and navigation effect is emitted`() = runTest {
+        coEvery { hasMusicFoldersUseCase.invoke() } returns true
         every { scanAndIndexMediaUseCase.invoke() } returns flowOf(
             Resource.Success(
                 MediaIndexingProgress(
@@ -97,6 +195,7 @@ class OnboardingViewModelTest {
 
     @Test
     fun `given permission granted and cached library when initialized then navigation skips onboarding`() = runTest {
+        coEvery { hasMusicFoldersUseCase.invoke() } returns true
         coEvery { isMediaLibraryIndexedUseCase.invoke() } returns true
 
         val viewModel = createViewModel()
@@ -113,8 +212,14 @@ class OnboardingViewModelTest {
     private fun createViewModel(): OnboardingViewModel = OnboardingViewModel(
         scanAndIndexMediaUseCase = scanAndIndexMediaUseCase,
         isMediaLibraryIndexedUseCase = isMediaLibraryIndexedUseCase,
+        hasMusicFoldersUseCase = hasMusicFoldersUseCase,
+        addMusicFolderUseCase = addMusicFolderUseCase,
         navigationManager = navigationManager,
         stringResolver = TestStringResolver,
         uiErrorMapper = TestUiErrorMapper
     )
+
+    private companion object {
+        const val FOLDER_ID = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
+    }
 }

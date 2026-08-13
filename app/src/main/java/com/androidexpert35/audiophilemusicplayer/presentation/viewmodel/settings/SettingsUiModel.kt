@@ -2,6 +2,7 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.setting
 
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.SueStatus
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStatus
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.MusicFolder
 
 /**
  * Immutable UI state for the Settings screen.
@@ -27,6 +28,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStat
  *   pipeline, or `null` when no track is loaded or the standard engine is active.
  * @property hiResRemasterEnabled Whether the Hi-Res Dynamic Remaster is currently
  *   enabled in settings.
+ * @property musicFolders Storage locations the library is scanned from. Empty means the
+ *   catalogue cannot be rebuilt until the user adds a folder.
  */
 data class SettingsUiModel(
     val audiophileEngineEnabled: Boolean = false,
@@ -38,4 +41,5 @@ data class SettingsUiModel(
     val sueEnabled: Boolean = true,
     val sueStatus: SueStatus? = null,
     val hiResRemasterEnabled: Boolean = true,
+    val musicFolders: List<MusicFolder> = emptyList(),
 )

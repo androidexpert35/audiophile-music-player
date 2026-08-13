@@ -42,6 +42,8 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  * - Version 7: invalidated artist URLs resolved by the former first-result
  *   Deezer matcher via [MIGRATION_6_7].
  * - Version 8: added persistent per-track play counts via [MIGRATION_7_8].
+ * - Version 9: added `folderSignature` to `library_index_state` via [MIGRATION_8_9],
+ *   so an index built from a different set of music folders is recognised as stale.
  */
 @Database(
     entities = [
@@ -54,7 +56,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         RecentlyPlayedEntity::class,
         LyricsCacheEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(LongListTypeConverter::class)
@@ -220,6 +222,25 @@ abstract class AudiophileDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE recently_played ADD COLUMN playCount INTEGER NOT NULL DEFAULT 1"
+                )
+            }
+        }
+
+        /**
+         * Migration from schema version 8 to 9.
+         *
+         * Adds `folderSignature` to `library_index_state`, recording which music folders
+         * produced the cached catalogue.
+         *
+         * Existing rows default to an empty signature, which deliberately never matches a
+         * granted folder set. That marks every pre-upgrade index as stale: those catalogues
+         * came from a whole-device scan and still contain the messenger voice notes and other
+         * stray audio that folder-scoped scanning exists to keep out.
+         */
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE library_index_state ADD COLUMN folderSignature TEXT NOT NULL DEFAULT ''"
                 )
             }
         }

@@ -9,6 +9,20 @@ sealed interface OnboardingState {
     data object RequiresPermission : OnboardingState
 
     /**
+     * Indicates that the user has not yet chosen where their music lives.
+     *
+     * The library is built only from folders the user picks, so this step is required
+     * rather than optional: it is what keeps unrelated audio out of the catalogue and
+     * the only way DSD files become readable at all.
+     *
+     * @property hasFailedAttempt Whether a previous pick was cancelled or rejected, so
+     *   the screen can explain why the app is asking again.
+     */
+    data class RequiresMusicFolder(
+        val hasFailedAttempt: Boolean = false
+    ) : OnboardingState
+
+    /**
      * Indicates that the app is currently indexing local audio files.
      *
      * @property progress Normalized progress in the inclusive range `0f..1f`.

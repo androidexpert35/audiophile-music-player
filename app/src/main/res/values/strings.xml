@@ -35,6 +35,10 @@
     <string name="onboarding_permission_title">Let Audiophile read your local library</string>
     <string name="onboarding_permission_message">Grant audio-library access so the app can scan your device once, build a fast local index, and keep playback browsing smooth afterward.</string>
     <string name="onboarding_permission_action">Grant library access</string>
+    <string name="onboarding_folder_title">Show Audiophile where your music lives</string>
+    <string name="onboarding_folder_message">Pick the folder that holds your albums. Audiophile indexes only what you choose, so voice notes and app sounds stay out of your library — and DSD files (.dsf / .dff) become readable, which Android does not allow any other way.</string>
+    <string name="onboarding_folder_action">Choose music folder</string>
+    <string name="onboarding_folder_required">Audiophile needs at least one folder before it can build your library. You can add more later in Settings.</string>
     <string name="onboarding_scanning_title">Indexing your high-res library…</string>
     <string name="onboarding_scanning_message">We’re scanning local audio and caching albums, artists, and tracks for a faster browsing experience.</string>
     <string name="onboarding_scanning_progress">%1$d%% complete</string>
@@ -69,6 +73,7 @@
     <string name="cd_open_playback_queue">Open playback queue</string>
     <string name="cd_open_track_destinations">Open album and artist destinations</string>
     <string name="cd_open_lossy_restorer_info">Open Lossy Restorer information</string>
+    <string name="cd_remove_music_folder">Remove music folder</string>
     <string name="cd_open_hires_remaster_info">Open Hi-Res Remaster information</string>
 
     <!-- Audio Telemetry Dialog -->
@@ -198,6 +203,11 @@
     <string name="nav_impostazioni">Settings</string>
 
     <!-- Settings -->
+    <string name="settings_section_library">Music Library</string>
+    <string name="settings_music_folders_title">Music folders</string>
+    <string name="settings_music_folders_description">Audiophile scans only these folders. Add the folders holding your albums — including DSD (.dsf / .dff), which is readable only through a folder you grant here — and leave messenger media folders out to keep voice notes off your song list.</string>
+    <string name="settings_music_folders_empty">No folder is granted yet, so the library cannot be rebuilt. Add one below.</string>
+    <string name="settings_music_folders_add_action">Add music folder</string>
     <string name="settings_section_general">General</string>
     <string name="settings_section_smart_effects">Audio Effects</string>
     <string name="settings_section_usb_settings">USB Audio Settings</string>

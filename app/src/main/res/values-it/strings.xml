@@ -35,6 +35,10 @@
     <string name="onboarding_permission_title">Consenti ad Audiophile di leggere la tua libreria locale</string>
     <string name="onboarding_permission_message">Concedi l’accesso alla libreria audio così l’app potrà analizzare il dispositivo una sola volta, creare un indice locale veloce e rendere fluida la navigazione durante la riproduzione.</string>
     <string name="onboarding_permission_action">Concedi accesso alla libreria</string>
+    <string name="onboarding_folder_title">Indica ad Audiophile dove si trova la tua musica</string>
+    <string name="onboarding_folder_message">Scegli la cartella che contiene i tuoi album. Audiophile indicizza solo ciò che selezioni, così note vocali e suoni delle app restano fuori dalla libreria — e i file DSD (.dsf / .dff) diventano leggibili, cosa che Android non consente in nessun altro modo.</string>
+    <string name="onboarding_folder_action">Scegli cartella musicale</string>
+    <string name="onboarding_folder_required">Audiophile ha bisogno di almeno una cartella per costruire la libreria. Puoi aggiungerne altre in seguito dalle Impostazioni.</string>
     <string name="onboarding_scanning_title">Indicizzazione della tua libreria ad alta risoluzione…</string>
     <string name="onboarding_scanning_message">Stiamo analizzando l’audio locale e memorizzando album, artisti e brani per offrirti una navigazione più rapida.</string>
     <string name="onboarding_scanning_progress">%1$d%% completato</string>
@@ -69,6 +73,7 @@
     <string name="cd_open_playback_queue">Apri la coda di riproduzione</string>
     <string name="cd_open_track_destinations">Apri album e artista del brano</string>
     <string name="cd_open_lossy_restorer_info">Apri le informazioni su Lossy Restorer</string>
+    <string name="cd_remove_music_folder">Rimuovi cartella musicale</string>
     <string name="cd_open_hires_remaster_info">Apri le informazioni su Hi-Res Remaster</string>
 
     <!-- Audio Telemetry Dialog -->
@@ -218,6 +223,11 @@
     <string name="nav_impostazioni">Impostazioni</string>
 
     <!-- Settings -->
+    <string name="settings_section_library">Libreria musicale</string>
+    <string name="settings_music_folders_title">Cartelle musicali</string>
+    <string name="settings_music_folders_description">Audiophile analizza solo queste cartelle. Aggiungi quelle che contengono i tuoi album — DSD (.dsf / .dff) compresi, leggibili solo tramite una cartella concessa qui — ed escludi le cartelle multimediali delle app di messaggistica per tenere le note vocali fuori dall\'elenco dei brani.</string>
+    <string name="settings_music_folders_empty">Nessuna cartella concessa: la libreria non può essere ricostruita. Aggiungine una qui sotto.</string>
+    <string name="settings_music_folders_add_action">Aggiungi cartella musicale</string>
     <string name="settings_section_general">Generali</string>
     <string name="settings_section_smart_effects">Effetti audio</string>
     <string name="settings_section_usb_settings">Impostazioni audio USB</string>

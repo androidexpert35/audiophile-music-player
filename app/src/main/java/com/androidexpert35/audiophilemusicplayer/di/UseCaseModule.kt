@@ -4,6 +4,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.repository.AudioTelemetr
 import com.androidexpert35.audiophilemusicplayer.domain.repository.LikedSongsRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.LyricsRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MediaIndexRepository
+import com.androidexpert35.audiophilemusicplayer.domain.repository.MusicFolderRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MusicRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaybackPersistenceRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaybackRepository
@@ -11,6 +12,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaylistRepos
 import com.androidexpert35.audiophilemusicplayer.domain.repository.RecentlyPlayedRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.RemoteImageRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.SettingsRepository
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToPlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTracksToPlaylistUseCase
@@ -23,6 +25,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUs
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLyricsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.MoveQueueItemUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
@@ -31,6 +34,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRema
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMostPlayedTracksUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveQueueStateUseCase
@@ -43,6 +47,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTracksNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RecordRecentlyPlayedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RefreshUsbAudioDevicesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.RemoveMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReorderPlaylistTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReplacePlaylistTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioPermissionUseCase
@@ -159,6 +164,46 @@ object UseCaseModule {
     fun provideIsMediaLibraryIndexedUseCase(
         mediaIndexRepository: MediaIndexRepository
     ): IsMediaLibraryIndexedUseCase = IsMediaLibraryIndexedUseCase(mediaIndexRepository)
+
+    /**
+     * Provides [ObserveMusicFoldersUseCase] backed by [MusicFolderRepository].
+     *
+     * Streams the locations the library scan is scoped to, so Settings can list them.
+     */
+    @Provides
+    fun provideObserveMusicFoldersUseCase(
+        musicFolderRepository: MusicFolderRepository
+    ): ObserveMusicFoldersUseCase = ObserveMusicFoldersUseCase(musicFolderRepository)
+
+    /**
+     * Provides [HasMusicFoldersUseCase] backed by [MusicFolderRepository].
+     *
+     * Tells onboarding whether the user still has to point the app at their music.
+     */
+    @Provides
+    fun provideHasMusicFoldersUseCase(
+        musicFolderRepository: MusicFolderRepository
+    ): HasMusicFoldersUseCase = HasMusicFoldersUseCase(musicFolderRepository)
+
+    /**
+     * Provides [AddMusicFolderUseCase] backed by [MusicFolderRepository].
+     *
+     * Persists a folder grant, widening the scan scope to that tree.
+     */
+    @Provides
+    fun provideAddMusicFolderUseCase(
+        musicFolderRepository: MusicFolderRepository
+    ): AddMusicFolderUseCase = AddMusicFolderUseCase(musicFolderRepository)
+
+    /**
+     * Provides [RemoveMusicFolderUseCase] backed by [MusicFolderRepository].
+     *
+     * Drops a folder grant so its tracks leave the catalogue on the next scan.
+     */
+    @Provides
+    fun provideRemoveMusicFolderUseCase(
+        musicFolderRepository: MusicFolderRepository
+    ): RemoveMusicFolderUseCase = RemoveMusicFolderUseCase(musicFolderRepository)
 
     /**
      * Provides [GetAlbumsUseCase] backed by [MusicRepository].

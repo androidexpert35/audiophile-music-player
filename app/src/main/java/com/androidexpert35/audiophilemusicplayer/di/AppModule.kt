@@ -95,6 +95,7 @@ object AppModule {
             AudiophileDatabase.MIGRATION_5_6,
             AudiophileDatabase.MIGRATION_6_7,
             AudiophileDatabase.MIGRATION_7_8,
+            AudiophileDatabase.MIGRATION_8_9,
         )
         .build()
 

@@ -12,8 +12,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Scans the device's MediaStore for local audio files using optimised
+ * Scans the user-granted music folders for local audio files using optimised
  * column projections to minimise memory and I/O overhead.
+ *
+ * The query is always restricted to the folders the user authorised. Scanning the
+ * whole external volume is deliberately not supported: it pulled in every audio file
+ * on the device — messenger voice notes above all — and drowned the real library in
+ * clips the user never asked to see.
  *
  * After the primary MediaStore cursor pass, any track whose artist or year
  * fields contain MediaStore sentinel / blank values is re-read via
@@ -53,6 +58,8 @@ class MediaStoreScanner @Inject constructor(
      * the total I/O overhead scales with the number of problematic tracks, not the
      * entire library.
      *
+     * @param folders Locations the user authorised as music folders. An empty list yields
+     *   an empty result — the scan never falls back to the whole device.
      * @param onProgress Invoked once per scanned file as the ID3v2.2 fallback pass walks
      *   the result set, with the number of files processed so far, the total file count,
      *   and the path of the file just processed. This is the dominant per-file I/O cost of
@@ -65,15 +72,18 @@ class MediaStoreScanner @Inject constructor(
     // exist on all Android 12+ (API 31+) devices and minSdk = 33 guarantees availability.
     @SuppressLint("NewApi")
     suspend fun scanAudioFilesForIndexing(
+        folders: List<MusicFolderScope>,
         onProgress: (processed: Int, total: Int, filePath: String) -> Unit = { _, _, _ -> }
     ): List<ScannedAudioFile> = withContext(ioDispatcher) {
+        if (folders.isEmpty()) return@withContext emptyList()
+
         val files = mutableListOf<ScannedAudioFile>()
 
         contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             MediaStoreColumns.TRACK_PROJECTION,
-            MediaStoreColumns.TRACK_SELECTION,
-            null,
+            MediaStoreColumns.trackSelectionForFolders(folders),
+            MediaStoreColumns.trackSelectionArgsForFolders(folders),
             MediaStoreColumns.TRACK_SORT_ORDER
         )?.use { cursor ->
             while (cursor.moveToNext()) {

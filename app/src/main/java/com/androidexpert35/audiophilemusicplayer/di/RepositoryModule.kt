@@ -3,6 +3,7 @@ package com.androidexpert35.audiophilemusicplayer.di
 import com.androidexpert35.audiophilemusicplayer.data.repository.AudioTelemetryRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.LyricsRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.MediaIndexRepositoryImpl
+import com.androidexpert35.audiophilemusicplayer.data.repository.MusicFolderRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.MusicRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.PlaybackPersistenceRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.PlaybackRepositoryImpl
@@ -14,6 +15,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.repository.AudioTelemetr
 import com.androidexpert35.audiophilemusicplayer.domain.repository.LikedSongsRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.LyricsRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MediaIndexRepository
+import com.androidexpert35.audiophilemusicplayer.domain.repository.MusicFolderRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MusicRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaybackPersistenceRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaybackRepository
@@ -78,6 +80,18 @@ abstract class RepositoryModule {
     abstract fun bindMediaIndexRepository(
         impl: MediaIndexRepositoryImpl
     ): MediaIndexRepository
+
+    /**
+     * Binds [MusicFolderRepositoryImpl] as the singleton [MusicFolderRepository] provider.
+     *
+     * Scoped as a singleton because it fronts the same persisted document-tree grants the
+     * indexing pipeline reads, and both must observe one consistent set of folders.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMusicFolderRepository(
+        impl: MusicFolderRepositoryImpl
+    ): MusicFolderRepository
 
     /**
      * Binds [PlaybackPersistenceRepositoryImpl] as the singleton [PlaybackPersistenceRepository] provider.

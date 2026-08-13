@@ -54,8 +54,8 @@ truth for indexed library, session state, liked songs, playback history/counts, 
 - **Converters** (`converter/`): `LongListTypeConverter` (queue ID lists).
 
 ### Migrations are mandatory
-Current schema **version is 8** with explicit migrations `MIGRATION_1_2` …
-`MIGRATION_7_8`, registered in both `AudiophileDatabase` and `AppModule`'s
+Current schema **version is 9** with explicit migrations `MIGRATION_1_2` …
+`MIGRATION_8_9`, registered in both `AudiophileDatabase` and `AppModule`'s
 `databaseBuilder`. When you change any entity:
 
 1. Bump `@Database(version = N)`.
@@ -68,16 +68,71 @@ catalogue and playback session must survive upgrades.
 
 ---
 
+## User-granted music folders (`MusicFolderRegistry`)
+
+**The library scan is scoped to folders the user picks — never to the whole device.**
+This is load-bearing for two separate reasons and must not be relaxed:
+
+- A whole-volume scan pulls in every audio file on the device. In practice that means
+  messenger voice notes and app sound effects listed as songs.
+- `.dsf` / `.dff` are not audio media types to Android, so `READ_MEDIA_AUDIO` grants **no**
+  access to them at all — a direct `File` walk of shared storage cannot even list them on
+  `minSdk 33`. The persisted document-tree grant taken when the user adds a folder is the
+  only way DSD files can be read, which is why DSD tracks appear exactly once a folder
+  containing them has been added.
+
+- `MusicFolderRegistry` (`data/repository/`) owns both halves of a grant: the tree URI in
+  `SharedPreferences` (`SettingsPreferences.KEY_MUSIC_FOLDER_URIS`) and the matching
+  `takePersistableUriPermission`. A URI whose grant was revoked is reported as absent, so
+  onboarding can ask for it again. Overlapping grants are collapsed (parent wins).
+- `MusicFolderScopeResolver` turns a tree URI (`primary:Music/DSD`) into a
+  `MusicFolderScope` carrying both addressing schemes the scan needs: the MediaStore
+  `(volumeName, relativePath)` pair and the tree URI itself.
+- `MusicFolderRepositoryImpl` adapts the registry to the Domain contract
+  (`MusicFolderRepository` → `MusicFolder`), used by `ObserveMusicFoldersUseCase`,
+  `HasMusicFoldersUseCase`, `AddMusicFolderUseCase`, `RemoveMusicFolderUseCase`.
+- Both the onboarding folder step and the Settings **Music folders** card add and remove
+  folders through those use cases; neither is the sole entry point.
+
+### An empty scope has two causes — do not conflate them
+`MediaIndexRepositoryImpl` branches on `MusicFolderRegistry.hasStoredFolders()`:
+
+- **Nothing on record** — the user removed their last folder. The scan proceeds with an
+  empty result, which clears `tracks` / `albums` / `artists`. Leaving the old rows would
+  keep serving content from a location the user just revoked.
+- **Folders on record that will not resolve** — card unmounted, grant not yet restored
+  after a reboot. Transient, so the scan aborts with `Resource.Error` and the cached
+  catalogue survives.
+
+### The index records the scope that built it
+`LibraryIndexStateEntity.folderSignature` stores `volumeName:relativePath` for every granted
+folder. `isLibraryIndexed()` returns `true` only when that signature still matches
+`MusicFolderRegistry.folderSignature()`, so a folder added or removed while nothing was
+observing still forces a rebuild on the next launch. An empty signature (rows written before
+version 9) never matches, which is what retires the old whole-device catalogues.
+
+❌ Never add a "scan everything" fallback when the folder list is empty, and never mark an
+index complete without stamping its signature.
+
+---
+
 ## MediaStore scanning & indexing (`data/scanner/`)
 
-- `MediaStoreScanner` runs the `MediaStore` audio queries (column names centralized in
-  `MediaStoreColumns.kt`) and maps rows into domain/scan models immediately.
-- `DsdFileScanner` finds `.dsf`/`.dff` files MediaStore may not index, and caches
-  embedded APIC artwork into `cacheDir` (referenced by `TrackEntity.artUri`).
+- `MediaStoreScanner` runs the `MediaStore` audio queries (column names and the
+  folder-scoped `WHERE` clause centralized in `MediaStoreColumns.kt`) and maps rows into
+  domain/scan models immediately. The selection matches `VOLUME_NAME` plus a
+  `RELATIVE_PATH LIKE` prefix per granted folder, with `%` / `_` / `\` escaped.
+- `DsdFileScanner` finds `.dsf`/`.dff` files MediaStore never indexes by walking the
+  granted document trees via `DocumentsContract`, parsing DSF/DFF headers and ID3v2 tags
+  through `SeekableDocumentSource` (positioned reads over the document's `FileChannel`,
+  because `RandomAccessFile` cannot open these files), and caches embedded APIC artwork
+  into `cacheDir` (referenced by `TrackEntity.artUri`).
 - `MetadataFallbackReader` fills gaps when MediaStore metadata is missing.
 - `ScanAndIndexMediaUseCase` drives a full scan → Room index pass; progress is exposed
   via `MediaIndexingProgress`. `ObserveMediaStoreChangesUseCase` watches for library
-  changes (wrap the `ContentObserver` in a `callbackFlow`).
+  changes (wrap the `ContentObserver` in a `callbackFlow`) **merged with folder-set
+  changes**, so adding or removing a folder in Settings re-indexes the same way copying
+  files onto the device does.
 - `MediaIndexRepositoryImpl.scanAndIndexMedia()` is a `callbackFlow` (not `flow {}`) so it
   can forward the `onProgress` callback `MediaStoreScanner.scanAudioFilesForIndexing()`
   invokes per file during its ID3v2.2 fallback pass — the real per-file I/O cost, and the
@@ -88,6 +143,7 @@ catalogue and playback session must survive upgrades.
 
 Rules:
 - ✅ Query MediaStore only from Data; close cursors with `use {}`.
+- ✅ Always scope a scan to `MusicFolderRegistry.getScopes()`; an empty scope scans nothing.
 - ✅ Wrap scan/search failures in `ResourceError.StorageError`.
 - ✅ Keep search local and case-insensitive (title/artist/album); blank query clears
   state rather than issuing a scan.

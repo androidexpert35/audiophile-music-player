@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.Button
@@ -85,6 +86,11 @@ fun OnboardingScreen(
     ) { granted ->
         viewModel.onEvent(OnboardingUiEvent.PermissionResult(granted))
     }
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        viewModel.onEvent(OnboardingUiEvent.MusicFolderPicked(treeUri?.toString()))
+    }
 
     LaunchedEffect(requiredPermission) {
         val isGranted = ContextCompat.checkSelfPermission(
@@ -98,6 +104,10 @@ fun OnboardingScreen(
         viewModel.uiEffect.collect { effect ->
             when (effect) {
                 OnboardingUiEffect.RequestPermission -> permissionLauncher.launch(requiredPermission)
+                // No initial URI is supplied: the chooser then opens at the device's own
+                // last-used location, which is where an audiophile's music folder is far
+                // more likely to be than at a hardcoded Music/ root.
+                OnboardingUiEffect.PickMusicFolder -> folderPickerLauncher.launch(null)
                 OnboardingUiEffect.NavigateToHome -> onNavigateToHome()
             }
         }
@@ -108,6 +118,9 @@ fun OnboardingScreen(
             model = model,
             onRequestPermission = {
                 viewModel.onEvent(OnboardingUiEvent.RequestPermissionTapped)
+            },
+            onAddMusicFolder = {
+                viewModel.onEvent(OnboardingUiEvent.AddMusicFolderTapped)
             }
         )
     }
@@ -118,11 +131,13 @@ fun OnboardingScreen(
  *
  * @param model Current immutable onboarding model.
  * @param onRequestPermission Callback requesting the platform permission prompt.
+ * @param onAddMusicFolder Callback requesting the platform folder chooser.
  */
 @Composable
 private fun OnboardingContent(
     model: OnboardingUiModel,
-    onRequestPermission: () -> Unit
+    onRequestPermission: () -> Unit,
+    onAddMusicFolder: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -174,6 +189,33 @@ private fun OnboardingContent(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(text = stringResource(R.string.onboarding_permission_action))
+                            }
+                        }
+
+                        is OnboardingState.RequiresMusicFolder -> {
+                            OnboardingIconBadge(icon = Icons.Filled.CreateNewFolder)
+                            Text(
+                                text = stringResource(R.string.onboarding_folder_title),
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.onboarding_folder_message),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (state.hasFailedAttempt) {
+                                Text(
+                                    text = stringResource(R.string.onboarding_folder_required),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Button(
+                                onClick = onAddMusicFolder,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(text = stringResource(R.string.onboarding_folder_action))
                             }
                         }
 
@@ -317,7 +359,20 @@ private fun OnboardingPermissionPreview() {
     AudiophileMusicPlayerTheme {
         OnboardingContent(
             model = OnboardingUiModel(OnboardingState.RequiresPermission),
-            onRequestPermission = {}
+            onRequestPermission = {},
+            onAddMusicFolder = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+private fun OnboardingMusicFolderPreview() {
+    AudiophileMusicPlayerTheme {
+        OnboardingContent(
+            model = OnboardingUiModel(OnboardingState.RequiresMusicFolder()),
+            onRequestPermission = {},
+            onAddMusicFolder = {}
         )
     }
 }
@@ -333,7 +388,8 @@ private fun OnboardingScanningPreview() {
                     currentFile = "Music/Reference/Kind of Blue/01 - So What.flac"
                 )
             ),
-            onRequestPermission = {}
+            onRequestPermission = {},
+            onAddMusicFolder = {}
         )
     }
 }

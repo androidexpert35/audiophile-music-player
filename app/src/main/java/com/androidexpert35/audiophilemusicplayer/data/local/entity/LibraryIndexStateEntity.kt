@@ -13,13 +13,18 @@ import androidx.room.PrimaryKey
  * @property isCompleted Whether at least one full scan-and-index pass finished successfully.
  * @property indexedTrackCount Number of tracks persisted during the last successful index.
  * @property lastIndexedAtEpochMs UTC epoch timestamp in milliseconds for the last successful scan.
+ * @property folderSignature Fingerprint of the music folders that produced this index. A
+ *   catalogue whose signature no longer matches the granted folders is stale by definition —
+ *   the user added or removed a folder — so it must be rebuilt rather than shown. Empty for
+ *   indexes written before folder-scoped scanning existed, which forces exactly that rebuild.
  */
 @Entity(tableName = "library_index_state")
 data class LibraryIndexStateEntity(
     @PrimaryKey val id: Int = DEFAULT_ID,
     val isCompleted: Boolean,
     val indexedTrackCount: Int,
-    val lastIndexedAtEpochMs: Long
+    val lastIndexedAtEpochMs: Long,
+    val folderSignature: String = ""
 ) {
     companion object {
         /** Fixed identifier for the singleton row storing index completion metadata. */

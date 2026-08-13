@@ -19,4 +19,22 @@ sealed interface SettingsUiEvent {
 
     /** Enable or disable the Hi-Res Dynamic Remaster for lossless tracks. */
     data class SetHiResRemasterEnabled(val enabled: Boolean) : SettingsUiEvent
+
+    /** Ask the UI to open the system folder chooser so another music folder can be added. */
+    data object AddMusicFolderTapped : SettingsUiEvent
+
+    /**
+     * Delivers the result of the system folder chooser.
+     *
+     * @property folderId Identifier of the chosen folder, or `null` when the chooser was
+     *   dismissed without a selection.
+     */
+    data class MusicFolderPicked(val folderId: String?) : SettingsUiEvent
+
+    /**
+     * Drop a folder from the library scan scope.
+     *
+     * @property folderId Identifier of the folder to stop scanning.
+     */
+    data class RemoveMusicFolder(val folderId: String) : SettingsUiEvent
 }

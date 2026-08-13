@@ -1,24 +1,25 @@
 package com.androidexpert35.audiophilemusicplayer.data.scanner
 
+import android.content.ContentResolver
 import android.content.Context
 import android.media.MediaMetadataRetriever
-import android.os.Environment
-import android.os.storage.StorageManager
-import com.androidexpert35.audiophilemusicplayer.data.scanner.DsdFileScanner.Companion.SCAN_SUBDIRS
+import android.net.Uri
+import android.provider.DocumentsContract
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.coroutineContext
 
 /**
- * Supplementary scanner that discovers DSD audio files (`.dsf`, `.dff`) from the
- * device filesystem.
+ * Supplementary scanner that discovers DSD audio files (`.dsf`, `.dff`) inside the
+ * folders the user granted as music locations.
  *
  * **Why a separate scanner is needed:**
  * Android's system media scanner does not register DSD formats in
@@ -27,138 +28,146 @@ import javax.inject.Singleton
  * completely invisible to any `ContentResolver` query against MediaStore — they are
  * never inserted as rows in the first place.
  *
- * This scanner compensates by:
- * 1. Enumerating ALL mounted storage volumes via [StorageManager.getStorageVolumes] so
- *    SD cards are discovered reliably regardless of their mount path.
- * 2. Walking several standard audio directories on each volume (`Music`, `Downloads`,
- *    `Documents`, `Audiobooks`, and the volume root itself).
- * 3. Attempting [MediaMetadataRetriever] for tag-based metadata first.
- * 4. **Falling back to direct ID3v2 binary parsing** for DSF files when MMR fails —
+ * **Why it walks document trees rather than the filesystem:**
+ * For the same reason, the platform does not treat `.dsf` / `.dff` as audio, so
+ * `READ_MEDIA_AUDIO` grants no access to them: a direct `File` walk of shared storage
+ * cannot even see these files on the API levels this app supports. The only durable way
+ * to read them is the persisted document-tree grant the user hands over when adding a
+ * music folder, which is why DSD tracks appear in the library exactly once such a folder
+ * has been added.
+ *
+ * The scanner therefore:
+ * 1. Walks each granted [MusicFolderScope] tree through [DocumentsContract], skipping
+ *    hidden directories and the `Android` data tree.
+ * 2. Attempts [MediaMetadataRetriever] for tag-based metadata first.
+ * 3. **Falls back to direct ID3v2 binary parsing** for DSF files when MMR fails —
  *    necessary on most Android OEMs where the platform codec framework has no DSD
  *    decoder and MMR returns null for every metadata key despite opening the file.
- * 5. Extracting embedded album art (APIC frame) and caching it as a `file://` URI in
+ * 4. Extracts embedded album art (APIC frame) and caches it as a `file://` URI in
  *    the app's cache directory so Coil can load it without MediaStore involvement.
- * 6. Parsing the binary DSF / DFF header directly to recover duration when MMR fails.
- * 7. Producing [ScannedAudioFile] records with `file://` content URIs that Media3 /
- *    ExoPlayer can open directly for playback.
+ * 5. Parses the binary DSF / DFF header directly to recover duration and sample rate.
+ * 6. Produces [ScannedAudioFile] records carrying the document URI, which both the
+ *    audiophile engine and Media3 can open directly for playback.
  *
- * Stable track IDs are generated from each file's absolute path hash, using a
- * negative Long range so they cannot collide with positive MediaStore IDs.
+ * Stable track IDs are generated from each document URI's hash, using a negative Long
+ * range so they cannot collide with positive MediaStore IDs.
  *
- * @property context Application context used to enumerate storage volumes and write
+ * @property context Application context used for metadata retrieval and for writing
  *   cached artwork to [Context.getCacheDir].
+ * @property contentResolver Resolver used to walk granted trees and open documents.
  * @property ioDispatcher Background dispatcher for all blocking I/O operations.
  */
 @Singleton
 class DsdFileScanner @Inject constructor(
     @param:ApplicationContext private val context: Context,
+    private val contentResolver: ContentResolver,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
 
     /**
-     * Scans all accessible storage volumes for `.dsf` and `.dff` files.
+     * Scans every granted music folder for `.dsf` and `.dff` documents.
      *
-     * Uses [StorageManager.getStorageVolumes] to enumerate every mounted volume so
-     * external SD cards are found at their correct root path. On each volume the
-     * scanner walks [SCAN_SUBDIRS] plus the volume root itself (one level deep only
-     * for the root to avoid traversing system folders).
-     *
+     * @param folders Locations the user authorised as music folders. An empty list yields
+     *   an empty result — there is no whole-device fallback.
      * @return List of [ScannedAudioFile] records representing discovered DSD tracks,
      *   sorted by title. Returns an empty list when no DSD files are found.
      */
-    suspend fun scanDsdFiles(): List<ScannedAudioFile> = withContext(ioDispatcher) {
-        val results = mutableListOf<ScannedAudioFile>()
-        val visited = mutableSetOf<String>()
+    suspend fun scanDsdFiles(folders: List<MusicFolderScope>): List<ScannedAudioFile> =
+        withContext(ioDispatcher) {
+            val results = mutableListOf<ScannedAudioFile>()
+            val visitedDocumentIds = mutableSetOf<String>()
 
-        val volumeRoots = resolveVolumeRoots()
+            for (folder in folders) {
+                val rootDocumentId = runCatching {
+                    DocumentsContract.getTreeDocumentId(folder.treeUri)
+                }.getOrNull() ?: continue
 
-        for (root in volumeRoots) {
-            // 1. Walk each standard audio sub-directory recursively.
-            for (subdir in SCAN_SUBDIRS) {
-                val dir = File(root, subdir)
-                if (dir.exists() && dir.isDirectory) {
-                    walkForDsd(dir, recursive = true, visited = visited, results = results)
-                }
+                walkForDsd(
+                    folder = folder,
+                    documentId = rootDocumentId,
+                    displayPath = folder.displayPath,
+                    visitedDocumentIds = visitedDocumentIds,
+                    results = results,
+                )
             }
 
-            // 2. Scan the volume root itself one level deep (non-recursive) so files
-            //    placed directly in the root or in a single custom folder are found
-            //    without risking traversal of Android system directories.
-            walkForDsd(root, recursive = false, visited = visited, results = results)
+            results.sortedBy { it.title }
         }
-
-        results.sortedBy { it.title }
-    }
 
     /**
-     * Resolves the root [File] for every mounted storage volume.
+     * Recursively walks the document tree rooted at [documentId], collecting DSD files.
      *
-     * Prefers [StorageManager.getStorageVolumes] (API 24+, enhanced in API 30) for
-     * accurate volume roots, then falls back to [Environment.getExternalStorageDirectory]
-     * for the primary volume when the storage manager returns nothing useful.
-     */
-    private fun resolveVolumeRoots(): List<File> {
-        val roots = mutableListOf<File>()
-        val storageManager = context.getSystemService(StorageManager::class.java)
-
-        storageManager?.storageVolumes?.forEach { volume ->
-            // StorageVolume.directory is available on API 30+ (minSdk = 33).
-            volume.directory
-                ?.takeIf { it.exists() && it.canRead() }
-                ?.let { roots += it }
-        }
-
-        // Fallback: if StorageManager returns nothing, use the primary external storage root.
-        if (roots.isEmpty()) {
-            Environment.getExternalStorageDirectory()
-                ?.takeIf { it.exists() && it.canRead() }
-                ?.let { roots += it }
-        }
-
-        return roots.distinctBy { file -> runCatching { file.canonicalPath }.getOrElse { file.absolutePath } }
-    }
-
-    /**
-     * Walks [dir] for DSD files, optionally recurring into sub-directories.
+     * Each document is processed in isolation — a failure in [scanSingleDocument] is
+     * swallowed so one corrupt file does not abort the walk. Directories starting with
+     * `.` (hidden) or named `Android` (system data tree) are always skipped, and every
+     * document ID is visited once so a tree reachable through two grants is not indexed
+     * twice.
      *
-     * Each file is processed in isolation — an exception in [scanSingleFile] is caught
-     * so one corrupt file does not abort the walk. Directories starting with `.`
-     * (hidden) or named `Android` (system data tree) are always skipped.
-     *
-     * @param dir Directory to walk.
-     * @param recursive Whether to descend into sub-directories.
-     * @param visited Canonical paths already processed; prevents duplicate entries when
-     *   the same volume is reachable via multiple symlinks.
+     * @param folder Granted folder currently being walked.
+     * @param documentId Directory document ID to enumerate.
+     * @param displayPath Human-readable path of [documentId] used for scan feedback.
+     * @param visitedDocumentIds Document IDs already processed.
      * @param results Accumulator for discovered [ScannedAudioFile] records.
      */
-    private fun walkForDsd(
-        dir: File,
-        recursive: Boolean,
-        visited: MutableSet<String>,
+    private suspend fun walkForDsd(
+        folder: MusicFolderScope,
+        documentId: String,
+        displayPath: String,
+        visitedDocumentIds: MutableSet<String>,
         results: MutableList<ScannedAudioFile>,
     ) {
-        val sequence = if (recursive) {
-            dir.walkTopDown().onEnter { sub ->
-                // Skip hidden directories and the Android data tree.
-                !sub.name.startsWith(".") && sub.name != "Android"
-            }
-        } else {
-            // Non-recursive: only immediate children of dir.
-            (dir.listFiles()?.asSequence() ?: emptySequence())
-        }
+        if (!visitedDocumentIds.add(documentId)) return
+        coroutineContext.ensureActive()
 
-        sequence
-            .filter { file -> file.isFile && file.extension.lowercase() in DSD_EXTENSIONS }
-            .forEach { file ->
-                val canonical = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
-                if (visited.add(canonical)) {
-                    scanSingleFile(file)?.let { results += it }
+        val childrenUri = runCatching {
+            DocumentsContract.buildChildDocumentsUriUsingTree(folder.treeUri, documentId)
+        }.getOrNull() ?: return
+
+        val childDirectories = mutableListOf<Pair<String, String>>()
+
+        runCatching {
+            contentResolver.query(childrenUri, CHILD_PROJECTION, null, null, null)?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val sizeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
+                val modifiedIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+
+                while (cursor.moveToNext()) {
+                    val childId = cursor.getString(idIndex) ?: continue
+                    val childName = cursor.getString(nameIndex).orEmpty()
+                    val childMime = cursor.getString(mimeIndex).orEmpty()
+                    val childPath = if (displayPath.isEmpty()) childName else "$displayPath/$childName"
+
+                    if (childMime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        if (childName.startsWith(".") || childName == ANDROID_DATA_DIR) continue
+                        // Collected first so the cursor is closed before recursing, keeping
+                        // at most one open cursor per tree level instead of one per depth.
+                        childDirectories += childId to childPath
+                        continue
+                    }
+
+                    if (childName.substringAfterLast('.', "").lowercase() !in DSD_EXTENSIONS) continue
+
+                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(folder.treeUri, childId)
+                    scanSingleDocument(
+                        documentUri = documentUri,
+                        displayName = childName,
+                        displayPath = childPath,
+                        fileSizeBytes = cursor.getLong(sizeIndex),
+                        lastModifiedMs = cursor.getLong(modifiedIndex),
+                    )?.let { results += it }
                 }
             }
+        }
+
+        for ((childId, childPath) in childDirectories) {
+            walkForDsd(folder, childId, childPath, visitedDocumentIds, results)
+        }
     }
 
     /**
-     * Extracts metadata for a single DSD file and converts it to a [ScannedAudioFile].
+     * Extracts metadata for a single DSD document and converts it to a [ScannedAudioFile].
      *
      * **Metadata resolution order:**
      * 1. [MediaMetadataRetriever] — fast and sufficient on Android versions /
@@ -166,7 +175,7 @@ class DsdFileScanner @Inject constructor(
      * 2. Direct ID3v2 binary parsing (DSF only) — used when MMR returns blank
      *    values or throws. Seeks to the ID3 offset recorded in the DSF chunk
      *    header and reads TIT2 / TPE1 / TALB / TRCK / TDRC frames directly.
-     * 3. Binary DSD / DFF header parsing for duration when both tag sources fail.
+     * 3. Binary DSD / DFF header parsing for duration and sample rate.
      *
      * **Album art resolution order:**
      * 1. [MediaMetadataRetriever.getEmbeddedPicture] — available when the platform
@@ -177,22 +186,34 @@ class DsdFileScanner @Inject constructor(
      * resulting `file://` URI is stored in [ScannedAudioFile.artUri] so Coil can
      * load album artwork for DSD tracks the same way as regular MediaStore tracks.
      *
-     * @param file Candidate DSD audio file from the filesystem walk.
-     * @return Populated [ScannedAudioFile], or `null` if the file is unreadable or has
+     * @param documentUri Document URI of the candidate DSD file.
+     * @param displayName File name including extension.
+     * @param displayPath Path of the document relative to its storage volume.
+     * @param fileSizeBytes Document size reported by the provider.
+     * @param lastModifiedMs Document modification time in epoch milliseconds.
+     * @return Populated [ScannedAudioFile], or `null` if the document is unreadable or has
      *   a duration below the 30-second threshold used for MediaStore tracks.
      */
-    private fun scanSingleFile(file: File): ScannedAudioFile? = runCatching {
-        val absolutePath = file.absolutePath
-        // Derive a stable, collision-free ID from the absolute path. MediaStore IDs are
+    private fun scanSingleDocument(
+        documentUri: Uri,
+        displayName: String,
+        displayPath: String,
+        fileSizeBytes: Long,
+        lastModifiedMs: Long,
+    ): ScannedAudioFile? = runCatching {
+        val uriString = documentUri.toString()
+        // Derive a stable, collision-free ID from the document URI. MediaStore IDs are
         // always positive; negating the hash pushes these IDs into the negative range.
-        val stableId = -(absolutePath.hashCode().toLong().and(0x7FFF_FFFFL) + 1L)
+        val stableId = -(uriString.hashCode().toLong().and(0x7FFF_FFFFL) + 1L)
+        val isDsf = displayName.substringAfterLast('.', "").equals("dsf", ignoreCase = true)
 
-        var title = file.nameWithoutExtension
-        var artist = "Unknown Artist"
-        var album = "Unknown Album"
+        var title = displayName.substringBeforeLast('.')
+        var artist = UNKNOWN_ARTIST
+        var album = UNKNOWN_ALBUM
         var durationMs = 0L
         var trackNumber = 0
         var year = 0
+        var sampleRateHz = 0
         var embeddedPicture: ByteArray? = null
 
         // ── Phase 1: tag-based metadata via MediaMetadataRetriever ───────────
@@ -201,7 +222,7 @@ class DsdFileScanner @Inject constructor(
         // firmware builds that lack a DSD codec entry in the platform stack.
         val mmr = MediaMetadataRetriever()
         try {
-            mmr.setDataSource(absolutePath)
+            mmr.setDataSource(context, documentUri)
             mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
                 ?.takeIf { it.isNotBlank() }?.let { title = it }
             mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
@@ -221,35 +242,43 @@ class DsdFileScanner @Inject constructor(
             runCatching { mmr.release() }
         }
 
-        // ── Phase 1b: Direct ID3v2 binary parsing (DSF only) ────────────────
-        // DSF files embed an ID3v2 tag whose file offset is stored at bytes 20–27
-        // of the DSD chunk header (little-endian int64). When MMR returns blank
-        // values — which happens on most Samsung-derived Android and many OEMs —
-        // we parse TIT2, TPE1, TALB, TRCK, TDRC, and APIC frames directly from the
-        // raw bytes. This path is reliable on every Android version because it
-        // requires only RandomAccessFile, not a platform codec decoder.
-        if (file.extension.lowercase() == "dsf") {
-            val id3Offset = readDsfId3Offset(file)
-            if (id3Offset > 0L) {
-                val id3 = parseId3v2Tag(file, id3Offset)
-                // Only promote direct-parsed values when MMR left them as defaults.
-                if (title == file.nameWithoutExtension) id3.title?.let { title = it }
-                if (artist == "Unknown Artist") id3.artist?.let { artist = it }
-                if (album == "Unknown Album") id3.album?.let { album = it }
-                if (trackNumber == 0) id3.trackNumber.takeIf { it > 0 }?.let { trackNumber = it }
-                if (year == 0) id3.year.takeIf { it > 0 }?.let { year = it }
-                if (embeddedPicture == null) embeddedPicture = id3.pictureBytes
+        // ── Phase 2: direct binary parsing ───────────────────────────────────
+        // A single descriptor serves both the ID3v2 tag read and the container
+        // header parse, so a track costs one open regardless of how much MMR missed.
+        SeekableDocumentSource.open(contentResolver, documentUri)?.use { source ->
+            // Phase 2a: ID3v2 binary parsing (DSF only).
+            // DSF files embed an ID3v2 tag whose file offset is stored at bytes 20–27
+            // of the DSD chunk header (little-endian int64). When MMR returns blank
+            // values — which happens on most Samsung-derived Android and many OEMs —
+            // we parse TIT2, TPE1, TALB, TRCK, TDRC, and APIC frames directly from the
+            // raw bytes. This path is reliable on every Android version because it
+            // requires only positioned reads, not a platform codec decoder.
+            if (isDsf) {
+                val id3Offset = readDsfId3Offset(source)
+                if (id3Offset > 0L) {
+                    val id3 = parseId3v2Tag(source, id3Offset)
+                    // Only promote direct-parsed values when MMR left them as defaults.
+                    if (title == displayName.substringBeforeLast('.')) id3.title?.let { title = it }
+                    if (artist == UNKNOWN_ARTIST) id3.artist?.let { artist = it }
+                    if (album == UNKNOWN_ALBUM) id3.album?.let { album = it }
+                    if (trackNumber == 0) id3.trackNumber.takeIf { it > 0 }?.let { trackNumber = it }
+                    if (year == 0) id3.year.takeIf { it > 0 }?.let { year = it }
+                    if (embeddedPicture == null) embeddedPicture = id3.pictureBytes
+                }
             }
-        }
 
-        // ── Phase 2: binary header parsing for duration fallback ─────────────
-        if (durationMs <= 0L) {
-            val headerData = readHeaderBytes(file)
+            // Phase 2b: container header — the only source of DSD sample rate, and the
+            // duration fallback when MMR could not decode the stream.
+            val headerData = readHeaderBytes(source)
             if (headerData != null) {
-                durationMs = when {
-                    isDsfMagic(headerData) -> parseDsfHeader(headerData).durationMs
-                    isDffMagic(headerData) -> parseDffHeader(file).durationMs
-                    else -> 0L
+                val header = when {
+                    isDsfMagic(headerData) -> parseDsfHeader(headerData)
+                    isDffMagic(headerData) -> parseDffHeader(source)
+                    else -> null
+                }
+                if (header != null) {
+                    sampleRateHz = header.sampleRateHz
+                    if (durationMs <= 0L) durationMs = header.durationMs
                 }
             }
         }
@@ -272,51 +301,34 @@ class DsdFileScanner @Inject constructor(
             albumId = -(album.hashCode().toLong().and(0x7FFF_FFFFL) + 1L),
             albumTitle = album,
             durationMs = durationMs,
-            contentUri = "file://$absolutePath",
-            filePath = absolutePath,
+            contentUri = uriString,
+            filePath = displayPath,
             trackNumber = trackNumber,
             discNumber = 1,
             mimeType = MIME_DSD,
-            fileSizeBytes = file.length(),
-            dateAdded = file.lastModified() / 1_000L,
+            fileSizeBytes = fileSizeBytes,
+            dateAdded = lastModifiedMs / 1_000L,
             year = year,
             artUri = artUri,
             // DSD sample rates: DSD64 = 2 822 400 Hz, DSD128 = 5 644 800, DSD256 = 11 289 600.
             // Read from the binary header since MMR does not expose DSD sample rate.
-            sampleRateHz = readDsdSampleRate(file),
+            sampleRateHz = sampleRateHz,
             bitDepth = 1, // DSD is inherently 1-bit; mark explicitly for display purposes.
         )
     }.getOrNull()
-
-    // ── DSD sample-rate extraction ────────────────────────────────────────────
-
-    /**
-     * Reads the sample rate directly from the DSF or DFF file header.
-     * Returns 0 if the file is not a recognised DSD container or is unreadable.
-     */
-    private fun readDsdSampleRate(file: File): Int {
-        val headerData = readHeaderBytes(file) ?: return 0
-        return when {
-            isDsfMagic(headerData) -> parseDsfHeader(headerData).sampleRateHz
-            isDffMagic(headerData) -> parseDffHeader(file).sampleRateHz
-            else -> 0
-        }
-    }
 
     // ── DSF ID3v2 offset extraction ───────────────────────────────────────────
 
     /**
      * Reads the ID3v2 tag offset stored at bytes 20–27 (little-endian `int64`) of
-     * the DSF chunk header. Returns −1 if the file cannot be read or has no tag.
+     * the DSF chunk header. Returns −1 if the document cannot be read or has no tag.
      */
-    private fun readDsfId3Offset(file: File): Long = runCatching {
-        RandomAccessFile(file, "r").use { raf ->
-            if (raf.length() < 28) return@runCatching -1L
-            raf.seek(20)
-            val buf = ByteArray(8)
-            raf.readFully(buf)
-            ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).long
-        }
+    private fun readDsfId3Offset(source: SeekableDocumentSource): Long = runCatching {
+        if (source.length() < 28) return@runCatching -1L
+        source.seek(20)
+        val buf = ByteArray(8)
+        source.readFully(buf)
+        ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).long
     }.getOrDefault(-1L)
 
     // ── Direct ID3v2 tag parser ───────────────────────────────────────────────
@@ -342,91 +354,89 @@ class DsdFileScanner @Inject constructor(
     )
 
     /**
-     * Parses the ID3v2 tag at [offset] inside [file], extracting text frames and
+     * Parses the ID3v2 tag at [offset] inside [source], extracting text frames and
      * the first APIC (attached picture) frame.
      *
      * Supports ID3v2.3 and v2.4. Frame sizes are plain big-endian int32 in v2.3
      * and syncsafe int32 in v2.4. Text encoding is honoured for both ASCII/Latin-1
      * and UTF-8/UTF-16.
      *
-     * @param file DSF file containing the tag.
-     * @param offset Byte offset of the `ID3` magic within the file.
+     * @param source Open reader over the DSF document containing the tag.
+     * @param offset Byte offset of the `ID3` magic within the document.
      * @return Parsed [Id3TagResult]; all fields are null/zero on parse failure.
      */
-    private fun parseId3v2Tag(file: File, offset: Long): Id3TagResult = runCatching {
-        RandomAccessFile(file, "r").use { raf ->
-            raf.seek(offset)
+    private fun parseId3v2Tag(source: SeekableDocumentSource, offset: Long): Id3TagResult = runCatching {
+        source.seek(offset)
 
-            // Verify ID3v2 magic.
-            val magic = ByteArray(3).also { raf.readFully(it) }
-            if (String(magic, Charsets.US_ASCII) != "ID3") return@runCatching Id3TagResult()
+        // Verify ID3v2 magic.
+        val magic = ByteArray(3).also { source.readFully(it) }
+        if (String(magic, Charsets.US_ASCII) != "ID3") return@runCatching Id3TagResult()
 
-            val versionMajor = raf.read()  // 3 = v2.3, 4 = v2.4
-            raf.read()                      // revision (ignored)
-            val flags = raf.read()
-            val hasExtendedHeader = (flags and 0x40) != 0
+        val versionMajor = source.readUnsignedByte()  // 3 = v2.3, 4 = v2.4
+        source.readUnsignedByte()                      // revision (ignored)
+        val flags = source.readUnsignedByte()
+        val hasExtendedHeader = (flags and 0x40) != 0
 
-            // Tag size is always a syncsafe int32 (7-bit bytes).
-            val tagSize = readSyncsafeInt(raf)
-            val tagEnd = offset + 10L + tagSize
+        // Tag size is always a syncsafe int32 (7-bit bytes).
+        val tagSize = readSyncsafeInt(source)
+        val tagEnd = offset + 10L + tagSize
 
-            // Skip the optional extended header.
-            if (hasExtendedHeader) {
-                val extHeaderSize = if (versionMajor == 4) readSyncsafeInt(raf) else readInt32BE(raf)
-                // extHeaderSize includes its own 4-byte field; skip the remaining content.
-                val remaining = (extHeaderSize - 4).coerceAtLeast(0)
-                if (remaining > 0) raf.skipBytes(remaining)
-            }
-
-            var title: String? = null
-            var artist: String? = null
-            var album: String? = null
-            var trackNumber = 0
-            var year = 0
-            var pictureBytes: ByteArray? = null
-
-            // Iterate frames until padding (all-zero ID) or tag boundary.
-            while (raf.filePointer < tagEnd - 10 && raf.filePointer < raf.length() - 10) {
-                val frameIdBytes = ByteArray(4).also { raf.readFully(it) }
-                val frameId = String(frameIdBytes, Charsets.US_ASCII)
-
-                // All-zero ID bytes signal the start of tag padding — stop here.
-                if (frameIdBytes.all { it == 0.toByte() }) break
-
-                val frameSize = if (versionMajor == 4) readSyncsafeInt(raf) else readInt32BE(raf)
-                raf.read()  // frame flags byte 1 (ignored)
-                raf.read()  // frame flags byte 2 (ignored)
-
-                // Guard against absurd frame sizes (corrupt tag or seek to wrong offset).
-                if (frameSize <= 0 || frameSize > MAX_FRAME_BYTES) break
-
-                val frameData = ByteArray(frameSize).also { raf.readFully(it) }
-
-                when (frameId) {
-                    "TIT2" -> if (title == null) title = decodeId3TextFrame(frameData)
-                    "TPE1" -> if (artist == null) artist = decodeId3TextFrame(frameData)
-                    "TALB" -> if (album == null) album = decodeId3TextFrame(frameData)
-                    "TRCK" -> if (trackNumber == 0)
-                        trackNumber = decodeId3TextFrame(frameData)
-                            ?.substringBefore('/')?.toIntOrNull() ?: 0
-                    "TDRC", "TYER" -> if (year == 0)
-                        year = decodeId3TextFrame(frameData)?.take(4)?.toIntOrNull() ?: 0
-                    "APIC" -> if (pictureBytes == null) pictureBytes = extractApicBytes(frameData)
-                }
-            }
-
-            Id3TagResult(title, artist, album, trackNumber, year, pictureBytes)
+        // Skip the optional extended header.
+        if (hasExtendedHeader) {
+            val extHeaderSize = if (versionMajor == 4) readSyncsafeInt(source) else readInt32BE(source)
+            // extHeaderSize includes its own 4-byte field; skip the remaining content.
+            val remaining = (extHeaderSize - 4).coerceAtLeast(0)
+            if (remaining > 0) source.skipBytes(remaining)
         }
+
+        var title: String? = null
+        var artist: String? = null
+        var album: String? = null
+        var trackNumber = 0
+        var year = 0
+        var pictureBytes: ByteArray? = null
+
+        // Iterate frames until padding (all-zero ID) or tag boundary.
+        while (source.position < tagEnd - 10 && source.position < source.length() - 10) {
+            val frameIdBytes = ByteArray(4).also { source.readFully(it) }
+            val frameId = String(frameIdBytes, Charsets.US_ASCII)
+
+            // All-zero ID bytes signal the start of tag padding — stop here.
+            if (frameIdBytes.all { it == 0.toByte() }) break
+
+            val frameSize = if (versionMajor == 4) readSyncsafeInt(source) else readInt32BE(source)
+            source.readUnsignedByte()  // frame flags byte 1 (ignored)
+            source.readUnsignedByte()  // frame flags byte 2 (ignored)
+
+            // Guard against absurd frame sizes (corrupt tag or seek to wrong offset).
+            if (frameSize <= 0 || frameSize > MAX_FRAME_BYTES) break
+
+            val frameData = ByteArray(frameSize).also { source.readFully(it) }
+
+            when (frameId) {
+                "TIT2" -> if (title == null) title = decodeId3TextFrame(frameData)
+                "TPE1" -> if (artist == null) artist = decodeId3TextFrame(frameData)
+                "TALB" -> if (album == null) album = decodeId3TextFrame(frameData)
+                "TRCK" -> if (trackNumber == 0)
+                    trackNumber = decodeId3TextFrame(frameData)
+                        ?.substringBefore('/')?.toIntOrNull() ?: 0
+                "TDRC", "TYER" -> if (year == 0)
+                    year = decodeId3TextFrame(frameData)?.take(4)?.toIntOrNull() ?: 0
+                "APIC" -> if (pictureBytes == null) pictureBytes = extractApicBytes(frameData)
+            }
+        }
+
+        Id3TagResult(title, artist, album, trackNumber, year, pictureBytes)
     }.getOrDefault(Id3TagResult())
 
     /**
-     * Reads a 4-byte syncsafe integer from [raf].
+     * Reads a 4-byte syncsafe integer from [source].
      *
      * ID3v2 syncsafe integers use only the lower 7 bits of each byte, giving a
      * 28-bit effective range. Used for the tag header size and all v2.4 frame sizes.
      */
-    private fun readSyncsafeInt(raf: RandomAccessFile): Int {
-        val b = ByteArray(4).also { raf.readFully(it) }
+    private fun readSyncsafeInt(source: SeekableDocumentSource): Int {
+        val b = ByteArray(4).also { source.readFully(it) }
         return ((b[0].toInt() and 0x7F) shl 21) or
             ((b[1].toInt() and 0x7F) shl 14) or
             ((b[2].toInt() and 0x7F) shl 7) or
@@ -528,7 +538,15 @@ class DsdFileScanner @Inject constructor(
         "file://${artFile.absolutePath}"
     }.getOrNull()
 
-    // ── DSF header parsing ────────────────────────────────────────────────────
+    // ── Container header parsing ──────────────────────────────────────────────
+
+    /**
+     * Sample rate and duration recovered from a DSD container header.
+     *
+     * @property sampleRateHz DSD sampling frequency in Hertz, `0` when unreadable.
+     * @property durationMs Track duration in milliseconds, `0` when unreadable.
+     */
+    private data class DsdHeaderResult(val sampleRateHz: Int, val durationMs: Long)
 
     /**
      * DSF (Sony DSD Stream File) binary header layout (all integers little-endian):
@@ -549,98 +567,89 @@ class DsdFileScanner @Inject constructor(
      * 64       8    Sample count             ← used for duration
      * ```
      */
-    private data class DsfHeaderResult(val sampleRateHz: Int, val durationMs: Long)
-
-    private fun parseDsfHeader(bytes: ByteArray): DsfHeaderResult {
-        if (bytes.size < 80) return DsfHeaderResult(0, 0)
+    private fun parseDsfHeader(bytes: ByteArray): DsdHeaderResult {
+        if (bytes.size < 80) return DsdHeaderResult(0, 0)
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         val sampleRate = buf.getInt(56)
         val sampleCount = buf.getLong(64)
         val duration = if (sampleRate > 0) (sampleCount * 1_000L) / sampleRate else 0L
-        return DsfHeaderResult(sampleRate, duration)
+        return DsdHeaderResult(sampleRate, duration)
     }
-
-    // ── DFF header parsing ────────────────────────────────────────────────────
-
-    private data class DffHeaderResult(val sampleRateHz: Int, val durationMs: Long)
 
     /**
      * DFF (DSDIFF) parsing walks the big-endian chunk tree to locate the PROP/FSXX
      * sub-chunk (sample rate) and the DSD chunk (sample count).
      */
-    private fun parseDffHeader(file: File): DffHeaderResult {
+    private fun parseDffHeader(source: SeekableDocumentSource): DsdHeaderResult {
         return runCatching {
-            RandomAccessFile(file, "r").use { raf ->
-                raf.seek(12) // skip FRM8 header (4 ID + 8 size + 4 form-type)
-                var sampleRate = 0
-                var dsdSampleCount = 0L
+            source.seek(12) // skip FRM8 header (4 ID + 8 size + 4 form-type)
+            var sampleRate = 0
+            var dsdSampleCount = 0L
 
-                while (raf.filePointer < raf.length() - 12) {
-                    val chunkId = readChunkId(raf)
-                    val chunkSize = readInt64BE(raf)
+            while (source.position < source.length() - 12) {
+                val chunkId = readChunkId(source)
+                val chunkSize = readInt64BE(source)
 
-                    when (chunkId) {
-                        "PROP" -> {
-                            raf.seek(raf.filePointer + 4) // skip "SND " form type
-                            val propEnd = raf.filePointer + chunkSize - 4
-                            while (raf.filePointer < propEnd - 12) {
-                                val subId = readChunkId(raf)
-                                val subSize = readInt64BE(raf)
-                                if (subId == "FSXX" || subId == "FS  ") {
-                                    sampleRate = readInt32BE(raf)
-                                    break
-                                } else {
-                                    raf.seek(raf.filePointer + subSize + (subSize and 1L))
-                                }
+                when (chunkId) {
+                    "PROP" -> {
+                        source.seek(source.position + 4) // skip "SND " form type
+                        val propEnd = source.position + chunkSize - 4
+                        while (source.position < propEnd - 12) {
+                            val subId = readChunkId(source)
+                            val subSize = readInt64BE(source)
+                            if (subId == "FSXX" || subId == "FS  ") {
+                                sampleRate = readInt32BE(source)
+                                break
+                            } else {
+                                source.seek(source.position + subSize + (subSize and 1L))
                             }
-                            raf.seek(propEnd)
                         }
-                        "DSD " -> {
-                            dsdSampleCount = readInt64BE(raf)
-                            raf.seek(raf.filePointer + chunkSize - 8 + (chunkSize and 1L))
-                        }
-                        else -> {
-                            val skip = chunkSize + (chunkSize and 1L)
-                            if (skip <= 0 || raf.filePointer + skip > raf.length()) break
-                            raf.seek(raf.filePointer + skip)
-                        }
+                        source.seek(propEnd)
                     }
-                    if (sampleRate > 0 && dsdSampleCount > 0L) break
+                    "DSD " -> {
+                        dsdSampleCount = readInt64BE(source)
+                        source.seek(source.position + chunkSize - 8 + (chunkSize and 1L))
+                    }
+                    else -> {
+                        val skip = chunkSize + (chunkSize and 1L)
+                        if (skip <= 0 || source.position + skip > source.length()) break
+                        source.seek(source.position + skip)
+                    }
                 }
-
-                val duration = if (sampleRate > 0 && dsdSampleCount > 0L) {
-                    (dsdSampleCount * 1_000L) / sampleRate
-                } else 0L
-
-                DffHeaderResult(sampleRate, duration)
+                if (sampleRate > 0 && dsdSampleCount > 0L) break
             }
-        }.getOrDefault(DffHeaderResult(0, 0))
+
+            val duration = if (sampleRate > 0 && dsdSampleCount > 0L) {
+                (dsdSampleCount * 1_000L) / sampleRate
+            } else 0L
+
+            DsdHeaderResult(sampleRate, duration)
+        }.getOrDefault(DsdHeaderResult(0, 0))
     }
 
     // ── Low-level I/O helpers ─────────────────────────────────────────────────
 
-    private fun readHeaderBytes(file: File): ByteArray? = runCatching {
-        RandomAccessFile(file, "r").use { raf ->
-            val size = minOf(HEADER_READ_SIZE.toLong(), raf.length()).toInt()
-            ByteArray(size).also { raf.readFully(it) }
-        }
+    private fun readHeaderBytes(source: SeekableDocumentSource): ByteArray? = runCatching {
+        val size = minOf(HEADER_READ_SIZE.toLong(), source.length()).toInt()
+        source.seek(0)
+        ByteArray(size).also { source.readFully(it) }
     }.getOrNull()
 
-    private fun readChunkId(raf: RandomAccessFile): String {
+    private fun readChunkId(source: SeekableDocumentSource): String {
         val buf = ByteArray(4)
-        raf.readFully(buf)
+        source.readFully(buf)
         return String(buf, Charsets.US_ASCII)
     }
 
-    private fun readInt32BE(raf: RandomAccessFile): Int {
+    private fun readInt32BE(source: SeekableDocumentSource): Int {
         val buf = ByteArray(4)
-        raf.readFully(buf)
+        source.readFully(buf)
         return ByteBuffer.wrap(buf).order(ByteOrder.BIG_ENDIAN).int
     }
 
-    private fun readInt64BE(raf: RandomAccessFile): Long {
+    private fun readInt64BE(source: SeekableDocumentSource): Long {
         val buf = ByteArray(8)
-        raf.readFully(buf)
+        source.readFully(buf)
         return ByteBuffer.wrap(buf).order(ByteOrder.BIG_ENDIAN).long
     }
 
@@ -660,6 +669,13 @@ class DsdFileScanner @Inject constructor(
         private const val MIN_DURATION_MS = 30_000L
         private const val HEADER_READ_SIZE = 128
 
+        /** Display fallbacks matching the sentinel clean-up applied to MediaStore rows. */
+        private const val UNKNOWN_ARTIST = "Unknown Artist"
+        private const val UNKNOWN_ALBUM = "Unknown Album"
+
+        /** Directory name of the Android app-data tree, never walked for user media. */
+        private const val ANDROID_DATA_DIR = "Android"
+
         /** Sub-directory name inside [Context.getCacheDir] used for cached DSD artwork. */
         private const val DSD_ART_CACHE_DIR = "dsd_art"
 
@@ -671,18 +687,13 @@ class DsdFileScanner @Inject constructor(
          */
         private const val MAX_FRAME_BYTES = 30_000_000 // 30 MB
 
-        /**
-         * Sub-directories searched recursively on each storage volume.
-         * These cover all standard Android media folders where audiophiles
-         * commonly store DSD files.
-         */
-        private val SCAN_SUBDIRS = listOf(
-            Environment.DIRECTORY_MUSIC,
-            Environment.DIRECTORY_DOWNLOADS,
-            Environment.DIRECTORY_DOCUMENTS,
-            "Audiobooks",
-            "DSD",
-            "SACD",
+        /** Columns read for every child document while walking a granted tree. */
+        private val CHILD_PROJECTION = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
         )
     }
 }

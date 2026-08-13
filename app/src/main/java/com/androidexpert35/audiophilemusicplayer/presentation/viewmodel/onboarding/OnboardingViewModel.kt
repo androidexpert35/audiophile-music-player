@@ -1,6 +1,8 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.onboarding
 
 import androidx.lifecycle.viewModelScope
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
 import com.tony.coreui.data.strings.StringResolver
@@ -13,19 +15,30 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel coordinating the initial permission and media-indexing onboarding flow.
+ * ViewModel coordinating the initial permission, folder-selection, and media-indexing
+ * onboarding flow.
  *
- * It keeps the screen fully state-driven: permission prompts are emitted as one-shot effects,
- * indexing progress is exposed as immutable state, and completion triggers a navigation effect.
+ * It keeps the screen fully state-driven: permission and folder prompts are emitted as
+ * one-shot effects, indexing progress is exposed as immutable state, and completion
+ * triggers a navigation effect.
  *
- * @property scanAndIndexMediaUseCase Executes the MediaStore-to-Room indexing workflow.
+ * The folder step is deliberately mandatory. The library is indexed only from folders
+ * the user names, which is both what keeps unrelated audio (messenger voice notes) out
+ * of the catalogue and the only mechanism that makes DSD files readable — Android grants
+ * no access to `.dsf` / `.dff` through the audio permission alone.
+ *
+ * @property scanAndIndexMediaUseCase Executes the scan-to-Room indexing workflow.
  * @property isMediaLibraryIndexedUseCase Checks whether onboarding can be skipped on launch.
+ * @property hasMusicFoldersUseCase Checks whether the user already named their music folders.
+ * @property addMusicFolderUseCase Persists the folder chosen in the system chooser.
  * @property navigationManager Shared navigation manager required by the base ViewModel contract.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val scanAndIndexMediaUseCase: ScanAndIndexMediaUseCase,
     private val isMediaLibraryIndexedUseCase: IsMediaLibraryIndexedUseCase,
+    private val hasMusicFoldersUseCase: HasMusicFoldersUseCase,
+    private val addMusicFolderUseCase: AddMusicFolderUseCase,
     navigationManager: NavigationManager,
     stringResolver: StringResolver,
     uiErrorMapper: UiErrorMapper
@@ -46,6 +59,8 @@ class OnboardingViewModel @Inject constructor(
             is OnboardingUiEvent.Initialize -> initialize(event.hasMediaPermission)
             OnboardingUiEvent.RequestPermissionTapped -> emitEffect(OnboardingUiEffect.RequestPermission)
             is OnboardingUiEvent.PermissionResult -> handlePermissionResult(event.granted)
+            OnboardingUiEvent.AddMusicFolderTapped -> emitEffect(OnboardingUiEffect.PickMusicFolder)
+            is OnboardingUiEvent.MusicFolderPicked -> handleMusicFolderPicked(event.folderId)
             OnboardingUiEvent.RetryIndexing -> startIndexing()
         }
     }
@@ -64,13 +79,7 @@ class OnboardingViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch(exceptionHandler) {
-            if (isMediaLibraryIndexedUseCase()) {
-                completeOnboarding()
-            } else {
-                startIndexing()
-            }
-        }
+        resumeAfterPermission()
     }
 
     /**
@@ -84,7 +93,60 @@ class OnboardingViewModel @Inject constructor(
             return
         }
 
-        startIndexing()
+        resumeAfterPermission()
+    }
+
+    /**
+     * Decides the next step once media permission is in place.
+     *
+     * A cached index is only trusted when the user has also named at least one music
+     * folder. Anything indexed before folders existed came from a whole-device scan, so
+     * it is re-built rather than shown as-is.
+     */
+    private fun resumeAfterPermission() {
+        viewModelScope.launch(exceptionHandler) {
+            when {
+                !hasMusicFoldersUseCase() ->
+                    setSuccessState(OnboardingUiModel(OnboardingState.RequiresMusicFolder()))
+
+                isMediaLibraryIndexedUseCase() -> completeOnboarding()
+
+                else -> startIndexing()
+            }
+        }
+    }
+
+    /**
+     * Persists the folder chosen in the system chooser and moves straight into indexing.
+     *
+     * @param folderId Chosen folder identifier, or `null` when the chooser was dismissed.
+     */
+    private fun handleMusicFolderPicked(folderId: String?) {
+        if (folderId.isNullOrBlank()) {
+            setSuccessState(
+                OnboardingUiModel(OnboardingState.RequiresMusicFolder(hasFailedAttempt = true))
+            )
+            return
+        }
+
+        viewModelScope.launch(exceptionHandler) {
+            when (val result = addMusicFolderUseCase(folderId)) {
+                is Resource.Success -> startIndexing()
+
+                is Resource.Error -> {
+                    setSuccessState(
+                        OnboardingUiModel(
+                            OnboardingState.RequiresMusicFolder(hasFailedAttempt = true)
+                        )
+                    )
+                    handleError(
+                        errorObject = result,
+                        retryAction = { emitEffect(OnboardingUiEffect.PickMusicFolder) },
+                        processUiAfterError = { uiState.value.data }
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -121,6 +183,15 @@ class OnboardingViewModel @Inject constructor(
 
                     is Resource.Error -> {
                         indexingFailed = true
+                        // Leave the Scanning state before surfacing the error: the guard at
+                        // the top of startIndexing() would otherwise swallow the retry. The
+                        // folder step is the right landing spot because a scan that produced
+                        // nothing almost always means the granted folder is gone or empty.
+                        setSuccessState(
+                            OnboardingUiModel(
+                                OnboardingState.RequiresMusicFolder(hasFailedAttempt = true)
+                            )
+                        )
                         handleError(
                             errorObject = resource,
                             retryAction = ::startIndexing,
@@ -142,5 +213,3 @@ class OnboardingViewModel @Inject constructor(
         emitEffect(OnboardingUiEffect.NavigateToHome)
     }
 }
-
-

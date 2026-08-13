@@ -23,21 +23,32 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository implementation that performs the initial MediaStore scan, supplements it with
- * a DSD filesystem scan, and writes a cached Room index.
+ * Repository implementation that scans the user's music folders, supplements the result with
+ * a DSD document scan, and writes a cached Room index.
  *
- * The scanner reads MediaStore once to discover all audio files, then this repository derives
- * the normalized track/album/artist tables and persists them transactionally for fast later reads.
- * DSD files (`.dsf`, `.dff`) are discovered by [DsdFileScanner] and merged into the same
- * pipeline because Android's system media scanner does not index these formats in MediaStore.
+ * The scan is scoped to the folders held by [MusicFolderRegistry] — never the whole device.
+ * That scope is what keeps unrelated audio (messenger voice notes above all) out of the
+ * catalogue, and its persisted read grants are the only way DSD containers can be read at all.
+ * With no granted folder the index is left untouched and a [ResourceError.StorageError] is
+ * emitted, so onboarding can ask the user to pick a folder instead of silently wiping the
+ * catalogue.
+ *
+ * The scanner reads MediaStore once to discover the audio files inside those folders, then this
+ * repository derives the normalized track/album/artist tables and persists them transactionally
+ * for fast later reads. DSD files (`.dsf`, `.dff`) are discovered by [DsdFileScanner] and merged
+ * into the same pipeline because Android's system media scanner does not index these formats.
  *
  * @property scanner MediaStore query executor for raw audio metadata.
- * @property dsdFileScanner Filesystem scanner for DSD files invisible to MediaStore.
+ * @property dsdFileScanner Document-tree scanner for DSD files invisible to MediaStore.
+ * @property musicFolderRegistry Source of truth for the folders the scan may read.
  * @property libraryIndexDao DAO used to replace the cached indexed library atomically.
  * @property contentResolver System content resolver used to observe MediaStore changes.
  * @property ioDispatcher Dispatcher reserved for blocking scan and indexing work.
@@ -46,6 +57,7 @@ import javax.inject.Singleton
 class MediaIndexRepositoryImpl @Inject constructor(
     private val scanner: MediaStoreScanner,
     private val dsdFileScanner: DsdFileScanner,
+    private val musicFolderRegistry: MusicFolderRegistry,
     private val libraryIndexDao: LibraryIndexDao,
     private val contentResolver: ContentResolver,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
@@ -75,7 +87,32 @@ class MediaIndexRepositoryImpl @Inject constructor(
 
         val job = launch(ioDispatcher) {
             try {
-                val mediaStoreFiles = scanner.scanAudioFilesForIndexing { processed, total, filePath ->
+                val folders = musicFolderRegistry.getScopes()
+
+                // An empty scope has two very different causes and only one of them means
+                // the catalogue should disappear.
+                //
+                // The user removing their last folder must empty the library — leaving the
+                // old tracks visible would keep playing content from a location the user
+                // just revoked. That case falls through and indexes an empty result set,
+                // which clears the tables.
+                //
+                // Folders still on record that simply cannot be resolved right now (card
+                // unmounted, grant not yet restored after a reboot) are transient. Wiping
+                // there would destroy a good catalogue over a temporary condition, so the
+                // scan aborts and leaves the index untouched.
+                if (folders.isEmpty() && musicFolderRegistry.hasStoredFolders()) {
+                    trySend(
+                        Resource.Error(
+                            ResourceError.StorageError(
+                                "Your music folders are not reachable right now. Reconnect the storage holding them, or add a folder again."
+                            )
+                        )
+                    )
+                    return@launch
+                }
+
+                val mediaStoreFiles = scanner.scanAudioFilesForIndexing(folders) { processed, total, filePath ->
                     if (total > 0) {
                         trySend(
                             Resource.Success(
@@ -89,10 +126,11 @@ class MediaIndexRepositoryImpl @Inject constructor(
                         )
                     }
                 }
-                // DSD files (.dsf / .dff) are not indexed by Android's system scanner, so
-                // the filesystem-based DsdFileScanner runs as a parallel supplementary pass
-                // and its results are merged here before indexing into Room.
-                val dsdFiles = dsdFileScanner.scanDsdFiles()
+                // DSD files (.dsf / .dff) are not indexed by Android's system scanner and are
+                // not covered by READ_MEDIA_AUDIO, so DsdFileScanner walks the same granted
+                // folders through their document-tree grants as a supplementary pass; its
+                // results are merged here before indexing into Room.
+                val dsdFiles = dsdFileScanner.scanDsdFiles(folders)
                 val scannedFiles = mediaStoreFiles + dsdFiles
                 val totalFiles = scannedFiles.size
                 val trackEntities = ArrayList<TrackEntity>(scannedFiles.size)
@@ -126,7 +164,10 @@ class MediaIndexRepositoryImpl @Inject constructor(
                 val state = LibraryIndexStateEntity(
                     isCompleted = true,
                     indexedTrackCount = trackEntities.size,
-                    lastIndexedAtEpochMs = System.currentTimeMillis()
+                    lastIndexedAtEpochMs = System.currentTimeMillis(),
+                    // Stamp the scope that produced this catalogue so a later folder change
+                    // is detectable without having to diff the tracks themselves.
+                    folderSignature = musicFolderRegistry.folderSignature()
                 )
 
                 // Atomic Room transaction — must complete before the 100% progress is emitted.
@@ -165,9 +206,33 @@ class MediaIndexRepositoryImpl @Inject constructor(
         awaitClose { job.cancel() }
     }
 
+    /**
+     * A cached index counts as usable only when it was built from the folders granted *now*.
+     *
+     * Comparing the stored signature is what makes a folder removed in Settings actually
+     * disappear: the catalogue is declared stale on the next launch even if nothing was
+     * running to observe the change when it happened. Indexes written before folder-scoped
+     * scanning carry an empty signature and are therefore always rebuilt.
+     */
     override suspend fun isLibraryIndexed(): Boolean = runCatching {
-        libraryIndexDao.getLibraryIndexState()?.isCompleted == true
+        val state = libraryIndexDao.getLibraryIndexState() ?: return@runCatching false
+        state.isCompleted && state.folderSignature == musicFolderRegistry.folderSignature()
     }.getOrDefault(false)
+
+    /**
+     * Signals every reason the cached library could now be stale: audio files changing on the
+     * device, and the user changing which folders the library is built from.
+     *
+     * Folder edits are merged in because adding or removing a music folder changes the scan
+     * scope exactly as much as copying files onto the device does — without this, a folder
+     * added in Settings would not show up until the next manual refresh. The registry's
+     * initial emission is dropped so only actual edits trigger work; the immediate [Unit]
+     * still comes from the content observer below.
+     */
+    override fun observeMediaStoreChanges(): Flow<Unit> = merge(
+        observeAudioContentChanges(),
+        musicFolderRegistry.observeScopes().drop(1).map { },
+    )
 
     /**
      * Wraps [ContentResolver.registerContentObserver] in a [callbackFlow] so that any addition
@@ -177,7 +242,7 @@ class MediaIndexRepositoryImpl @Inject constructor(
      * change event arrives. [awaitClose] unregisters the observer automatically when the
      * collecting scope is cancelled — no manual lifecycle wiring is required.
      */
-    override fun observeMediaStoreChanges(): Flow<Unit> = callbackFlow {
+    private fun observeAudioContentChanges(): Flow<Unit> = callbackFlow {
         // Emit immediately so the caller has an initial value without waiting for a change event.
         trySend(Unit)
 

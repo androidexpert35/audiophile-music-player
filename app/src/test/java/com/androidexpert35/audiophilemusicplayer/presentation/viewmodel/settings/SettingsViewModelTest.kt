@@ -13,17 +13,22 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputStream
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.SueStatus
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStatus
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.MusicFolder
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveSueEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveUsbAudioStatusUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RefreshUsbAudioDevicesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.RemoveMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RequestUsbAudioPermissionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
 import com.tony.coreui.domain.resource.Resource
+import com.tony.coreui.domain.resource.ResourceError
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -56,6 +61,9 @@ class SettingsViewModelTest {
     private val setHiResRemasterEnabledUseCase = mockk<SetHiResRemasterEnabledUseCase>()
     private val refreshUsbAudioDevicesUseCase = mockk<RefreshUsbAudioDevicesUseCase>()
     private val requestUsbAudioPermissionUseCase = mockk<RequestUsbAudioPermissionUseCase>()
+    private val observeMusicFoldersUseCase = mockk<ObserveMusicFoldersUseCase>()
+    private val addMusicFolderUseCase = mockk<AddMusicFolderUseCase>()
+    private val removeMusicFolderUseCase = mockk<RemoveMusicFolderUseCase>()
     private val navigationManager = FakeNavigationManager()
 
     private val audiophileEnabledFlow = MutableStateFlow(false)
@@ -63,6 +71,7 @@ class SettingsViewModelTest {
     private val sueEnabledFlow = MutableStateFlow(true)
     private val hiResEnabledFlow = MutableStateFlow(true)
     private val telemetryFlow = MutableStateFlow(AudioTelemetry())
+    private val musicFoldersFlow = MutableStateFlow(emptyList<MusicFolder>())
 
     @Test
     fun `given usb refresh requested when it succeeds then refresh use case runs and progress resets`() = runTest {
@@ -241,12 +250,90 @@ class SettingsViewModelTest {
         assertEquals("External USB DAC", model?.activeUsbPlaybackDeviceName)
     }
 
+    @Test
+    fun `given add folder tapped when handled then the folder chooser effect is emitted`() = runTest {
+        stubObservationUseCases()
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.uiEffect.test {
+            viewModel.onEvent(SettingsUiEvent.AddMusicFolderTapped)
+            advanceUntilIdle()
+
+            assertEquals(SettingsUiEffect.PickMusicFolder, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `given folder picked when grant succeeds then the folder joins the scan scope`() = runTest {
+        stubObservationUseCases()
+        coEvery { addMusicFolderUseCase.invoke(FOLDER_ID) } returns Resource.Success(Unit)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SettingsUiEvent.MusicFolderPicked(FOLDER_ID))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { addMusicFolderUseCase.invoke(FOLDER_ID) }
+    }
+
+    @Test
+    fun `given folder chooser dismissed when result handled then no grant is attempted`() = runTest {
+        stubObservationUseCases()
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SettingsUiEvent.MusicFolderPicked(folderId = null))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { addMusicFolderUseCase.invoke(any()) }
+    }
+
+    @Test
+    fun `given folder removal fails when handled then a toggle error effect is emitted`() = runTest {
+        stubObservationUseCases()
+        coEvery { removeMusicFolderUseCase.invoke(FOLDER_ID) } returns Resource.Error(
+            ResourceError.StorageError("could not release grant")
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.uiEffect.test {
+            viewModel.onEvent(SettingsUiEvent.RemoveMusicFolder(FOLDER_ID))
+            advanceUntilIdle()
+
+            assertTrue(awaitItem() is SettingsUiEffect.ToggleError)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `given granted folders change when observed then the settings model lists them`() = runTest {
+        stubObservationUseCases()
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        musicFoldersFlow.value = listOf(
+            MusicFolder(id = FOLDER_ID, displayPath = "Music/DSD", storageLabel = "Internal storage")
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("Music/DSD"),
+            viewModel.uiState.value.data?.musicFolders?.map { it.displayPath }
+        )
+    }
+
     private fun stubObservationUseCases() {
         every { observeAudiophileEngineEnabledUseCase.invoke() } returns audiophileEnabledFlow
         every { observeUsbAudioStatusUseCase.invoke() } returns usbAudioStatusFlow
         every { observeSueEnabledUseCase.invoke() } returns sueEnabledFlow
         every { observeHiResRemasterEnabledUseCase.invoke() } returns hiResEnabledFlow
         every { observeAudioTelemetryUseCase.invoke() } returns telemetryFlow
+        every { observeMusicFoldersUseCase.invoke() } returns musicFoldersFlow
     }
 
     private fun createViewModel(): SettingsViewModel = SettingsViewModel(
@@ -260,8 +347,15 @@ class SettingsViewModelTest {
         setHiResRemasterEnabledUseCase = setHiResRemasterEnabledUseCase,
         refreshUsbAudioDevicesUseCase = refreshUsbAudioDevicesUseCase,
         requestUsbAudioPermissionUseCase = requestUsbAudioPermissionUseCase,
+        observeMusicFoldersUseCase = observeMusicFoldersUseCase,
+        addMusicFolderUseCase = addMusicFolderUseCase,
+        removeMusicFolderUseCase = removeMusicFolderUseCase,
         navigationManager = navigationManager,
         stringResolver = TestStringResolver,
         uiErrorMapper = TestUiErrorMapper,
     )
+
+    private companion object {
+        const val FOLDER_ID = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
+    }
 }

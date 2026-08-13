@@ -11,4 +11,7 @@ sealed interface SettingsUiEffect {
 	 * @property message Human-readable failure message shown to the user.
 	 */
 	data class ToggleError(val message: String) : SettingsUiEffect
+
+	/** Requests that the Compose layer open the system folder chooser. */
+	data object PickMusicFolder : SettingsUiEffect
 }

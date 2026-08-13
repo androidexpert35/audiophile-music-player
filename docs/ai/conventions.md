@@ -105,7 +105,10 @@ Every public class, interface, function, and property gets complete KDoc.
 - ✅ Remote calls are best-effort metadata enrichment only (Deezer/LRCLIB); cache
   results to minimize traffic; degrade gracefully offline.
 - ✅ Request only the manifest's permissions (`READ_MEDIA_AUDIO`, foreground service,
-  `WAKE_LOCK`, `MODIFY_AUDIO_SETTINGS`, `INTERNET`, optional USB host).
+  `WAKE_LOCK`, `MODIFY_AUDIO_SETTINGS`, `INTERNET`, optional USB host) plus the
+  document-tree grants the user hands over when adding a music folder.
+- ✅ Scan only the user-granted music folders — never the whole volume. See
+  [`data.md`](data.md#user-granted-music-folders-musicfolderregistry).
 - ✅ Fail gracefully when media/USB permission is denied or revoked.
 - ❌ Never upload local library metadata anywhere beyond the enrichment lookups.
 - ❌ Never log full file paths, raw content URIs, or whole library dumps in production.

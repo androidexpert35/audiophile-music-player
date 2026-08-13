@@ -102,7 +102,8 @@ Read the full technical breakdown in **[docs/FEATURES.md](docs/FEATURES.md)**.
 - 📊 **Honest, live telemetry** — every track shows its actual decoded format, actual
   output path, and a genuine `isBitPerfect` flag that's only ever `true` when the OS
   confirmed it — never assumed.
-- 📴 **Fully offline** — scans your device's local library via `MediaStore`, no account,
+- 📴 **Fully offline** — scans the music folders you choose (via `MediaStore` plus a
+  direct document-tree walk for DSD), no account,
   no cloud dependency, no network requirement to play a single file.
 - 💛 **Free. No ads. No premium tier.** See [`AUTHOR.md`](AUTHOR.md) for why.
 
@@ -177,7 +178,8 @@ against, and the engine toggle in **[docs/FEATURES.md §7](docs/FEATURES.md#7-pe
 
 Beyond the sound engine, Audiophile is a complete, modern music player:
 
-- Local library scan & indexing (MediaStore → Room cache), with albums, artists, and
+- Folder-scoped library scan & indexing (MediaStore + document-tree DSD pass → Room
+  cache) over the folders you add in onboarding or Settings, with albums, artists, and
   tracks views
 - Playlists — create, reorder, search within, and manage tracks
 - Playback queue — play next, add to queue, drag-to-reorder, all without interrupting

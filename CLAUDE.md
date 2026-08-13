@@ -26,6 +26,8 @@ duplicated (and cannot drift) here.
 - Respect the layers; Domain stays pure Kotlin; framework types never leave Data.
 - Feature ViewModels extend `BaseViewModel`; UDF only; use cases have **no** `@Inject`.
 - Wrap every `register*/unregister*` callback API in a `callbackFlow`.
+- **Scan only the user-granted music folders**, never the whole volume — it is what keeps
+  messenger voice notes out of the library and the only way DSD files are readable.
 - **Do not degrade the bit-perfect / USB / DSD audio path** — see
   [`docs/ai/native-audio.md`](docs/ai/native-audio.md) and
   [`docs/BIT_PERFECT_LIMITATIONS.md`](docs/BIT_PERFECT_LIMITATIONS.md).
