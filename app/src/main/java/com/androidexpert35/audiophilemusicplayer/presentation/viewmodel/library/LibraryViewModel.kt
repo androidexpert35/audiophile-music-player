@@ -3,6 +3,8 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library
 import androidx.lifecycle.viewModelScope
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessage
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.LibrarySectionDisplayPreference
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Album
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
@@ -15,6 +17,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.CreatePlaylistUs
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
@@ -23,6 +26,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveRecentlyP
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ToggleLikeSongUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.overlay.PlayerOverlayManager
@@ -79,6 +83,7 @@ class LibraryViewModel @Inject constructor(
     private val getTracksUseCase: GetTracksUseCase,
     private val getAlbumsUseCase: GetAlbumsUseCase,
     private val getArtistsUseCase: GetArtistsUseCase,
+    private val getLibraryDisplayPreferencesUseCase: GetLibraryDisplayPreferencesUseCase,
     private val getArtistImageUseCase: GetArtistImageUseCase,
     private val playTrackUseCase: PlayTrackUseCase,
     private val toggleLikeSongUseCase: ToggleLikeSongUseCase,
@@ -91,6 +96,7 @@ class LibraryViewModel @Inject constructor(
     private val addTrackToPlaylistUseCase: AddTrackToPlaylistUseCase,
     private val playNextUseCase: PlayNextUseCase,
     private val addTrackToQueueUseCase: AddTrackToQueueUseCase,
+    private val setLibraryDisplayPreferencesUseCase: SetLibraryDisplayPreferencesUseCase,
     navigationManager: NavigationManager,
     stringResolver: StringResolver,
     uiErrorMapper: UiErrorMapper,
@@ -108,6 +114,7 @@ class LibraryViewModel @Inject constructor(
     private val pendingArtistImageRequests = mutableSetOf<String>()
 
     init {
+        loadLibraryDisplayPreferences()
         loadFullLibrary()
         observeUserCollections()
         observePlaylists()
@@ -271,10 +278,16 @@ class LibraryViewModel @Inject constructor(
         setSuccessState(current.copy(selectedContentType = contentType))
     }
 
-    /** Flips the content between list view and two-column grid view. */
+    /** Flips the visible section between its retained list and two-column grid views. */
     private fun toggleViewMode() {
         val current = uiState.value.data ?: return
-        setSuccessState(current.copy(isGridView = !current.isGridView))
+        setSuccessState(
+            current.copy(
+                gridViews = current.gridViews +
+                    (current.selectedContentType to !current.isGridView)
+            )
+        )
+        persistLibraryDisplayPreferences()
     }
 
     /**
@@ -289,6 +302,48 @@ class LibraryViewModel @Inject constructor(
                 sortOrders = current.sortOrders + (current.selectedContentType to sortOrder)
             ).withSortApplied()
         )
+        persistLibraryDisplayPreferences()
+    }
+
+    /** Restores the user's per-section sort and layout choices from SharedPreferences. */
+    private fun loadLibraryDisplayPreferences() {
+        viewModelScope.launch(exceptionHandler) {
+            getLibraryDisplayPreferencesUseCase().fold(
+                onSuccess = { preferences ->
+                    val current = uiState.value.data ?: LibraryUiModel()
+                    val restored = LibraryContentType.entries.associateWith { contentType ->
+                        preferences.preferenceFor(contentType.name)
+                    }
+                    setSuccessState(
+                        current.copy(
+                            sortOrders = restored.mapValues { (_, preference) ->
+                                LibrarySortOrder.entries.firstOrNull { it.name == preference.sortOrder }
+                                    ?: LibrarySortOrder.RECENTLY_ADDED
+                            },
+                            gridViews = restored.mapValues { (_, preference) -> preference.isGridView },
+                        ).withSortApplied()
+                    )
+                },
+                onError = { /* Defaults remain usable when preferences cannot be read. */ },
+            )
+        }
+    }
+
+    /** Writes the current per-section sort and layout choices without delaying the UI update. */
+    private fun persistLibraryDisplayPreferences() {
+        val model = uiState.value.data ?: return
+        val preferences = LibraryDisplayPreferences(
+            sections = LibraryContentType.entries.associate { contentType ->
+                contentType.name to LibrarySectionDisplayPreference(
+                    sortOrder = model.sortOrders[contentType]?.name
+                        ?: LibrarySortOrder.RECENTLY_ADDED.name,
+                    isGridView = model.gridViews[contentType] ?: false,
+                )
+            }
+        )
+        viewModelScope.launch(exceptionHandler) {
+            setLibraryDisplayPreferencesUseCase(preferences)
+        }
     }
 
     /**

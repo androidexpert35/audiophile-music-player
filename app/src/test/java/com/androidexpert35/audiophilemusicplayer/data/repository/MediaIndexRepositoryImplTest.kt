@@ -1,12 +1,14 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
 import android.content.ContentResolver
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.ImportedPlaylistDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.AlbumEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.ArtistEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
 import com.androidexpert35.audiophilemusicplayer.data.scanner.DsdFileScanner
+import com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MediaStoreScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MusicFolderScope
 import com.tony.coreui.domain.resource.Resource
@@ -36,8 +38,10 @@ class MediaIndexRepositoryImplTest {
 
     private val scanner = mockk<MediaStoreScanner>()
     private val dsdFileScanner = mockk<DsdFileScanner>()
+    private val m3uFileScanner = mockk<M3uFileScanner>()
     private val musicFolderRegistry = mockk<MusicFolderRegistry>()
     private val libraryIndexDao = mockk<LibraryIndexDao>(relaxed = true)
+    private val importedPlaylistDao = mockk<ImportedPlaylistDao>(relaxed = true)
     private val contentResolver = mockk<ContentResolver>(relaxed = true)
 
     @Test
@@ -50,6 +54,7 @@ class MediaIndexRepositoryImplTest {
             coEvery { musicFolderRegistry.folderSignature() } returns ""
             coEvery { scanner.scanAudioFilesForIndexing(any(), any()) } returns emptyList()
             coEvery { dsdFileScanner.scanDsdFiles(any()) } returns emptyList()
+            coEvery { m3uFileScanner.scanPlaylists(any(), any()) } returns emptyList()
 
             val tracks = slot<List<TrackEntity>>()
             val albums = slot<List<AlbumEntity>>()
@@ -96,6 +101,7 @@ class MediaIndexRepositoryImplTest {
             coEvery { musicFolderRegistry.folderSignature() } returns SIGNATURE
             coEvery { scanner.scanAudioFilesForIndexing(any(), any()) } returns emptyList()
             coEvery { dsdFileScanner.scanDsdFiles(any()) } returns emptyList()
+            coEvery { m3uFileScanner.scanPlaylists(any(), any()) } returns emptyList()
 
             val state = slot<LibraryIndexStateEntity>()
             coEvery {
@@ -163,8 +169,10 @@ class MediaIndexRepositoryImplTest {
     private fun createRepository(): MediaIndexRepositoryImpl = MediaIndexRepositoryImpl(
         scanner = scanner,
         dsdFileScanner = dsdFileScanner,
+        m3uFileScanner = m3uFileScanner,
         musicFolderRegistry = musicFolderRegistry,
         libraryIndexDao = libraryIndexDao,
+        importedPlaylistDao = importedPlaylistDao,
         contentResolver = contentResolver,
         ioDispatcher = UnconfinedTestDispatcher(),
     )

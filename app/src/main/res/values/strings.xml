@@ -205,7 +205,7 @@
     <!-- Settings -->
     <string name="settings_section_library">Music Library</string>
     <string name="settings_music_folders_title">Music folders</string>
-    <string name="settings_music_folders_description">Audiophile scans only these folders. Add the folders holding your albums — including DSD (.dsf / .dff), which is readable only through a folder you grant here — and leave messenger media folders out to keep voice notes off your song list.</string>
+    <string name="settings_music_folders_description">Audiophile scans only these folders. Only the music files in these folders are indexed and added to your library.</string>
     <string name="settings_music_folders_empty">No folder is granted yet, so the library cannot be rebuilt. Add one below.</string>
     <string name="settings_music_folders_add_action">Add music folder</string>
     <string name="settings_section_general">General</string>

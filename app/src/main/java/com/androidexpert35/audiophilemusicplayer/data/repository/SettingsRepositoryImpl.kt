@@ -9,6 +9,8 @@ import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStatus
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.LibrarySectionDisplayPreference
 import com.androidexpert35.audiophilemusicplayer.domain.repository.SettingsRepository
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
@@ -42,6 +44,42 @@ class SettingsRepositoryImpl @Inject constructor(
     private val usbDeviceScanner: UsbDeviceScanner,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : SettingsRepository {
+
+    override suspend fun getLibraryDisplayPreferences(): Resource<LibraryDisplayPreferences> =
+        withContext(ioDispatcher) {
+            runCatching {
+                val entries = prefs.getStringSet(
+                    SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES,
+                    emptySet(),
+                ).orEmpty()
+                LibraryDisplayPreferences(
+                    sections = entries.mapNotNull(::decodeLibraryDisplayPreference).toMap()
+                )
+            }.fold(
+                onSuccess = { Resource.Success(it) },
+                onFailure = { Resource.Error(ResourceError.StorageError(it.message ?: "Unable to read library display preferences.")) },
+            )
+        }
+
+    override suspend fun setLibraryDisplayPreferences(
+        preferences: LibraryDisplayPreferences
+    ): Resource<Unit> {
+        val committed = withContext(ioDispatcher) {
+            prefs.edit()
+                .putStringSet(
+                    SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES,
+                    preferences.sections.map { (section, preference) ->
+                        encodeLibraryDisplayPreference(section, preference)
+                    }.toSet(),
+                )
+                .commit()
+        }
+        return if (committed) {
+            Resource.Success(Unit)
+        } else {
+            Resource.Error(ResourceError.StorageError("Unable to save library display preferences."))
+        }
+    }
 
     override fun observeAudiophileEngineEnabled(): Flow<Boolean> = callbackFlow {
         // Emit the current value synchronously so the first collector has a
@@ -295,5 +333,19 @@ class SettingsRepositoryImpl @Inject constructor(
         bitDepth = profile.bitDepth,
         channelCount = profile.channelCount,
     )
+
+    private fun encodeLibraryDisplayPreference(
+        section: String,
+        preference: LibrarySectionDisplayPreference,
+    ): String = listOf(section, preference.sortOrder, preference.isGridView).joinToString("|")
+
+    private fun decodeLibraryDisplayPreference(
+        value: String,
+    ): Pair<String, LibrarySectionDisplayPreference>? {
+        val parts = value.split("|", limit = 3)
+        if (parts.size != 3 || parts[0].isBlank()) return null
+        val gridView = parts[2].toBooleanStrictOrNull() ?: return null
+        return parts[0] to LibrarySectionDisplayPreference(parts[1], gridView)
+    }
 
 }

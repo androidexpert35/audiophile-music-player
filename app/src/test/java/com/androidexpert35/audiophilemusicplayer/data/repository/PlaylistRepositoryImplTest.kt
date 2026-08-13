@@ -1,8 +1,13 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
+import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.ImportedPlaylistDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LikedSongDao
+import com.androidexpert35.audiophilemusicplayer.data.local.entity.ImportedPlaylistEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LikedSongEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
@@ -13,17 +18,21 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -35,6 +44,8 @@ class PlaylistRepositoryImplTest {
     private val context = mockk<Context>()
     private val likedSongDao = mockk<LikedSongDao>()
     private val libraryIndexDao = mockk<LibraryIndexDao>()
+    private val importedPlaylistDao = mockk<ImportedPlaylistDao>()
+    private val contentResolver = mockk<ContentResolver>(relaxed = true)
 
     @Test
     fun `given existing liked rows when playlists observed then favorites M3U is materialized first`() = runTest {
@@ -167,17 +178,101 @@ class PlaylistRepositoryImplTest {
         assertTrue(result is Resource.Error)
     }
 
+    @Test
+    fun `given a discovered playlist when playlists observed then it is merged with app-private ones`() = runTest {
+        val imported = ImportedPlaylistEntity(
+            documentUri = "content://tree/playlist.m3u",
+            name = "Gym Mix",
+            trackUris = listOf("content://tracks/1"),
+            lastModifiedMs = 1_000L,
+        )
+        stubContext()
+        every { likedSongDao.observeLikedSongIds() } returns flowOf(emptyList())
+        every { importedPlaylistDao.observeAll() } returns flowOf(listOf(imported))
+
+        val playlists = repository(testScheduler).observePlaylists().first()
+
+        val importedResult = playlists.single { it.kind == PlaylistKind.IMPORTED }
+        assertEquals("Gym Mix", importedResult.name)
+        assertEquals(listOf("content://tracks/1"), importedResult.trackUris)
+        assertEquals(imported.documentUri, importedResult.id)
+    }
+
+    @Test
+    fun `given track added to an imported playlist then it is written back via SAF and cached`() = runTest {
+        val documentUri = "content://tree/playlist.m3u"
+        val existing = ImportedPlaylistEntity(
+            documentUri = documentUri,
+            name = "Road Trip",
+            trackUris = emptyList(),
+            lastModifiedMs = 1_000L,
+        )
+        val track = domainTrack(id = 5L, uri = "content://tracks/5")
+        val trackRow = trackEntity(id = 5L, uri = "content://tracks/5")
+        val uri = mockk<Uri>(relaxed = true)
+        val outputStream = ByteArrayOutputStream()
+        stubContext()
+        mockkStatic(Uri::class)
+        every { Uri.parse(documentUri) } returns uri
+        coEvery { importedPlaylistDao.getByDocumentUri(documentUri) } returns existing
+        coEvery { libraryIndexDao.getTracks() } returns listOf(trackRow)
+        coEvery { importedPlaylistDao.upsert(any()) } returns Unit
+        every { contentResolver.openOutputStream(uri, "wt") } returns outputStream
+
+        val result = repository(testScheduler).addTrack(documentUri, track)
+
+        assertTrue(result is Resource.Success)
+        assertTrue(outputStream.toString(Charsets.UTF_8.name()).contains(trackRow.filePath))
+        coVerify(exactly = 1) {
+            importedPlaylistDao.upsert(match { row -> row.trackUris == listOf(track.uri) })
+        }
+    }
+
+    @Test
+    fun `given an imported playlist when deleted then its source document is removed via SAF`() = runTest {
+        val documentUri = "content://tree/playlist.m3u"
+        val existing = ImportedPlaylistEntity(
+            documentUri = documentUri,
+            name = "Road Trip",
+            trackUris = emptyList(),
+            lastModifiedMs = 1_000L,
+        )
+        val uri = mockk<Uri>(relaxed = true)
+        stubContext()
+        mockkStatic(Uri::class)
+        mockkStatic(DocumentsContract::class)
+        every { Uri.parse(documentUri) } returns uri
+        every { DocumentsContract.deleteDocument(contentResolver, uri) } returns true
+        coEvery { importedPlaylistDao.getByDocumentUri(documentUri) } returns existing
+        coEvery { importedPlaylistDao.deleteByDocumentUri(documentUri) } returns Unit
+
+        val result = repository(testScheduler).deletePlaylist(documentUri)
+
+        assertTrue(result is Resource.Success)
+        coVerify(exactly = 1) { importedPlaylistDao.deleteByDocumentUri(documentUri) }
+    }
+
+    @After
+    fun tearDownStaticMocks() {
+        unmockkStatic(Uri::class)
+        unmockkStatic(DocumentsContract::class)
+    }
+
     private fun repository(testScheduler: TestCoroutineScheduler): PlaylistRepositoryImpl =
         PlaylistRepositoryImpl(
             context = context,
             likedSongDao = likedSongDao,
             libraryIndexDao = libraryIndexDao,
+            importedPlaylistDao = importedPlaylistDao,
+            contentResolver = contentResolver,
             ioDispatcher = UnconfinedTestDispatcher(testScheduler)
         )
 
     private fun stubContext() {
         every { context.filesDir } returns temporaryFolder.root
         every { context.getString(any()) } returns "Liked Songs"
+        every { importedPlaylistDao.observeAll() } returns flowOf(emptyList())
+        coEvery { importedPlaylistDao.getAll() } returns emptyList()
     }
 
     private fun favoritesFile(): File = File(temporaryFolder.root, "playlists/$FAVORITES_ID")

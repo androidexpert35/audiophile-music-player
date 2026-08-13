@@ -164,7 +164,7 @@ private fun PlaylistOverviewContent(
                         onPlayClick = { onEvent(PlaylistOverviewUiEvent.PlayPlaylist) },
                         onShuffleClick = { onEvent(PlaylistOverviewUiEvent.ShufflePlaylist) },
                         onEditClick = { onEvent(PlaylistOverviewUiEvent.ToggleEditing) },
-                        onDeleteClick = if (model.playlistKind == PlaylistKind.STANDARD) {
+                        onDeleteClick = if (model.playlistKind != PlaylistKind.FAVORITES) {
                             { onEvent(PlaylistOverviewUiEvent.ShowDeletePlaylistDialog) }
                         } else {
                             null

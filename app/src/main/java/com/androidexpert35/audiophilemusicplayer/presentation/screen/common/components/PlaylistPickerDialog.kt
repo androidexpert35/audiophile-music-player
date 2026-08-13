@@ -92,9 +92,9 @@ fun PlaylistPickerDialog(
     }
 }
 
-/** Excludes app-managed collections from user-selectable playlist destinations. */
+/** Excludes the reserved favorites collection from user-selectable playlist destinations. */
 internal fun List<PlaylistUiModel>.selectablePlaylistDestinations(): List<PlaylistUiModel> =
-    filter { playlist -> playlist.kind == PlaylistKind.STANDARD }
+    filter { playlist -> playlist.kind != PlaylistKind.FAVORITES }
 
 /** Renders the title, guidance, and close control for the destination selector. */
 @Composable

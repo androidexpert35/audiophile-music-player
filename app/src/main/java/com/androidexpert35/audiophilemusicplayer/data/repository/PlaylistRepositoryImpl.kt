@@ -1,9 +1,14 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
+import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.ImportedPlaylistDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LikedSongDao
+import com.androidexpert35.audiophilemusicplayer.data.local.entity.ImportedPlaylistEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LikedSongEntity
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
@@ -40,9 +45,17 @@ import javax.inject.Singleton
  * favorites collection one coordinator, so a like, playlist-picker addition, or detail-page edit
  * updates both stores under the same serialized mutation.
  *
+ * Playlists discovered inside a user-granted music folder (`.m3u`/`.m3u8` files found by
+ * [com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner]) are merged in
+ * as [PlaylistKind.IMPORTED]. Unlike the app-private collection, mutating one of these
+ * writes straight back to its original document via the SAF permission already granted on
+ * its parent tree, instead of an app-private copy.
+ *
  * @property context Application context used to resolve private playlist storage and its title.
  * @property likedSongDao Reactive liked-membership persistence.
  * @property libraryIndexDao Indexed tracks used to map stable IDs and content URIs.
+ * @property importedPlaylistDao Cached `.m3u` playlists discovered in granted folders.
+ * @property contentResolver Used to read/write/delete imported playlist documents via SAF.
  * @property ioDispatcher Dispatcher for filesystem and Room work.
  */
 @Singleton
@@ -50,6 +63,8 @@ class PlaylistRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val likedSongDao: LikedSongDao,
     private val libraryIndexDao: LibraryIndexDao,
+    private val importedPlaylistDao: ImportedPlaylistDao,
+    private val contentResolver: ContentResolver,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : PlaylistRepository, LikedSongsRepository {
 
@@ -59,11 +74,12 @@ class PlaylistRepositoryImpl @Inject constructor(
     /** @see PlaylistRepository.observePlaylists */
     override fun observePlaylists(): Flow<List<Playlist>> = combine(
         playlistRevision,
-        likedSongDao.observeLikedSongIds()
-    ) { _, likedIds ->
+        likedSongDao.observeLikedSongIds(),
+        importedPlaylistDao.observeAll(),
+    ) { _, likedIds, importedEntities ->
         mutationMutex.withLock {
             synchronizeFavoritesFile(likedIds)
-            loadPlaylists()
+            (loadPlaylists() + importedEntities.map(::toImportedPlaylist)).sortedWith(PLAYLIST_ORDER)
         }
     }
         .catch { emit(runCatching(::loadPlaylists).getOrDefault(emptyList())) }
@@ -74,13 +90,15 @@ class PlaylistRepositoryImpl @Inject constructor(
         mutationMutex.withLock {
             val normalizedName = name.trim()
             val currentPlaylists = loadPlaylists()
+            val importedNames = importedPlaylistDao.getAll().map(ImportedPlaylistEntity::name)
             when {
                 normalizedName.isBlank() -> Resource.Error(
                     ResourceError.LogicError("A playlist name is required.")
                 )
 
                 normalizedName.equals(favoritesName(), ignoreCase = true) ||
-                    currentPlaylists.any { it.name.equals(normalizedName, ignoreCase = true) } -> Resource.Error(
+                    currentPlaylists.any { it.name.equals(normalizedName, ignoreCase = true) } ||
+                    importedNames.any { it.equals(normalizedName, ignoreCase = true) } -> Resource.Error(
                     ResourceError.LogicError("A playlist with this name already exists.")
                 )
 
@@ -117,11 +135,12 @@ class PlaylistRepositoryImpl @Inject constructor(
                     appendFavorites(tracks)
                 } else {
                     val playlist = requirePlaylist(playlistId)
-                    writePlaylist(
-                        file = playlistDirectory().resolve(playlist.id),
-                        name = playlist.name,
-                        trackUris = playlist.trackUris + tracks.map(Track::uri)
-                    )
+                    val newTrackUris = playlist.trackUris + tracks.map(Track::uri)
+                    if (playlist.kind == PlaylistKind.IMPORTED) {
+                        writeImportedPlaylist(playlist.id, playlist.name, newTrackUris)
+                    } else {
+                        writePlaylist(playlistDirectory().resolve(playlist.id), playlist.name, newTrackUris)
+                    }
                 }
             }.fold(
                 onSuccess = {
@@ -184,8 +203,15 @@ class PlaylistRepositoryImpl @Inject constructor(
                     "The favorites playlist can't be deleted."
                 }
                 val playlist = requirePlaylist(playlistId)
-                check(playlistDirectory().resolve(playlist.id).delete()) {
-                    "Unable to delete the playlist file."
+                if (playlist.kind == PlaylistKind.IMPORTED) {
+                    check(DocumentsContract.deleteDocument(contentResolver, Uri.parse(playlist.id))) {
+                        "Unable to delete the playlist file."
+                    }
+                    importedPlaylistDao.deleteByDocumentUri(playlist.id)
+                } else {
+                    check(playlistDirectory().resolve(playlist.id).delete()) {
+                        "Unable to delete the playlist file."
+                    }
                 }
             }.fold(
                 onSuccess = {
@@ -310,30 +336,35 @@ class PlaylistRepositoryImpl @Inject constructor(
         persistFavorites(desiredRows, desiredUris)
     }
 
-    /** Routes a normal file replacement or favorites membership replacement by playlist kind. */
+    /** Routes a favorites membership replacement, imported SAF write, or app-private file write. */
     private suspend fun replacePlaylistContents(playlist: Playlist, trackUris: List<String>) {
-        if (playlist.kind == PlaylistKind.FAVORITES) {
-            val tracksByUri = if (trackUris.isEmpty()) {
-                emptyMap()
-            } else {
-                libraryIndexDao.getTracks()
-                    .filter { entity -> entity.contentUri in trackUris }
-                    .associateBy { entity -> entity.contentUri }
+        when (playlist.kind) {
+            PlaylistKind.FAVORITES -> {
+                val tracksByUri = if (trackUris.isEmpty()) {
+                    emptyMap()
+                } else {
+                    libraryIndexDao.getTracks()
+                        .filter { entity -> entity.contentUri in trackUris }
+                        .associateBy { entity -> entity.contentUri }
+                }
+                check(trackUris.all(tracksByUri::containsKey)) {
+                    "Unavailable tracks must be removed before the favorites playlist can be saved."
+                }
+                val distinctUris = trackUris.distinct()
+                val baseLikedAt = System.currentTimeMillis()
+                val desiredRows = distinctUris.mapIndexed { index, uri ->
+                    LikedSongEntity(
+                        trackId = tracksByUri.getValue(uri).id,
+                        likedAt = baseLikedAt + index
+                    )
+                }
+                persistFavorites(desiredRows, distinctUris)
             }
-            check(trackUris.all(tracksByUri::containsKey)) {
-                "Unavailable tracks must be removed before the favorites playlist can be saved."
-            }
-            val distinctUris = trackUris.distinct()
-            val baseLikedAt = System.currentTimeMillis()
-            val desiredRows = distinctUris.mapIndexed { index, uri ->
-                LikedSongEntity(
-                    trackId = tracksByUri.getValue(uri).id,
-                    likedAt = baseLikedAt + index
-                )
-            }
-            persistFavorites(desiredRows, distinctUris)
-        } else {
-            writePlaylist(playlistDirectory().resolve(playlist.id), playlist.name, trackUris)
+
+            PlaylistKind.IMPORTED -> writeImportedPlaylist(playlist.id, playlist.name, trackUris)
+
+            PlaylistKind.STANDARD ->
+                writePlaylist(playlistDirectory().resolve(playlist.id), playlist.name, trackUris)
         }
     }
 
@@ -375,11 +406,25 @@ class PlaylistRepositoryImpl @Inject constructor(
         .listFiles { file -> file.isFile && file.extension.equals(M3U_EXTENSION, ignoreCase = true) }
         .orEmpty()
         .mapNotNull(::readPlaylist)
-        .sortedWith(compareBy<Playlist> { it.kind != PlaylistKind.FAVORITES }.thenBy { it.name.lowercase() })
+        .sortedWith(PLAYLIST_ORDER)
 
-    /** Resolves one playlist or rejects a stale navigation/picker identifier. */
-    private fun requirePlaylist(playlistId: String): Playlist = loadPlaylists()
+    /** Maps one discovered `.m3u`/`.m3u8` row to its domain representation. */
+    private fun toImportedPlaylist(entity: ImportedPlaylistEntity): Playlist = Playlist(
+        id = entity.documentUri,
+        name = entity.name,
+        trackUris = entity.trackUris,
+        kind = PlaylistKind.IMPORTED,
+    )
+
+    /**
+     * Resolves one playlist or rejects a stale navigation/picker identifier.
+     *
+     * Checks the app-private collection first, then the discovered `.m3u` collection —
+     * an imported playlist's stable ID is its source document URI, not a filename.
+     */
+    private suspend fun requirePlaylist(playlistId: String): Playlist = loadPlaylists()
         .firstOrNull { playlist -> playlist.id == playlistId }
+        ?: importedPlaylistDao.getByDocumentUri(playlistId)?.let(::toImportedPlaylist)
         ?: error("The selected playlist no longer exists.")
 
     /** Reads the favorites URI order without exposing the file outside Data. */
@@ -402,6 +447,58 @@ class PlaylistRepositoryImpl @Inject constructor(
             }
         )
     }
+
+    /**
+     * Rewrites a discovered `.m3u` document in place via its SAF grant and refreshes its
+     * cached row so [observePlaylists] reflects the edit before the next library scan.
+     *
+     * Each track is written as its real filesystem path when one is known (true for
+     * ordinary MediaStore tracks), keeping the file readable by other players; DSD tracks
+     * and any track no longer in the index fall back to their content URI.
+     */
+    private suspend fun writeImportedPlaylist(documentUri: String, name: String, trackUris: List<String>) {
+        val tracksByUri = if (trackUris.isEmpty()) {
+            emptyMap()
+        } else {
+            libraryIndexDao.getTracks()
+                .filter { entity -> entity.contentUri in trackUris }
+                .associateBy { entity -> entity.contentUri }
+        }
+        val contents = buildString {
+            append("#EXTM3U\n#PLAYLIST:")
+            append(name)
+            append('\n')
+            trackUris.forEach { uri ->
+                val filePath = tracksByUri[uri]?.filePath
+                append(if (filePath != null && filePath.startsWith("/")) filePath else uri)
+                append('\n')
+            }
+        }
+        val uri = Uri.parse(documentUri)
+        val stream = contentResolver.openOutputStream(uri, "wt")
+        checkNotNull(stream) { "Unable to open the playlist file for writing." }
+        stream.use { it.write(contents.toByteArray(Charsets.UTF_8)) }
+
+        importedPlaylistDao.upsert(
+            ImportedPlaylistEntity(
+                documentUri = documentUri,
+                name = name,
+                trackUris = trackUris,
+                lastModifiedMs = queryLastModified(uri) ?: System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /** Reads a SAF document's last-modified time, matching what a future scan would see. */
+    private fun queryLastModified(uri: Uri): Long? = runCatching {
+        contentResolver.query(
+            uri,
+            arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+            null,
+            null,
+            null
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+    }.getOrNull()
 
     /** Uses a same-directory temporary file so readers never observe a partial playlist. */
     private fun writeRawFile(file: File, contents: String) {
@@ -493,5 +590,9 @@ class PlaylistRepositoryImpl @Inject constructor(
         const val M3U_EXTENSION = "m3u"
         const val PLAYLIST_NAME_PREFIX = "#PLAYLIST:"
         const val FAVORITES_PLAYLIST_ID = "favorites.m3u"
+
+        /** Favorites first, then every other playlist (standard or imported) alphabetically. */
+        val PLAYLIST_ORDER: Comparator<Playlist> =
+            compareBy<Playlist> { it.kind != PlaylistKind.FAVORITES }.thenBy { it.name.lowercase() }
     }
 }

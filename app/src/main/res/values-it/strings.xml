@@ -225,7 +225,7 @@
     <!-- Settings -->
     <string name="settings_section_library">Libreria musicale</string>
     <string name="settings_music_folders_title">Cartelle musicali</string>
-    <string name="settings_music_folders_description">Audiophile analizza solo queste cartelle. Aggiungi quelle che contengono i tuoi album — DSD (.dsf / .dff) compresi, leggibili solo tramite una cartella concessa qui — ed escludi le cartelle multimediali delle app di messaggistica per tenere le note vocali fuori dall\'elenco dei brani.</string>
+    <string name="settings_music_folders_description">Audiophile analizza solo queste cartelle. Solo i brani presenti in queste cartelle saranno indicizzati e aggiunti alla tua libreria.</string>
     <string name="settings_music_folders_empty">Nessuna cartella concessa: la libreria non può essere ricostruita. Aggiungine una qui sotto.</string>
     <string name="settings_music_folders_add_action">Aggiungi cartella musicale</string>
     <string name="settings_section_general">Generali</string>

@@ -12,7 +12,11 @@ import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.C
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_5_6
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_6_7
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_7_8
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_8_9
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_9_10
 import com.androidexpert35.audiophilemusicplayer.data.local.converter.LongListTypeConverter
+import com.androidexpert35.audiophilemusicplayer.data.local.converter.StringListTypeConverter
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.ImportedPlaylistDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LikedSongDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LyricsCacheDao
@@ -20,6 +24,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.dao.PlaybackStateDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.RecentlyPlayedDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.AlbumEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.ArtistEntity
+import com.androidexpert35.audiophilemusicplayer.data.local.entity.ImportedPlaylistEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LikedSongEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LyricsCacheEntity
@@ -44,6 +49,8 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  * - Version 8: added persistent per-track play counts via [MIGRATION_7_8].
  * - Version 9: added `folderSignature` to `library_index_state` via [MIGRATION_8_9],
  *   so an index built from a different set of music folders is recognised as stale.
+ * - Version 10: added the `imported_playlists` table via [MIGRATION_9_10], caching
+ *   `.m3u`/`.m3u8` playlists discovered inside granted music folders.
  */
 @Database(
     entities = [
@@ -55,15 +62,19 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         LikedSongEntity::class,
         RecentlyPlayedEntity::class,
         LyricsCacheEntity::class,
+        ImportedPlaylistEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
-@TypeConverters(LongListTypeConverter::class)
+@TypeConverters(LongListTypeConverter::class, StringListTypeConverter::class)
 abstract class AudiophileDatabase : RoomDatabase() {
 
     /** @return DAO for indexed-library reads and cache replacement writes. */
     abstract fun libraryIndexDao(): LibraryIndexDao
+
+    /** @return DAO for reading and writing playlists discovered in granted music folders. */
+    abstract fun importedPlaylistDao(): ImportedPlaylistDao
 
     /** @return DAO for reading and writing the singleton playback-session row. */
     abstract fun playbackStateDao(): PlaybackStateDao
@@ -241,6 +252,30 @@ abstract class AudiophileDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE library_index_state ADD COLUMN folderSignature TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /**
+         * Migration from schema version 9 to 10.
+         *
+         * Adds the `imported_playlists` table, caching `.m3u`/`.m3u8` playlists discovered
+         * inside granted music folders by
+         * [com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner]. Populated
+         * on the next library scan; empty until then.
+         */
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `imported_playlists` (
+                        `documentUri`     TEXT    NOT NULL,
+                        `name`            TEXT    NOT NULL,
+                        `trackUris`       TEXT    NOT NULL,
+                        `lastModifiedMs`  INTEGER NOT NULL,
+                        PRIMARY KEY(`documentUri`)
+                    )
+                    """.trimIndent()
                 )
             }
         }

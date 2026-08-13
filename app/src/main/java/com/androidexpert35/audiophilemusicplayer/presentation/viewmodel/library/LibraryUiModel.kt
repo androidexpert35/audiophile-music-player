@@ -21,8 +21,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  *   used by [LibrarySortOrder.RECENTLY_PLAYED] to sort the visible list.
  * @property selectedContentType Section currently visible in the catalogue surface.
  *   Defaults to the first chip, [LibraryContentType.TRACKS], when the library opens.
- * @property isGridView Whether the content should be rendered as a two-column grid.
- *   Defaults to `false` (list view).
+ * @property gridViews View mode retained independently for every catalogue section.
+ *   Every section defaults to the list view.
  * @property sortOrders Sort strategy retained independently for every catalogue section.
  *   Every section defaults to [LibrarySortOrder.RECENTLY_ADDED].
  * @property isRefreshing `true` while a user-requested or MediaStore-change re-index is in
@@ -39,7 +39,8 @@ data class LibraryUiModel(
     val likedSongIds: Set<Long> = emptySet(),
     val recentlyPlayedTrackIds: List<Long> = emptyList(),
     val selectedContentType: LibraryContentType = LibraryContentType.TRACKS,
-    val isGridView: Boolean = false,
+    val gridViews: Map<LibraryContentType, Boolean> =
+        LibraryContentType.entries.associateWith { false },
     val sortOrders: Map<LibraryContentType, LibrarySortOrder> =
         LibraryContentType.entries.associateWith { LibrarySortOrder.RECENTLY_ADDED },
     val isRefreshing: Boolean = false,
@@ -49,6 +50,10 @@ data class LibraryUiModel(
     /** Sort strategy currently selected for the visible catalogue section. */
     val sortOrder: LibrarySortOrder
         get() = sortOrders[selectedContentType] ?: LibrarySortOrder.RECENTLY_ADDED
+
+    /** Whether the visible catalogue section uses the two-column grid view. */
+    val isGridView: Boolean
+        get() = gridViews[selectedContentType] ?: false
 
     /**
      * Derived ordered list of recently-played [Track] objects, most-recent first.

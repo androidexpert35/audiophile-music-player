@@ -1,6 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.domain.repository
 
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStatus
+import com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences
 import com.tony.coreui.domain.resource.Resource
 import kotlinx.coroutines.flow.Flow
 
@@ -12,6 +13,14 @@ import kotlinx.coroutines.flow.Flow
  * [com.androidexpert35.audiophilemusicplayer.data.playback.engine.AudioEngineManager].
  */
 interface SettingsRepository {
+
+    /** Retrieves the persisted sort and layout selections for the library sections. */
+    suspend fun getLibraryDisplayPreferences(): Resource<LibraryDisplayPreferences>
+
+    /** Persists the sort and layout selections for the library sections atomically. */
+    suspend fun setLibraryDisplayPreferences(
+        preferences: LibraryDisplayPreferences
+    ): Resource<Unit>
 
     /**
      * Live stream of the "audiophile engine enabled" preference. Emits the

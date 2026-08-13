@@ -23,6 +23,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumArtUseCa
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLyricsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
@@ -59,6 +60,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.SearchTracksUseC
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SeekToPositionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetRepeatModeUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetShuffleModeUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
@@ -80,6 +82,18 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 object UseCaseModule {
+
+    /** Provides persisted library layout preferences backed by [SettingsRepository]. */
+    @Provides
+    fun provideGetLibraryDisplayPreferencesUseCase(
+        settingsRepository: SettingsRepository
+    ): GetLibraryDisplayPreferencesUseCase = GetLibraryDisplayPreferencesUseCase(settingsRepository)
+
+    /** Provides the writer for persisted library layout preferences. */
+    @Provides
+    fun provideSetLibraryDisplayPreferencesUseCase(
+        settingsRepository: SettingsRepository
+    ): SetLibraryDisplayPreferencesUseCase = SetLibraryDisplayPreferencesUseCase(settingsRepository)
 
     /** Provides [ObservePlaylistsUseCase] backed by the local M3U playlist repository. */
     @Provides

@@ -17,6 +17,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.CreatePlaylistUs
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetAlbumsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
@@ -25,6 +26,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveRecentlyP
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ToggleLikeSongUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes
 import com.tony.coreui.domain.resource.Resource
@@ -54,6 +56,7 @@ class LibraryViewModelTest {
     private val getTracksUseCase = mockk<GetTracksUseCase>()
     private val getAlbumsUseCase = mockk<GetAlbumsUseCase>()
     private val getArtistsUseCase = mockk<GetArtistsUseCase>()
+    private val getLibraryDisplayPreferencesUseCase = mockk<GetLibraryDisplayPreferencesUseCase>()
     private val getArtistImageUseCase = mockk<GetArtistImageUseCase>()
     private val playTrackUseCase = mockk<PlayTrackUseCase>()
     private val toggleLikeSongUseCase = mockk<ToggleLikeSongUseCase>()
@@ -66,6 +69,7 @@ class LibraryViewModelTest {
     private val addTrackToPlaylistUseCase = mockk<AddTrackToPlaylistUseCase>()
     private val playNextUseCase = mockk<PlayNextUseCase>()
     private val addTrackToQueueUseCase = mockk<AddTrackToQueueUseCase>()
+    private val setLibraryDisplayPreferencesUseCase = mockk<SetLibraryDisplayPreferencesUseCase>()
     private val navigationManager = FakeNavigationManager()
     private val playerOverlayManager = FakePlayerOverlayManager()
 
@@ -236,6 +240,10 @@ class LibraryViewModelTest {
         coEvery { getTracksUseCase.invoke() } returns Resource.Success(emptyList())
         coEvery { getAlbumsUseCase.invoke() } returns Resource.Success(albums)
         coEvery { getArtistsUseCase.invoke() } returns Resource.Success(artists)
+        coEvery { getLibraryDisplayPreferencesUseCase.invoke() } returns Resource.Success(
+            com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
+        )
+        coEvery { setLibraryDisplayPreferencesUseCase.invoke(any()) } returns Resource.Success(Unit)
         every { observeLikedSongIdsUseCase.invoke() } returns flowOf(emptySet())
         every { observeRecentlyPlayedUseCase.invoke(any()) } returns flowOf(emptyList())
         every { observeMediaStoreChangesUseCase.invoke() } returns kotlinx.coroutines.flow.emptyFlow()
@@ -287,6 +295,44 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `given different view modes when switching sections then each section retains its own mode`() = runTest {
+        stubInitialLibrary()
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(LibraryUiEvent.ToggleViewMode)
+        viewModel.onEvent(LibraryUiEvent.SelectContentType(LibraryContentType.ARTISTS))
+        assertEquals(false, viewModel.uiState.value.data?.isGridView)
+
+        viewModel.onEvent(LibraryUiEvent.ToggleViewMode)
+        viewModel.onEvent(LibraryUiEvent.SelectContentType(LibraryContentType.TRACKS))
+        assertEquals(true, viewModel.uiState.value.data?.isGridView)
+
+        viewModel.onEvent(LibraryUiEvent.SelectContentType(LibraryContentType.ARTISTS))
+        assertEquals(true, viewModel.uiState.value.data?.isGridView)
+    }
+
+    @Test
+    fun `given a display choice when changed then it is persisted`() = runTest {
+        stubInitialLibrary()
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(LibraryUiEvent.ToggleViewMode)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            setLibraryDisplayPreferencesUseCase.invoke(
+                match { preferences ->
+                    preferences.preferenceFor(LibraryContentType.TRACKS.name).isGridView
+                }
+            )
+        }
+    }
+
+    @Test
     fun `given favorites playlist when selected then playlist detail opens without starting playback`() = runTest {
         val favorites = Playlist(
             id = "favorites.m3u",
@@ -313,6 +359,10 @@ class LibraryViewModelTest {
         coEvery { getTracksUseCase.invoke() } returns Resource.Success(tracks)
         coEvery { getAlbumsUseCase.invoke() } returns Resource.Success(albums)
         coEvery { getArtistsUseCase.invoke() } returns Resource.Success(artists)
+        coEvery { getLibraryDisplayPreferencesUseCase.invoke() } returns Resource.Success(
+            com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
+        )
+        coEvery { setLibraryDisplayPreferencesUseCase.invoke(any()) } returns Resource.Success(Unit)
         coEvery { playTrackUseCase.invoke(any(), any()) } returns Resource.Success(Unit)
         coEvery { toggleLikeSongUseCase.invoke(any()) } returns Resource.Success(Unit)
         every { observeLikedSongIdsUseCase.invoke() } returns flowOf(emptySet())
@@ -325,6 +375,7 @@ class LibraryViewModelTest {
         getTracksUseCase = getTracksUseCase,
         getAlbumsUseCase = getAlbumsUseCase,
         getArtistsUseCase = getArtistsUseCase,
+        getLibraryDisplayPreferencesUseCase = getLibraryDisplayPreferencesUseCase,
         getArtistImageUseCase = getArtistImageUseCase,
         playTrackUseCase = playTrackUseCase,
         toggleLikeSongUseCase = toggleLikeSongUseCase,
@@ -337,6 +388,7 @@ class LibraryViewModelTest {
         addTrackToPlaylistUseCase = addTrackToPlaylistUseCase,
         playNextUseCase = playNextUseCase,
         addTrackToQueueUseCase = addTrackToQueueUseCase,
+        setLibraryDisplayPreferencesUseCase = setLibraryDisplayPreferencesUseCase,
         navigationManager = navigationManager,
         stringResolver = TestStringResolver,
         uiErrorMapper = TestUiErrorMapper,

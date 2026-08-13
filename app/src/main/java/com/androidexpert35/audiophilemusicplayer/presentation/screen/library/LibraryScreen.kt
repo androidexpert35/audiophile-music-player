@@ -33,7 +33,6 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.com
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.LibraryHeaderRow
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.LibraryListContent
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.MotionTokens
-import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiEffect
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiEvent
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiModel
@@ -107,12 +106,6 @@ private fun LibraryContent(
     snackbarHostState: SnackbarHostState,
     onEvent: (LibraryUiEvent) -> Unit
 ) {
-    // Artists and Playlists are always rendered in list mode; the grid toggle only
-    // applies to Songs and Albums.
-    val showGridLayout = model.isGridView &&
-        model.selectedContentType != LibraryContentType.ARTISTS &&
-        model.selectedContentType != LibraryContentType.PLAYLISTS
-
     // Bottom padding sourced from the shell panel so content is never hidden under
     // the floating mini-player + bottom navigation bar.
     val shellBottomPadding = LocalShellBottomPadding.current
@@ -148,7 +141,7 @@ private fun LibraryContent(
 
             // Crossfade between list and grid modes when the view toggle is tapped.
             AnimatedContent(
-                targetState = showGridLayout,
+                targetState = model.isGridView,
                 label = "LibraryViewModeTransition",
                 modifier = Modifier
                     .fillMaxSize()

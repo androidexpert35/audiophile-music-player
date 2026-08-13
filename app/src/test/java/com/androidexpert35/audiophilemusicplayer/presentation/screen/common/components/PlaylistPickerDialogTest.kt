@@ -17,6 +17,15 @@ class PlaylistPickerDialogTest {
         assertEquals(listOf(standard), destinations)
     }
 
+    @Test
+    fun `given an imported playlist when destinations resolved then it remains selectable`() {
+        val imported = playlist(id = "content://tree/playlist.m3u", kind = PlaylistKind.IMPORTED)
+
+        val destinations = listOf(imported).selectablePlaylistDestinations()
+
+        assertEquals(listOf(imported), destinations)
+    }
+
     private fun playlist(id: String, kind: PlaylistKind): PlaylistUiModel = PlaylistUiModel(
         id = id,
         name = id,

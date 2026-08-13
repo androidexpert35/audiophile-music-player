@@ -2,35 +2,23 @@ package com.androidexpert35.audiophilemusicplayer.presentation.screen.library.co
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
@@ -51,20 +39,6 @@ internal fun LibraryArtistRow(
     onImageRequest: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val imageRequest = remember(artist.imageUrl) {
-        ImageRequest.Builder(context)
-            .data(artist.imageUrl)
-            .crossfade(200)
-            .build()
-    }
-
-    // A list row becoming visible is a UI intent; the ViewModel owns lookup,
-    // matching, persistence, and state updates.
-    LaunchedEffect(artist.id, artist.imageUrl) {
-        if (artist.imageUrl.isNullOrBlank()) onImageRequest?.invoke()
-    }
-
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -84,31 +58,12 @@ internal fun LibraryArtistRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    modifier = Modifier.matchParentSize(),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.tertiaryContainer
-                ) {}
-                Icon(
-                    imageVector = Icons.Filled.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer
-                )
-                if (!artist.imageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            ArtistArtwork(
+                artist = artist,
+                shape = CircleShape,
+                onImageRequest = onImageRequest,
+                modifier = Modifier.size(48.dp)
+            )
 
             // Memoize the secondary label — listOf + joinToString allocate every recomposition.
             val subtitleText = remember(artist.id, artist.albumCount, artist.trackCount) {

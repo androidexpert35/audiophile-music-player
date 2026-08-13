@@ -5,6 +5,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.ImportedPlaylistDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LibraryIndexStateEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
@@ -13,6 +14,7 @@ import com.androidexpert35.audiophilemusicplayer.data.mapper.toArtistEntities
 import com.androidexpert35.audiophilemusicplayer.data.mapper.toTrackEntity
 import com.androidexpert35.audiophilemusicplayer.data.repository.MediaIndexRepositoryImpl.Companion.SCAN_PHASE_WEIGHT
 import com.androidexpert35.audiophilemusicplayer.data.scanner.DsdFileScanner
+import com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MediaStoreScanner
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import com.androidexpert35.audiophilemusicplayer.domain.model.indexing.MediaIndexingProgress
@@ -45,11 +47,16 @@ import javax.inject.Singleton
  * repository derives the normalized track/album/artist tables and persists them transactionally
  * for fast later reads. DSD files (`.dsf`, `.dff`) are discovered by [DsdFileScanner] and merged
  * into the same pipeline because Android's system media scanner does not index these formats.
+ * `.m3u`/`.m3u8` playlist files are discovered the same way by [M3uFileScanner], which resolves
+ * each entry against the combined MediaStore+DSD result and is persisted separately via
+ * [ImportedPlaylistDao] rather than into the track/album/artist tables.
  *
  * @property scanner MediaStore query executor for raw audio metadata.
  * @property dsdFileScanner Document-tree scanner for DSD files invisible to MediaStore.
+ * @property m3uFileScanner Document-tree scanner for `.m3u`/`.m3u8` playlists invisible to MediaStore.
  * @property musicFolderRegistry Source of truth for the folders the scan may read.
  * @property libraryIndexDao DAO used to replace the cached indexed library atomically.
+ * @property importedPlaylistDao DAO used to replace the cached discovered-playlist table.
  * @property contentResolver System content resolver used to observe MediaStore changes.
  * @property ioDispatcher Dispatcher reserved for blocking scan and indexing work.
  */
@@ -57,8 +64,10 @@ import javax.inject.Singleton
 class MediaIndexRepositoryImpl @Inject constructor(
     private val scanner: MediaStoreScanner,
     private val dsdFileScanner: DsdFileScanner,
+    private val m3uFileScanner: M3uFileScanner,
     private val musicFolderRegistry: MusicFolderRegistry,
     private val libraryIndexDao: LibraryIndexDao,
+    private val importedPlaylistDao: ImportedPlaylistDao,
     private val contentResolver: ContentResolver,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : MediaIndexRepository {
@@ -133,6 +142,11 @@ class MediaIndexRepositoryImpl @Inject constructor(
                 val dsdFiles = dsdFileScanner.scanDsdFiles(folders)
                 val scannedFiles = mediaStoreFiles + dsdFiles
                 val totalFiles = scannedFiles.size
+
+                // `.m3u`/`.m3u8` playlists are likewise invisible to MediaStore. They're
+                // resolved against scannedFiles here — before the Room write below — so the
+                // scanner never needs a separate query against the indexed track table.
+                val importedPlaylists = m3uFileScanner.scanPlaylists(folders, scannedFiles)
                 val trackEntities = ArrayList<TrackEntity>(scannedFiles.size)
 
                 for ((index, file) in scannedFiles.withIndex()) {
@@ -177,6 +191,7 @@ class MediaIndexRepositoryImpl @Inject constructor(
                     artists = artistEntities,
                     state = state
                 )
+                importedPlaylistDao.replaceAll(importedPlaylists)
 
                 // Final emission after the transaction commits, so the UI can safely
                 // call isLibraryIndexed() or open the library screen.

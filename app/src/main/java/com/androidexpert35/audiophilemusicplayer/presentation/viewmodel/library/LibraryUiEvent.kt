@@ -67,7 +67,7 @@ sealed interface LibraryUiEvent {
     /** Appends a selected song to the end of the active playback queue. */
     data class AddToQueue(val track: Track) : LibraryUiEvent
 
-    /** Toggles between list and two-column grid view modes. */
+    /** Toggles the retained list or two-column grid mode for the visible catalogue section. */
     data object ToggleViewMode : LibraryUiEvent
 
     /**

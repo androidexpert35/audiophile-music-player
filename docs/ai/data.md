@@ -187,3 +187,8 @@ Enhancer) toggle, and Hi-Res remaster toggle. Each is exposed reactively through
 `Observe*UseCase` / `Set*UseCase` pairs and consumed by the engine coordinators
 in [`playback.md`](playback.md). Direct USB PCM format negotiation is always
 automatic and source-native; no manual format override is exposed.
+
+The library's per-section sort order and list/grid choice are stored together under
+`SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES`. They are exposed through
+`GetLibraryDisplayPreferencesUseCase` / `SetLibraryDisplayPreferencesUseCase` so the
+library restores every tab's choices after an app restart.

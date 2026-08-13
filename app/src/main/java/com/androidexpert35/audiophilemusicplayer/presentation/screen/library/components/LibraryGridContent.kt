@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -25,12 +26,11 @@ import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiModel
 
 /**
- * Scrollable two-column grid view for albums and tracks.
+ * Scrollable grid view for every library content type.
  *
  * The sort/toggle row appears as a full-width span at the top of the
  * [LazyVerticalGrid] so it participates in the same scroll physics as the grid
- * cells below. Liked Songs is intentionally omitted because it is available
- * only from the list-only Playlists section.
+ * cells below.
  *
  * @param model Current library UI snapshot.
  * @param shellBottomPadding Bottom padding reserving space for the floating shell panel.
@@ -43,8 +43,15 @@ fun LibraryGridContent(
     shellBottomPadding: Dp,
     onEvent: (LibraryUiEvent) -> Unit
 ) {
+    val columnCount = when (model.selectedContentType) {
+        LibraryContentType.ALBUMS,
+        LibraryContentType.ARTISTS -> 3
+        LibraryContentType.TRACKS,
+        LibraryContentType.PLAYLISTS -> 2
+    }
+
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        columns = GridCells.Fixed(columnCount),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 12.dp,
@@ -66,6 +73,26 @@ fun LibraryGridContent(
         }
 
         when (model.selectedContentType) {
+            LibraryContentType.PLAYLISTS -> {
+                if (model.playlists.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LibraryEmptyState(
+                            icon = Icons.Filled.LibraryMusic,
+                            title = stringResource(R.string.library_empty_playlists_title),
+                            message = stringResource(R.string.library_empty_playlists_message),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                } else {
+                    items(items = model.playlists, key = { playlist -> "playlist_grid_${playlist.id}" }) { playlist ->
+                        LibraryPlaylistRow(
+                            playlist = playlist,
+                            onClick = { onEvent(LibraryUiEvent.OpenPlaylistOverview(playlist)) }
+                        )
+                    }
+                }
+            }
+
             LibraryContentType.ALBUMS -> {
                 if (model.albums.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -89,8 +116,29 @@ fun LibraryGridContent(
                 }
             }
 
+            LibraryContentType.ARTISTS -> {
+                if (model.artists.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LibraryEmptyState(
+                            icon = Icons.Filled.Person,
+                            title = stringResource(R.string.library_empty_artists_title),
+                            message = stringResource(R.string.library_empty_artists_message),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                } else {
+                    items(items = model.artists, key = { artist -> "artist_grid_${artist.id}" }) { artist ->
+                        LibraryArtistGridItem(
+                            artist = artist,
+                            onImageRequest = { onEvent(LibraryUiEvent.LoadArtistImage(artist)) },
+                            onClick = { onEvent(LibraryUiEvent.OpenArtistDescription(artist)) }
+                        )
+                    }
+                }
+            }
+
             // TRACKS displays the full local song catalogue.
-            else -> {
+            LibraryContentType.TRACKS -> {
                 if (model.tracks.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         LibraryEmptyState(

@@ -46,6 +46,9 @@ object SettingsPreferences {
     /** Hi-Res Dynamic Remaster is opt-in so lossless playback remains unprocessed by default. */
     const val DEFAULT_HIRES_REMASTER_ENABLED: Boolean = false
 
+    /** Stores the encoded per-section sort and list/grid choices for the library. */
+    const val KEY_LIBRARY_DISPLAY_PREFERENCES: String = "library_display_preferences"
+
 
     /**
      * SharedPreferences key holding the document-tree URIs of every folder the user
