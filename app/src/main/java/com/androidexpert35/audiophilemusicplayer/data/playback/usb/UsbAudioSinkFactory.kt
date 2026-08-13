@@ -311,6 +311,7 @@ class UsbAudioSinkFactory @Inject constructor(
                 else -> "USB DAC not ready for libusb DSD (state=$state)"
             }
         }
+        usbVolumeController.activateDevice(checkNotNull(state.connectedDevice))
 
         // ── Resolve the native-DSD streaming endpoint ──────────────────────────
         // Use the libusb-safe selector that skips UsbRequest probing (probing
@@ -548,6 +549,7 @@ class UsbAudioSinkFactory @Inject constructor(
                 else -> "USB DAC not ready for libusb PCM (state=$state)"
             }
         }
+        usbVolumeController.activateDevice(checkNotNull(state.connectedDevice))
 
         // Select the streaming endpoint for this PCM format (no UsbRequest probe).
         //
@@ -973,6 +975,7 @@ class UsbAudioSinkFactory @Inject constructor(
                 else -> "USB DAC not ready for libusb enhanced PCM (state=$state)"
             }
         }
+        usbVolumeController.activateDevice(checkNotNull(state.connectedDevice))
 
         // Post-DSP output is always float32 (ENCODING_PCM_FLOAT), which maps to
         // a 4-byte wire subslot. Use effectiveBitDepth=32 to target bSubslotSize=4

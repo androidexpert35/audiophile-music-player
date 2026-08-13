@@ -188,9 +188,12 @@ Rules:
   `callbackFlow` with `awaitClose` cleanup — see [`conventions.md`](conventions.md).
 - ✅ Surface USB permission/attach state as domain models (`UsbAudioStatus`,
   `UsbAudioFormat`), never raw `UsbDevice`.
-- ✅ Software volume for USB sends a linear UI position to native code, where one
-  quadratic taper is applied. At 100% it is exact unity; do not add a pre-amplifier
-  or apply the curve a second time.
+- ✅ Software volume remains available for every direct-USB PCM DAC, including DACs
+  with their own hardware buttons. Each DAC has an independent persisted level;
+  a newly encountered device starts at the safe 60% fallback before the first PCM
+  sample. The UI sends a linear position to native code, where one quadratic taper
+  is applied. At 100% it is exact unity; do not add a pre-amplifier or apply the
+  curve a second time. Native DSD remains unattenuated.
 - ✅ Without a libusb-ready DAC, the enhancement graph continues through the platform
   `AudioTrack` sink; USB availability changes only the final transport.
 - ✅ Enhanced libusb PCM requires an exact Type-I linear-PCM four-byte subslot;

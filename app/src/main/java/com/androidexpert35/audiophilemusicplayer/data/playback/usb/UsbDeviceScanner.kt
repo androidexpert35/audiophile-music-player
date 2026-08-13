@@ -358,6 +358,7 @@ class UsbDeviceScanner @Inject constructor(
             ?: deviceName,
         vendorId = vendorId,
         productId = productId,
+        serialNumber = runCatching { serialNumber }.getOrNull(),
     )
 
     private fun UsbDevice.logLabel(): String =

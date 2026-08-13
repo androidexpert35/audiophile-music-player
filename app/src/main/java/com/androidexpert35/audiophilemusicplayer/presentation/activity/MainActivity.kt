@@ -532,7 +532,7 @@ class MainActivity : ComponentActivity() {
          * injected [usbVolumeController]. Matches [UsbVolumeController]'s own default
          * so the displayed value is consistent the moment the first key event fires.
          */
-        const val DEFAULT_OVERLAY_VOLUME_PCT = 50
+        const val DEFAULT_OVERLAY_VOLUME_PCT = 60
 
         /**
          * Step size for a single tap or a short hold (fine-grained adjustment).

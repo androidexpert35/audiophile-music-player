@@ -7,6 +7,7 @@ import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPrefere
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,11 +18,10 @@ import javax.inject.Singleton
  * volume rocker has no effect on output level. This controller acts as the
  * exclusive software volume authority for the direct-USB path:
  *
- * - The volume level is **persisted** in [SharedPreferences] under
- *   [SettingsPreferences.KEY_USB_VOLUME_PCT] so the user's choice survives
- *   app restarts. On construction the controller reads the stored value
- *   (falling back to [SettingsPreferences.DEFAULT_USB_VOLUME_PCT]) so the
- *   correct level is available before the first isochronous transfer starts.
+ * - The volume level is **persisted per DAC** in [SharedPreferences] under a
+ *   stable USB-identity key. [activateDevice] restores that DAC's last level,
+ *   falling back to [SettingsPreferences.DEFAULT_USB_VOLUME_PCT] the first time
+ *   it is encountered, before the first isochronous transfer starts.
  * - The active [LibusbPcmAudioSink] calls [attachBridge] when its pump thread
  *   starts and [detachBridge] when the pump stops or the sink is closed.
  * - `MainActivity` calls [stepUp] / [stepDown] in response to physical volume
@@ -72,8 +72,13 @@ import javax.inject.Singleton
  * in a `@Volatile` field; JNI calls are inherently thread-safe at the native
  * boundary. SharedPreferences writes use `apply()` (asynchronous, non-blocking).
  *
+ * DACs with physical volume buttons are deliberately not inferred or bypassed:
+ * USB descriptors do not reliably describe whether those buttons control an
+ * internal analogue stage. PCM software attenuation therefore remains available
+ * for every direct-USB device. Native DSD transports continue to ignore it.
+ *
  * @property sharedPreferences Application-scoped preferences used to persist
- *   the volume level across app restarts.
+ *   each DAC's volume level across app restarts.
  */
 @Singleton
 class UsbVolumeController @Inject constructor(
@@ -83,16 +88,10 @@ class UsbVolumeController @Inject constructor(
     /**
      * Current volume as an integer percentage in `[0, 100]`.
      *
-     * Initialised from [SharedPreferences] on construction so the last
-     * user-chosen level is restored before the first isochronous transfer
-     * is prepared.
+     * Initialised to the safe fallback and replaced with the selected DAC's
+     * persisted value by [activateDevice] before a USB sink is prepared.
      */
-    private val _volumePct = MutableStateFlow(
-        sharedPreferences.getInt(
-            SettingsPreferences.KEY_USB_VOLUME_PCT,
-            SettingsPreferences.DEFAULT_USB_VOLUME_PCT,
-        )
-    )
+    private val _volumePct = MutableStateFlow(SettingsPreferences.DEFAULT_USB_VOLUME_PCT)
 
     /**
      * Observable volume level in the range `[0, 100]`.
@@ -123,6 +122,42 @@ class UsbVolumeController @Inject constructor(
     @Volatile
     private var activeBridgeHandle: Long = 0L
 
+    private val stateLock = Any()
+
+    @Volatile
+    private var activeDevicePreferenceKey: String? = null
+
+    // ── Device selection ─────────────────────────────────────────────────────
+
+    /**
+     * Selects the DAC whose independent PCM volume should be restored and saved.
+     *
+     * The persistent identity uses vendor ID, product ID, and the USB serial when
+     * available. Devices without a serial fall back to their product label; two
+     * indistinguishable units of the same model consequently share a level.
+     * Selection is idempotent and may safely be repeated for every sink build.
+     *
+     * @param device USB identity snapshot associated with the sink being opened.
+     */
+    internal fun activateDevice(device: UsbAudioDeviceDescriptor) {
+        val preferenceKey = preferenceKey(device)
+        val restoredVolume = synchronized(stateLock) {
+            if (activeDevicePreferenceKey == preferenceKey) return
+            activeDevicePreferenceKey = preferenceKey
+            sharedPreferences.getInt(
+                preferenceKey,
+                SettingsPreferences.DEFAULT_USB_VOLUME_PCT,
+            ).coerceIn(MIN_VOLUME_PCT, MAX_VOLUME_PCT).also { restored ->
+                _volumePct.value = restored
+            }
+        }
+        Log.d(
+            TAG,
+            "activateDevice: vendor=${device.vendorId} product=${device.productId} " +
+                "volume=$restoredVolume%",
+        )
+    }
+
     // ── Bridge lifecycle ──────────────────────────────────────────────────────────
 
     /**
@@ -144,12 +179,15 @@ class UsbVolumeController @Inject constructor(
      *   [EngineSwapBridge.isValidBridgeHandle]).
      */
     internal fun attachBridge(handle: Long) {
-        activeBridgeHandle = handle
-        _isLibusbPathActive.value = true
+        val currentVolume = synchronized(stateLock) {
+            activeBridgeHandle = handle
+            _isLibusbPathActive.value = true
+            _volumePct.value
+        }
         // Re-apply the persisted level as a safety net; the primary delivery
         // already happened via the initialVolume parameter of nativeAttachUsbEngine.
-        pushVolumeToNative(handle, _volumePct.value)
-        Log.d(TAG, "attachBridge: handle=0x${handle.toULong().toString(16)} volume=${_volumePct.value}%")
+        pushVolumeToNative(handle, currentVolume)
+        Log.d(TAG, "attachBridge: handle=0x${handle.toULong().toString(16)} volume=$currentVolume%")
     }
 
     /**
@@ -161,9 +199,12 @@ class UsbVolumeController @Inject constructor(
      * [LibusbPcmEnhancedSink] on every write.
      */
     internal fun attachDirectWriter() {
-        activeBridgeHandle = 0L
-        _isLibusbPathActive.value = true
-        Log.d(TAG, "attachDirectWriter: volume=${_volumePct.value}%")
+        val currentVolume = synchronized(stateLock) {
+            activeBridgeHandle = 0L
+            _isLibusbPathActive.value = true
+            _volumePct.value
+        }
+        Log.d(TAG, "attachDirectWriter: volume=$currentVolume%")
     }
 
     /**
@@ -174,8 +215,10 @@ class UsbVolumeController @Inject constructor(
      * and in [SharedPreferences] until the next [attachBridge].
      */
     internal fun detachBridge() {
-        activeBridgeHandle = 0L
-        _isLibusbPathActive.value = false
+        synchronized(stateLock) {
+            activeBridgeHandle = 0L
+            _isLibusbPathActive.value = false
+        }
         Log.d(TAG, "detachBridge")
     }
 
@@ -210,16 +253,18 @@ class UsbVolumeController @Inject constructor(
      */
     fun setVolumePct(pct: Int) {
         val clamped = pct.coerceIn(MIN_VOLUME_PCT, MAX_VOLUME_PCT)
-        _volumePct.value = clamped
+        val handle = synchronized(stateLock) {
+            _volumePct.value = clamped
 
-        // Persist asynchronously so the level survives app restarts.
-        // apply() is non-blocking; the write is committed on a background thread
-        // by the platform before the process terminates.
-        sharedPreferences.edit()
-            .putInt(SettingsPreferences.KEY_USB_VOLUME_PCT, clamped)
-            .apply()
-
-        val handle = activeBridgeHandle
+            // No global fallback is written: a level only belongs to the DAC that
+            // was explicitly selected before its sink was opened.
+            activeDevicePreferenceKey?.let { preferenceKey ->
+                sharedPreferences.edit()
+                    .putInt(preferenceKey, clamped)
+                    .apply()
+            }
+            activeBridgeHandle
+        }
         if (handle != 0L) {
             pushVolumeToNative(handle, clamped)
         }
@@ -245,6 +290,20 @@ class UsbVolumeController @Inject constructor(
         EngineSwapBridge.nativeSetVolume(handle, linearPosition)
         Log.v(TAG, "pushVolumeToNative: pct=$pct linearPosition=$linearPosition " +
                 "handle=0x${handle.toULong().toString(16)}")
+    }
+
+    private fun preferenceKey(device: UsbAudioDeviceDescriptor): String {
+        val stableIdentity = buildString {
+            append(device.vendorId)
+            append(':')
+            append(device.productId)
+            append(':')
+            append(device.serialNumber?.takeIf(String::isNotBlank) ?: device.deviceName)
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(stableIdentity.toByteArray(Charsets.UTF_8))
+            .joinToString(separator = "") { byte -> "%02x".format(byte) }
+        return SettingsPreferences.KEY_USB_VOLUME_PCT_PREFIX + digest
     }
 
     private companion object {

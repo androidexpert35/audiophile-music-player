@@ -63,27 +63,15 @@ object SettingsPreferences {
      */
     const val KEY_MUSIC_FOLDER_URIS: String = "music_folder_uris"
 
-    /**
-     * SharedPreferences key for the USB software volume level.
-     *
-     * Stores an integer percentage in `[0, 100]` that is loaded by
-     * [com.androidexpert35.audiophilemusicplayer.data.playback.usb.UsbVolumeController]
-     * on every cold start, ensuring the level the user last chose is restored
-     * before the first isochronous transfer reaches the DAC.
-     *
-     * The raw percentage is transmitted to the C++ bridge as a linear position
-     * in `[0.0, 1.0]` where `nativeSetVolume` applies the quartic taper
-     * (`gain = position⁴`) before storing the final amplitude scalar.
-     */
-    const val KEY_USB_VOLUME_PCT: String = "usb_volume_pct"
+    /** Prefix for the USB software-volume preference stored independently per DAC. */
+    const val KEY_USB_VOLUME_PCT_PREFIX: String = "usb_volume_pct_device_"
 
     /**
      * Default USB volume on first install.
      *
-     * 100 % maps to a quartic gain of 1.0 (0 dB, full scale).
-     * After the quartic curve is applied, 50 % on the slider corresponds to
-     * −24.1 dB — so full-scale is still the right default for a new install
-     * where no user preference has been recorded yet.
+     * Each newly encountered DAC starts at 60% before its first PCM sample is
+     * produced. The native quadratic taper maps that position to a gain of 0.36
+     * (about −8.9 dB), providing headroom while remaining readily audible.
      */
-    const val DEFAULT_USB_VOLUME_PCT: Int = 50
+    const val DEFAULT_USB_VOLUME_PCT: Int = 60
 }
