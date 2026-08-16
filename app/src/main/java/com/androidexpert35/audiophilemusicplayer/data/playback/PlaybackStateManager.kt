@@ -91,7 +91,7 @@ class PlaybackStateManager @Inject constructor(
      */
     fun saveNow(player: Player) {
         val snapshot = capturePlayerState(player) ?: return
-        val generation = persistenceGeneration.get()
+        val generation = persistenceGeneration.incrementAndGet()
         runBlocking {
             persistenceMutex.withLock {
                 if (generation == persistenceGeneration.get()) {
@@ -152,6 +152,8 @@ class PlaybackStateManager @Inject constructor(
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
                 if (player.mediaItemCount == 0) {
                     clearNow()
+                } else {
+                    scheduleAsyncSave(player)
                 }
             }
         }
@@ -172,7 +174,7 @@ class PlaybackStateManager @Inject constructor(
 
     private fun scheduleAsyncSave(player: Player) {
         val snapshot = capturePlayerState(player) ?: return
-        val generation = persistenceGeneration.get()
+        val generation = persistenceGeneration.incrementAndGet()
         saveScope.launch {
             persistenceMutex.withLock {
                 if (generation == persistenceGeneration.get()) {

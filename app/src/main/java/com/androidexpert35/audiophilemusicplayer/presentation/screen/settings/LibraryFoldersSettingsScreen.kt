@@ -3,15 +3,23 @@ package com.androidexpert35.audiophilemusicplayer.presentation.screen.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,7 +33,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.LocalShellBottomPadding
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.components.AppTopBar
-import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.MusicFoldersCard
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components.LibraryEmptyState
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.MusicFolderRow
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.settings.LibraryFoldersSettingsUiEffect
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.settings.LibraryFoldersSettingsUiEvent
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.settings.LibraryFoldersSettingsUiModel
@@ -93,28 +102,56 @@ private fun LibraryFoldersSettingsContent(
                 modifier = Modifier.padding(bottom = shellBottomPadding)
             )
         },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { onEvent(LibraryFoldersSettingsUiEvent.AddMusicFolderTapped) },
+                icon = {
+                    Icon(imageVector = Icons.Outlined.CreateNewFolder, contentDescription = null)
+                },
+                text = { Text(text = stringResource(R.string.settings_music_folders_add_action)) },
+                modifier = Modifier.padding(bottom = shellBottomPadding),
+            )
+        },
+        floatingActionButtonPosition = FabPosition.End,
         containerColor = Color.Transparent,
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    start = 24.dp,
-                    end = 24.dp,
-                    top = 16.dp,
-                    bottom = shellBottomPadding + 16.dp,
-                ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(top = innerPadding.calculateTopPadding()),
+            contentPadding = PaddingValues(
+                start = 24.dp,
+                end = 24.dp,
+                top = 16.dp,
+                bottom = shellBottomPadding + 96.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            MusicFoldersCard(
-                folders = model.musicFolders,
-                onAddFolder = { onEvent(LibraryFoldersSettingsUiEvent.AddMusicFolderTapped) },
-                onRemoveFolder = { folderId ->
-                    onEvent(LibraryFoldersSettingsUiEvent.RemoveMusicFolder(folderId))
-                },
-            )
+            item(key = "description") {
+                Text(
+                    text = stringResource(R.string.settings_music_folders_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (model.musicFolders.isEmpty()) {
+                item(key = "empty") {
+                    LibraryEmptyState(
+                        icon = Icons.Outlined.Folder,
+                        title = stringResource(R.string.settings_music_folders_title),
+                        message = stringResource(R.string.settings_music_folders_empty),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            } else {
+                items(items = model.musicFolders, key = { folder -> folder.id }) { folder ->
+                    MusicFolderRow(
+                        folder = folder,
+                        onRemove = { onEvent(LibraryFoldersSettingsUiEvent.RemoveMusicFolder(folder.id)) },
+                    )
+                }
+            }
         }
     }
 }

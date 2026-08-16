@@ -11,6 +11,7 @@ import androidx.media3.session.MediaSessionService
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.data.playback.AudioTelemetryCollector
 import com.androidexpert35.audiophilemusicplayer.data.playback.AudiophileSimpleBasePlayer
+import com.androidexpert35.audiophilemusicplayer.data.playback.PlaybackQueueClearer
 import com.androidexpert35.audiophilemusicplayer.data.playback.PlaybackStateManager
 import com.androidexpert35.audiophilemusicplayer.data.playback.observeBecomingNoisy
 import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPreferences
@@ -155,9 +156,8 @@ class AudioPlaybackService : MediaSessionService() {
         )
         mediaSession?.player?.let { player ->
             if (clearQueueOnExit) {
-                // Clearing before service teardown also stops the audio pipeline promptly.
-                player.clearMediaItems()
-                playbackStateManager.clearNow()
+                PlaybackQueueClearer.retainCurrentMediaItem(player)
+                playbackStateManager.saveNow(player)
             } else {
                 // Persist the current queue position and playhead so the next cold start
                 // restores exactly where the user left off.

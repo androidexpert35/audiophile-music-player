@@ -340,20 +340,32 @@ class PlaybackController @Inject constructor(
     }
 
     /**
-     * Clears the loaded Media3 queue and immediately publishes the empty player state.
+     * Clears every queued item except the one that is currently playing.
      *
-     * The service-side [PlaybackStateManager] observes the resulting timeline change and removes
-     * the saved session, ensuring a manually cleared queue cannot return on the next launch.
+     * The current decoder, sink, and playhead are deliberately left untouched. The service-side
+     * [PlaybackStateManager] persists the resulting one-track session through the timeline update.
      */
     suspend fun clearQueue() {
         val ctrl = getController()
         commandMutex.withLock {
             if (ctrl.mediaItemCount == 0) return@withLock
-            ctrl.clearMediaItems()
-            trackMap.clear()
-            stopPositionTicker()
-            _queueState.value = QueueState.EMPTY
-            _playbackState.value = PlaybackState.IDLE
+            val retainedCurrentItem = PlaybackQueueClearer.retainCurrentMediaItem(ctrl)
+            if (retainedCurrentItem) {
+                val currentMediaId = ctrl.currentMediaItem?.mediaId
+                val retainedTrack = currentMediaId?.let(trackMap::get)
+                    ?: _queueState.value.tracks.getOrNull(_queueState.value.currentIndex)
+                trackMap.keys.retainAll(setOfNotNull(currentMediaId))
+                _queueState.value = _queueState.value.copy(
+                    tracks = listOfNotNull(retainedTrack),
+                    currentIndex = if (retainedTrack == null) -1 else 0,
+                )
+                updatePlaybackState()
+            } else {
+                trackMap.clear()
+                stopPositionTicker()
+                _queueState.value = QueueState.EMPTY
+                _playbackState.value = PlaybackState.IDLE
+            }
         }
     }
 

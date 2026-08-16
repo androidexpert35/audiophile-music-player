@@ -28,9 +28,9 @@ deliberately not requested or observed: OEM focus transitions, screen lock/unloc
 notifications, and competing apps never mutate playback state. Session restore is
 handled by `PlaybackControllerSessionRestorer` + `PlaybackPersistenceRepository`.
 The listener may disable that restore through the **Clear queue when closing the app**
-setting: task removal from Recents clears both the Media3 queue and its singleton
-persistence row before the service releases the audio path. The Queue sheet also offers
-the same action manually, with confirmation.
+setting: task removal from Recents removes every Media3 item except the current one and
+persists that one-track session before the service releases the audio path. The Queue
+sheet uses the same operation manually, with confirmation, without interrupting audio.
 
 ---
 
@@ -220,6 +220,8 @@ queue editor uses `MoveQueueItemUseCase`. `PlaybackController` is the single mut
 - **Collection mutations** submit the complete ordered `MediaItem` list under one
   command lock, so album order cannot reverse or interleave with another mutation.
 - **Move** preserves the active media item and playhead while changing its queue index.
+- **Clear queue** removes every past and upcoming item while retaining the active media item,
+  decoder, and playhead; manual clearing and task removal use the same `PlaybackQueueClearer`.
 
 `AudiophileSimpleBasePlayer.handleMoveMediaItems` must keep the adapter playlist,
 original queue order, active index, and gapless next-track preload synchronized. Do not

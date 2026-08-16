@@ -264,11 +264,14 @@ class AudiophileSimpleBasePlayer @Inject constructor(
 
     override fun handleRemoveMediaItems(fromIndex: Int, toIndex: Int): ListenableFuture<*> {
         if (fromIndex in 0..playlist.size && toIndex in fromIndex..playlist.size) {
+            val removedItemCount = toIndex - fromIndex
             playlist.subList(fromIndex, toIndex).clear()
             originalPlaylist = playlist.toList()
             clearPendingSeek()
-            if (currentMediaItemIndex >= playlist.size) {
-                currentMediaItemIndex = max(0, playlist.lastIndex)
+            currentMediaItemIndex = when {
+                currentMediaItemIndex >= toIndex -> currentMediaItemIndex - removedItemCount
+                currentMediaItemIndex >= fromIndex -> fromIndex.coerceAtMost(max(0, playlist.lastIndex))
+                else -> currentMediaItemIndex
             }
             scheduleNextTrackPreload()
         }
