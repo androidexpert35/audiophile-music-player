@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType
+import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryFacetFilter
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiEvent
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiModel
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.facetsFor
@@ -46,8 +47,8 @@ fun LibraryGridContent(
 ) {
     val columnCount = when (model.selectedContentType) {
         LibraryContentType.ALBUMS,
-        LibraryContentType.ARTISTS -> 3
-        LibraryContentType.TRACKS,
+        LibraryContentType.ARTISTS,
+        LibraryContentType.TRACKS -> 3
         LibraryContentType.PLAYLISTS,
         LibraryContentType.GENRES,
         LibraryContentType.YEARS,
@@ -158,7 +159,13 @@ fun LibraryGridContent(
                     items(items = facets, key = { facet -> "facet_grid_${model.selectedContentType}_${facet.key}" }) { facet ->
                         LibraryFacetRow(
                             facet = facet,
-                            onClick = { onEvent(LibraryUiEvent.PlayFacet(facet)) },
+                            onClick = {
+                                onEvent(
+                                    LibraryUiEvent.OpenFacetTracks(
+                                        LibraryFacetFilter(model.selectedContentType, facet.name)
+                                    )
+                                )
+                            },
                         )
                     }
                 }
@@ -166,7 +173,7 @@ fun LibraryGridContent(
 
             // TRACKS displays the full local song catalogue.
             LibraryContentType.TRACKS -> {
-                if (model.tracks.isEmpty()) {
+                if (model.visibleTracks.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         LibraryEmptyState(
                             icon = Icons.Filled.LibraryMusic,
@@ -177,7 +184,7 @@ fun LibraryGridContent(
                     }
                 } else {
                     items(
-                        items = model.tracks,
+                        items = model.visibleTracks,
                         key = { track -> "track_grid_${track.id}" }
                     ) { track ->
                         val isPlaying by remember(track.id, playingTrackIdProvider) {

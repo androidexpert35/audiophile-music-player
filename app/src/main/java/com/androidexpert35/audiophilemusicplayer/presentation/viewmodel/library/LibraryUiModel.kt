@@ -51,6 +51,7 @@ data class LibraryUiModel(
     val isCreatePlaylistDialogVisible: Boolean = false,
     val playlistPickerTrack: Track? = null,
     val visibleOrderedSections: List<LibraryContentType> = LibraryContentType.entries.toList(),
+    val facetTrackFilter: LibraryFacetFilter? = null,
 ) {
     /** Sort strategy currently selected for the visible catalogue section. */
     val sortOrder: LibrarySortOrder
@@ -59,6 +60,10 @@ data class LibraryUiModel(
     /** Whether the visible catalogue section uses the two-column grid view. */
     val isGridView: Boolean
         get() = gridViews[selectedContentType] ?: false
+
+    /** Tracks rendered in the current Songs surface, optionally narrowed to one metadata facet. */
+    val visibleTracks: List<Track>
+        get() = facetTrackFilter?.let { filter -> tracks.filter(filter::matches) } ?: tracks
 
     /** Genre groups derived locally from the indexed tracks' metadata. */
     val genreFacets: List<LibraryFacet>

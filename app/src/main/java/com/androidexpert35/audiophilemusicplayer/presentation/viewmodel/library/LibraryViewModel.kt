@@ -145,12 +145,16 @@ class LibraryViewModel @Inject constructor(
             is LibraryUiEvent.AddTrackToPlaylist -> addTrackToPlaylist(event.playlistId)
             is LibraryUiEvent.PlayNext -> playNext(event.track)
             is LibraryUiEvent.AddToQueue -> addToQueue(event.track)
-            is LibraryUiEvent.PlayFacet -> playFacet(event.facet)
+            is LibraryUiEvent.OpenFacetTracks -> navigateToRoute(
+                AppRoutes.libraryFacetTracksRoute(event.filter)
+            )
+            is LibraryUiEvent.SetFacetTrackFilter -> setFacetTrackFilter(event.filter)
             is LibraryUiEvent.ToggleViewMode -> toggleViewMode()
             is LibraryUiEvent.SetSortOrder -> setSortOrder(event.sortOrder)
             is LibraryUiEvent.ToggleLikeSong -> toggleLike(event.track.id)
             is LibraryUiEvent.OpenSearch -> navigateToRoute(AppRoutes.Search.route)
             is LibraryUiEvent.OpenSettings -> navigateToRoute(AppRoutes.SettingsHub.route)
+            LibraryUiEvent.NavigateBack -> navigateUp()
             is LibraryUiEvent.OpenAlbumOverview -> navigateToRoute(
                 AppRoutes.albumOverviewRoute(event.album.id)
             )
@@ -165,7 +169,7 @@ class LibraryViewModel @Inject constructor(
             is LibraryUiEvent.PlayAlbum -> playAlbum(event.album)
             is LibraryUiEvent.PlayTrack -> playTrack(
                 track = event.track,
-                queue = uiState.value.data?.tracks.orEmpty()
+                queue = uiState.value.data?.visibleTracks.orEmpty()
             )
         }
     }
@@ -250,14 +254,6 @@ class LibraryViewModel @Inject constructor(
         )
     }
 
-    /** Starts the selected metadata grouping as an ordered, self-contained playback queue. */
-    private fun playFacet(facet: LibraryFacet) {
-        playTrack(
-            track = facet.tracks.firstOrNull() ?: return,
-            queue = facet.tracks,
-        )
-    }
-
     /** Opens the album overview screen for the given track's album, if it has one. */
     private fun openTrackAlbum(track: Track) {
         if (track.albumId == 0L) return
@@ -292,7 +288,18 @@ class LibraryViewModel @Inject constructor(
     /** Updates which catalogue section is currently visible on the library screen. */
     private fun selectContentType(contentType: LibraryContentType) {
         val current = uiState.value.data ?: LibraryUiModel(selectedContentType = contentType)
-        setSuccessState(current.copy(selectedContentType = contentType))
+        setSuccessState(current.copy(selectedContentType = contentType, facetTrackFilter = null))
+    }
+
+    /** Shows one metadata collection through the same retained Songs list/grid surface. */
+    private fun setFacetTrackFilter(filter: LibraryFacetFilter) {
+        val current = uiState.value.data ?: LibraryUiModel()
+        setSuccessState(
+            current.copy(
+                selectedContentType = LibraryContentType.TRACKS,
+                facetTrackFilter = filter,
+            )
+        )
     }
 
     /** Flips the visible section between its retained list and two-column grid views. */

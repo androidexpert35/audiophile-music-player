@@ -35,6 +35,36 @@ class LibraryFacetTest {
         assertEquals(listOf("2001", "1970"), years.map { it.name })
     }
 
+    @Test
+    fun `given a selected facet when matching then returns only exact category tracks`() {
+        val popFilter = LibraryFacetFilter(LibraryContentType.GENRES, "Pop")
+        val composerFilter = LibraryFacetFilter(LibraryContentType.COMPOSERS, "Ryuichi Sakamoto")
+        val yearFilter = LibraryFacetFilter(LibraryContentType.YEARS, "1983")
+        val track = track(
+            id = 1L,
+            year = 1983,
+            genre = "Electronic; Pop",
+            composer = "Ryuichi Sakamoto",
+        )
+
+        assertEquals(true, popFilter.matches(track))
+        assertEquals(true, composerFilter.matches(track))
+        assertEquals(true, yearFilter.matches(track))
+        assertEquals(false, LibraryFacetFilter(LibraryContentType.GENRES, "Rock").matches(track))
+    }
+
+    @Test
+    fun `given a facet filter when library songs surface is rendered then exposes only matching tracks`() {
+        val jazzTrack = track(id = 1L, genre = "Jazz")
+        val rockTrack = track(id = 2L, genre = "Rock")
+        val model = LibraryUiModel(
+            tracks = listOf(jazzTrack, rockTrack),
+            facetTrackFilter = LibraryFacetFilter(LibraryContentType.GENRES, "Jazz"),
+        )
+
+        assertEquals(listOf(jazzTrack), model.visibleTracks)
+    }
+
     private fun track(
         id: Long,
         year: Int = 0,

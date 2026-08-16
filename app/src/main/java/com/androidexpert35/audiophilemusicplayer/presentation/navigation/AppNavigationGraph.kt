@@ -3,6 +3,7 @@ package com.androidexpert35.audiophilemusicplayer.presentation.navigation
 import androidx.navigation.NavGraphBuilder
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.AlbumOverviewScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.ArtistDescriptionScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.LibraryFacetTracksScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.LibraryScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.PlaylistOverviewScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.onboarding.OnboardingScreen
@@ -14,6 +15,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.Li
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.PlaybackBehaviorSettingsScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.SettingsScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.UsbSettingsScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryFacetFilter
 import com.tony.coreui.presentation.navigation.NavigationManager
 import com.tony.coreui.presentation.navigation.graph.destination
 import com.tony.coreui.presentation.navigation.graph.flow
@@ -47,6 +49,19 @@ fun NavGraphBuilder.mainNavGraph() {
     flow(AppRoutes.MainFlow) {
         destination(AppRoutes.Library) {
             LibraryScreen()
+        }
+        destination(AppRoutes.LibraryFacetTracks) { backStackEntry ->
+            val section = AppRoutes.LibraryFacetTracks.routeDefinition.requireArgument(
+                backStackEntry,
+                AppRoutes.facetSection,
+            )
+            val name = AppRoutes.LibraryFacetTracks.routeDefinition.requireArgument(
+                backStackEntry,
+                AppRoutes.facetName,
+            )
+            LibraryFacetFilter.fromRoute(section, name)?.let { filter ->
+                LibraryFacetTracksScreen(filter = filter)
+            }
         }
         destination(AppRoutes.AlbumOverview) { backStackEntry ->
             val albumId = AppRoutes.AlbumOverview.routeDefinition.requireArgument(

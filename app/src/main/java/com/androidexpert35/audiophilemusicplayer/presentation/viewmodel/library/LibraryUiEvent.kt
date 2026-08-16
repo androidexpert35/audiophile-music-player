@@ -67,8 +67,11 @@ sealed interface LibraryUiEvent {
     /** Appends a selected song to the end of the active playback queue. */
     data class AddToQueue(val track: Track) : LibraryUiEvent
 
-    /** Starts playback of every track sharing the selected metadata value. */
-    data class PlayFacet(val facet: LibraryFacet) : LibraryUiEvent
+    /** Opens the scrollable track list for the selected metadata value. */
+    data class OpenFacetTracks(val filter: LibraryFacetFilter) : LibraryUiEvent
+
+    /** Activates the route-provided metadata filter while retaining the standard Songs surface. */
+    data class SetFacetTrackFilter(val filter: LibraryFacetFilter) : LibraryUiEvent
 
     /** Toggles the retained list or two-column grid mode for the visible catalogue section. */
     data object ToggleViewMode : LibraryUiEvent
@@ -94,6 +97,9 @@ sealed interface LibraryUiEvent {
 
     /** Navigate to the settings screen. */
     data object OpenSettings : LibraryUiEvent
+
+    /** Returns from a nested Library destination to its parent collection. */
+    data object NavigateBack : LibraryUiEvent
 
     /** Opens the detailed album overview screen for the selected album. */
     data class OpenAlbumOverview(val album: Album) : LibraryUiEvent

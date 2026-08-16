@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -22,10 +22,10 @@ import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryFacet
 
 /**
- * Playable row representing a genre, release year, or composer grouping.
+ * Entry-point row representing a genre, release year, or composer grouping.
  *
  * @param facet Metadata grouping to show.
- * @param onClick Starts playback of the grouping's tracks.
+ * @param onClick Opens the grouping's scrollable track list.
  * @param modifier Optional modifier for the row surface.
  */
 @Composable
@@ -70,7 +70,7 @@ internal fun LibraryFacetRow(
                 )
             }
             Icon(
-                imageVector = Icons.Filled.PlayArrow,
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )

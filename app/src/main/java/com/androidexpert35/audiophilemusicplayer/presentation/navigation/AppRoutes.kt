@@ -3,6 +3,7 @@ package com.androidexpert35.audiophilemusicplayer.presentation.navigation
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.MainFlow
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.Root
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.SettingsFlow
+import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryFacetFilter
 import com.tony.coreui.presentation.navigation.graph.destinationNode
 import com.tony.coreui.presentation.navigation.graph.flowNode
 import com.tony.coreui.presentation.navigation.graph.rootNode
@@ -25,6 +26,12 @@ object AppRoutes {
     /** Stable playlist filename passed to the playlist overview destination. */
     val playlistId = stringPathArgument("playlistId")
 
+    /** Metadata section passed to the metadata-track-list destination. */
+    val facetSection = stringPathArgument("facetSection")
+
+    /** Selected genre, year, or composer passed to the metadata-track-list destination. */
+    val facetName = stringPathArgument("facetName")
+
     /** Initial permission and indexing destination. */
     val Onboarding = destinationNode(route("onboarding_screen"))
 
@@ -39,6 +46,9 @@ object AppRoutes {
 
     /** Artist profile destination. */
     val ArtistDescription = destinationNode(route("artist_description", artistName))
+
+    /** Scrollable list of tracks belonging to one genre, year, or composer. */
+    val LibraryFacetTracks = destinationNode(route("library_facet_tracks", facetSection, facetName))
 
     /** Local-library search destination. */
     val Search = destinationNode(route("search_screen"))
@@ -116,4 +126,11 @@ object AppRoutes {
     /** Builds a concrete artist profile route with safely encoded text. */
     fun artistDescriptionRoute(name: String): String =
         ArtistDescription.routeDefinition.createRoute(artistName with name)
+
+    /** Builds a concrete metadata-track-list route with safely encoded arguments. */
+    fun libraryFacetTracksRoute(filter: LibraryFacetFilter): String =
+        LibraryFacetTracks.routeDefinition.createRoute(
+            facetSection with filter.section.name,
+            facetName with filter.name,
+        )
 }

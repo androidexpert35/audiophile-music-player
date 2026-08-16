@@ -29,12 +29,12 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.comp
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
 
 /**
- * Two-column grid item for a track displayed in the library grid view.
+ * Three-column grid item for a track displayed in the library grid view.
  *
  * Shows a square music-note placeholder (track-level artwork requires an additional
  * resolver query which would degrade grid scroll performance), the track title bold,
  * and the artist name below it. Designed for a [androidx.compose.foundation.lazy.grid.LazyVerticalGrid]
- * with two equal-width columns.
+ * with three equal-width columns.
  *
  * @param track Track rendered in this grid cell.
  * @param isCurrentlyPlaying Whether this cell represents the track currently loaded in playback.

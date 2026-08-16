@@ -22,6 +22,43 @@ data class LibraryFacet(
     val trackCount: Int = tracks.size
 }
 
+/**
+ * Immutable route-safe description of one metadata collection in the library.
+ *
+ * @property section Metadata section that owns [name]. Only Genres, Years, and
+ * Composers are valid section values.
+ * @property name Exact display value selected by the listener.
+ */
+@Immutable
+data class LibraryFacetFilter(
+    val section: LibraryContentType,
+    val name: String,
+) {
+    /** Returns whether [track] belongs to this metadata collection. */
+    fun matches(track: Track): Boolean = when (section) {
+        LibraryContentType.GENRES -> track.genre.splitFacetValues().any { it.equals(name, ignoreCase = true) }
+        LibraryContentType.COMPOSERS -> track.composer.splitFacetValues().any { it.equals(name, ignoreCase = true) }
+        LibraryContentType.YEARS -> track.year > 0 && track.year.toString() == name
+        else -> false
+    }
+
+    companion object {
+        /** Rebuilds a validated metadata filter from the two navigation path arguments. */
+        fun fromRoute(sectionName: String, name: String): LibraryFacetFilter? {
+            val section = LibraryContentType.entries.firstOrNull { it.name == sectionName }
+                ?.takeIf { it in metadataSections }
+                ?: return null
+            return LibraryFacetFilter(section = section, name = name)
+        }
+
+        private val metadataSections = setOf(
+            LibraryContentType.GENRES,
+            LibraryContentType.YEARS,
+            LibraryContentType.COMPOSERS,
+        )
+    }
+}
+
 /** Builds genre facets from every non-blank genre tag in the indexed catalogue. */
 internal fun List<Track>.toGenreFacets(): List<LibraryFacet> =
     toTextFacets { track -> track.genre.splitFacetValues() }
@@ -49,7 +86,7 @@ private fun List<Track>.toTextFacets(values: (Track) -> List<String>): List<Libr
         }
         .sortedBy { it.name.lowercase(Locale.ROOT) }
 
-private fun String?.splitFacetValues(): List<String> =
+internal fun String?.splitFacetValues(): List<String> =
     this.orEmpty()
         .split(';', '|')
         .map(String::trim)

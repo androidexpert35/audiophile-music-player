@@ -108,9 +108,11 @@ private fun PlayerContent(model: PlayerUiModel, onEvent: (PlayerUiEvent) -> Unit
 
 The Library filter row is driven by `LibraryContentType` and the persisted Library Sections
 settings. Genres, Years, and Composers are metadata facets derived from the local indexed tracks;
-their rows show a track count and start a queue containing that facet when tapped. Settings can
-hide any section (while retaining at least one visible) and drag-reorder the filter row; both
-changes apply to the live Library immediately.
+their rows show a track count and an arrow entry point. Tapping one opens the exact standard Songs
+surface, filtered to that metadata value: it retains the Songs sort selector, list/grid toggle, and
+track actions, and uses only the filtered list as its playback queue. Settings can hide any section
+(while retaining at least one visible) and drag-reorder the filter row; both changes apply to the
+live Library immediately.
 
 ---
 

@@ -286,6 +286,19 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `given a metadata collection when selected then its filtered-track route is requested`() = runTest {
+        stubInitialLibrary()
+        val filter = LibraryFacetFilter(LibraryContentType.GENRES, "Jazz")
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(LibraryUiEvent.OpenFacetTracks(filter))
+        advanceUntilIdle()
+
+        assertEquals(AppRoutes.libraryFacetTracksRoute(filter), navigationManager.lastRoute)
+    }
+
+    @Test
     fun `given different sort choices when switching sections then each section retains its own choice`() = runTest {
         stubInitialLibrary()
 
