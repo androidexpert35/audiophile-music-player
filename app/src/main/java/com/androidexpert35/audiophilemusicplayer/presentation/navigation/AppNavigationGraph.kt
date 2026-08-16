@@ -7,7 +7,13 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.Lib
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.library.PlaylistOverviewScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.onboarding.OnboardingScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.search.SearchScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.AboutSettingsScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.AudioEngineSettingsScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.LibraryFoldersSettingsScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.LibrarySectionsSettingsScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.PlaybackBehaviorSettingsScreen
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.SettingsScreen
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.UsbSettingsScreen
 import com.tony.coreui.presentation.navigation.NavigationManager
 import com.tony.coreui.presentation.navigation.graph.destination
 import com.tony.coreui.presentation.navigation.graph.flow
@@ -66,8 +72,28 @@ fun NavGraphBuilder.mainNavGraph() {
         destination(AppRoutes.Search) {
             SearchScreen()
         }
-        destination(AppRoutes.Settings) {
-            SettingsScreen()
+        flow(AppRoutes.SettingsFlow) {
+            destination(AppRoutes.SettingsHub) {
+                SettingsScreen()
+            }
+            destination(AppRoutes.SettingsAudioEngine) {
+                AudioEngineSettingsScreen()
+            }
+            destination(AppRoutes.SettingsUsb) {
+                UsbSettingsScreen()
+            }
+            destination(AppRoutes.SettingsLibraryFolders) {
+                LibraryFoldersSettingsScreen()
+            }
+            destination(AppRoutes.SettingsLibrarySections) {
+                LibrarySectionsSettingsScreen()
+            }
+            destination(AppRoutes.SettingsPlaybackBehavior) {
+                PlaybackBehaviorSettingsScreen()
+            }
+            destination(AppRoutes.SettingsAbout) {
+                AboutSettingsScreen()
+            }
         }
     }
 }

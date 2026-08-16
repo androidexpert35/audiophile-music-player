@@ -19,6 +19,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUs
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibraryDisplayPreferencesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibrarySectionOrderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
@@ -84,6 +86,8 @@ class LibraryViewModel @Inject constructor(
     private val getAlbumsUseCase: GetAlbumsUseCase,
     private val getArtistsUseCase: GetArtistsUseCase,
     private val getLibraryDisplayPreferencesUseCase: GetLibraryDisplayPreferencesUseCase,
+    private val observeLibraryDisplayPreferencesUseCase: ObserveLibraryDisplayPreferencesUseCase,
+    private val observeLibrarySectionOrderUseCase: ObserveLibrarySectionOrderUseCase,
     private val getArtistImageUseCase: GetArtistImageUseCase,
     private val playTrackUseCase: PlayTrackUseCase,
     private val toggleLikeSongUseCase: ToggleLikeSongUseCase,
@@ -119,6 +123,7 @@ class LibraryViewModel @Inject constructor(
         observeUserCollections()
         observePlaylists()
         observeAndReindexOnMediaStoreChanges()
+        observeVisibleOrderedSections()
     }
 
     override fun handleEvent(event: LibraryUiEvent) {
@@ -141,7 +146,7 @@ class LibraryViewModel @Inject constructor(
             is LibraryUiEvent.SetSortOrder -> setSortOrder(event.sortOrder)
             is LibraryUiEvent.ToggleLikeSong -> toggleLike(event.track.id)
             is LibraryUiEvent.OpenSearch -> navigateToRoute(AppRoutes.Search.route)
-            is LibraryUiEvent.OpenSettings -> navigateToRoute(AppRoutes.Settings.route)
+            is LibraryUiEvent.OpenSettings -> navigateToRoute(AppRoutes.SettingsHub.route)
             is LibraryUiEvent.OpenAlbumOverview -> navigateToRoute(
                 AppRoutes.albumOverviewRoute(event.album.id)
             )
@@ -327,6 +332,42 @@ class LibraryViewModel @Inject constructor(
                 onError = { /* Defaults remain usable when preferences cannot be read. */ },
             )
         }
+    }
+
+    /**
+     * Keeps [LibraryUiModel.visibleOrderedSections] live so a section hidden or
+     * reordered from the Library Sections settings screen applies immediately, without
+     * requiring this screen to be recreated. Falls back the active selection to the
+     * first remaining visible section if it was just hidden.
+     */
+    private fun observeVisibleOrderedSections() {
+        combine(
+            observeLibraryDisplayPreferencesUseCase(),
+            observeLibrarySectionOrderUseCase(),
+        ) { preferences, order ->
+            val orderedTypes = order.mapNotNull { name ->
+                LibraryContentType.entries.firstOrNull { it.name == name }
+            }
+            val missingTypes = LibraryContentType.entries.filterNot { it in orderedTypes }
+            (orderedTypes + missingTypes).filter { contentType ->
+                preferences.preferenceFor(contentType.name).isVisible
+            }
+        }
+            .onEach { visibleOrderedSections ->
+                val current = uiState.value.data ?: return@onEach
+                val selectedContentType = if (current.selectedContentType in visibleOrderedSections) {
+                    current.selectedContentType
+                } else {
+                    visibleOrderedSections.firstOrNull() ?: LibraryContentType.TRACKS
+                }
+                setSuccessState(
+                    current.copy(
+                        visibleOrderedSections = visibleOrderedSections,
+                        selectedContentType = selectedContentType,
+                    )
+                )
+            }
+            .launchIn(viewModelScope)
     }
 
     /** Writes the current per-section sort and layout choices without delaying the UI update. */

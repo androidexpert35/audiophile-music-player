@@ -2,6 +2,7 @@ package com.androidexpert35.audiophilemusicplayer.presentation.navigation
 
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.MainFlow
 import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.Root
+import com.androidexpert35.audiophilemusicplayer.presentation.navigation.AppRoutes.SettingsFlow
 import com.tony.coreui.presentation.navigation.graph.destinationNode
 import com.tony.coreui.presentation.navigation.graph.flowNode
 import com.tony.coreui.presentation.navigation.graph.rootNode
@@ -42,8 +43,43 @@ object AppRoutes {
     /** Local-library search destination. */
     val Search = destinationNode(route("search_screen"))
 
-    /** Audio and application settings destination. */
-    val Settings = destinationNode(route("settings_screen"))
+    /** Settings hub destination — shows the category cards. */
+    val SettingsHub = destinationNode(route("settings_hub_screen"))
+
+    /** Audio engine and DSP settings destination (bit-perfect engine, SUE, Hi-Res Remaster). */
+    val SettingsAudioEngine = destinationNode(route("settings_audio_engine_screen"))
+
+    /** USB DAC settings destination. */
+    val SettingsUsb = destinationNode(route("settings_usb_screen"))
+
+    /** Music folder scan-scope settings destination. */
+    val SettingsLibraryFolders = destinationNode(route("settings_library_folders_screen"))
+
+    /** Library section visibility and ordering settings destination. */
+    val SettingsLibrarySections = destinationNode(route("settings_library_sections_screen"))
+
+    /** Playback behavior settings destination (e.g. queue retention on exit). */
+    val SettingsPlaybackBehavior = destinationNode(route("settings_playback_behavior_screen"))
+
+    /** Open-source attribution destination. */
+    val SettingsAbout = destinationNode(route("settings_about_screen"))
+
+    /** Nested graph hosting the Settings hub and its category sub-screens. */
+    val SettingsFlow = flowNode(
+        route = "settings_flow_node",
+        startDestination = SettingsHub
+    )
+
+    /** Every route inside [SettingsFlow], used to keep the Settings tab highlighted on sub-screens. */
+    val settingsRoutes: Set<String> = setOf(
+        SettingsHub.route,
+        SettingsAudioEngine.route,
+        SettingsUsb.route,
+        SettingsLibraryFolders.route,
+        SettingsLibrarySections.route,
+        SettingsPlaybackBehavior.route,
+        SettingsAbout.route,
+    )
 
     /** Nested graph containing the persistent app shell destinations. */
     val MainFlow = flowNode(

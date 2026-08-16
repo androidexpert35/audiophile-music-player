@@ -276,6 +276,32 @@
     <string name="settings_open_source_title">View source code</string>
     <string name="settings_open_source_description">Audiophile Music Player is open source. Browse the code, report issues, or contribute on GitHub.</string>
 
+    <!-- Settings Hub -->
+    <string name="settings_category_audio_engine_title">Audio Engine &amp; DSP</string>
+    <string name="settings_category_audio_engine_subtitle_on">Bit-perfect engine active</string>
+    <string name="settings_category_audio_engine_subtitle_off">Standard engine active</string>
+    <string name="settings_category_usb_title">USB &amp; DAC</string>
+    <string name="settings_category_usb_subtitle_connected">DAC connected</string>
+    <string name="settings_category_usb_subtitle_disconnected">No DAC connected</string>
+    <string name="settings_category_library_folders_title">Library folders</string>
+    <string name="settings_category_library_folders_subtitle_empty">No folder selected yet</string>
+    <string name="settings_category_library_sections_title">Library sections</string>
+    <string name="settings_category_library_sections_subtitle">%1$d of %2$d sections visible</string>
+    <string name="settings_category_playback_behavior_title">Playback behavior</string>
+    <string name="settings_category_playback_behavior_subtitle_on">Queue cleared on exit</string>
+    <string name="settings_category_playback_behavior_subtitle_off">Queue kept on exit</string>
+    <string name="settings_category_about_title">About</string>
+    <string name="settings_category_about_subtitle">Source code and licenses</string>
+
+    <plurals name="settings_category_library_folders_subtitle">
+        <item quantity="one">%1$d folder selected</item>
+        <item quantity="other">%1$d folders selected</item>
+    </plurals>
+
+    <!-- Library Sections Settings -->
+    <string name="settings_library_sections_description">Choose which sections appear in the Library, and drag the handle to reorder them.</string>
+    <string name="cd_drag_handle_reorder_section">Reorder section</string>
+
     <!-- Audio Output Control -->
     <string name="cd_audio_output_control">Audio output control</string>
     <string name="cd_playback_viz_bars">Playback visualization bars</string>

@@ -35,6 +35,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTele
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudiophileEngineEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveHiResRemasterEnabledUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibraryDisplayPreferencesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibrarySectionOrderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMostPlayedTracksUseCase
@@ -65,6 +67,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetAudiophileEng
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetClearQueueOnExitUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetHiResRemasterEnabledUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetLibraryDisplayPreferencesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetLibrarySectionOrderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetRepeatModeUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetShuffleModeUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetSueEnabledUseCase
@@ -98,6 +101,25 @@ object UseCaseModule {
     fun provideSetLibraryDisplayPreferencesUseCase(
         settingsRepository: SettingsRepository
     ): SetLibraryDisplayPreferencesUseCase = SetLibraryDisplayPreferencesUseCase(settingsRepository)
+
+    /** Provides the reactive reader for persisted library layout preferences. */
+    @Provides
+    fun provideObserveLibraryDisplayPreferencesUseCase(
+        settingsRepository: SettingsRepository
+    ): ObserveLibraryDisplayPreferencesUseCase =
+        ObserveLibraryDisplayPreferencesUseCase(settingsRepository)
+
+    /** Provides the reactive reader for the persisted library section display order. */
+    @Provides
+    fun provideObserveLibrarySectionOrderUseCase(
+        settingsRepository: SettingsRepository
+    ): ObserveLibrarySectionOrderUseCase = ObserveLibrarySectionOrderUseCase(settingsRepository)
+
+    /** Provides the writer for the persisted library section display order. */
+    @Provides
+    fun provideSetLibrarySectionOrderUseCase(
+        settingsRepository: SettingsRepository
+    ): SetLibrarySectionOrderUseCase = SetLibrarySectionOrderUseCase(settingsRepository)
 
     /** Provides [ObservePlaylistsUseCase] backed by the local M3U playlist repository. */
     @Provides

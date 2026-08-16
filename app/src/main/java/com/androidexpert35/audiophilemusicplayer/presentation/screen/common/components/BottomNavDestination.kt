@@ -48,7 +48,7 @@ enum class BottomNavDestination(
     SETTINGS(
         icon = Icons.Filled.Settings,
         labelRes = R.string.nav_impostazioni,
-        route = AppRoutes.Settings.route
+        route = AppRoutes.SettingsHub.route
     ),
 }
 

@@ -116,6 +116,56 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun observeLibraryDisplayPreferences(): Flow<LibraryDisplayPreferences> = callbackFlow {
+        fun readPreferences() = LibraryDisplayPreferences(
+            sections = prefs.getStringSet(
+                SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES,
+                emptySet(),
+            ).orEmpty().mapNotNull(::decodeLibraryDisplayPreference).toMap()
+        )
+
+        trySend(readPreferences())
+
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES) {
+                trySend(readPreferences())
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    override fun observeLibrarySectionOrder(): Flow<List<String>> = callbackFlow {
+        fun readOrder() = prefs.getString(SettingsPreferences.KEY_LIBRARY_SECTION_ORDER, null)
+            ?.split(",")
+            ?.filter { it.isNotBlank() }
+            ?.takeIf { it.isNotEmpty() }
+            ?: SettingsPreferences.DEFAULT_LIBRARY_SECTION_ORDER
+
+        trySend(readOrder())
+
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == SettingsPreferences.KEY_LIBRARY_SECTION_ORDER) {
+                trySend(readOrder())
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    override suspend fun setLibrarySectionOrder(order: List<String>): Resource<Unit> {
+        val committed = withContext(ioDispatcher) {
+            prefs.edit()
+                .putString(SettingsPreferences.KEY_LIBRARY_SECTION_ORDER, order.joinToString(","))
+                .commit()
+        }
+        return if (committed) {
+            Resource.Success(Unit)
+        } else {
+            Resource.Error(ResourceError.StorageError("Unable to save the library section order."))
+        }
+    }
+
     override fun observeAudiophileEngineEnabled(): Flow<Boolean> = callbackFlow {
         // Emit the current value synchronously so the first collector has a
         // real value before any change event arrives.
@@ -372,15 +422,28 @@ class SettingsRepositoryImpl @Inject constructor(
     private fun encodeLibraryDisplayPreference(
         section: String,
         preference: LibrarySectionDisplayPreference,
-    ): String = listOf(section, preference.sortOrder, preference.isGridView).joinToString("|")
+    ): String = listOf(
+        section,
+        preference.sortOrder,
+        preference.isGridView,
+        preference.isVisible,
+    ).joinToString("|")
 
+    /**
+     * Decodes one pipe-delimited entry, accepting both the legacy 3-field format
+     * (section|sortOrder|isGridView, written before section visibility existed — where
+     * [LibrarySectionDisplayPreference.isVisible] defaults to `true`) and the current
+     * 4-field format. Without this, users upgrading from an older build would silently
+     * lose their saved sort order and grid/list choice on first read.
+     */
     private fun decodeLibraryDisplayPreference(
         value: String,
     ): Pair<String, LibrarySectionDisplayPreference>? {
-        val parts = value.split("|", limit = 3)
-        if (parts.size != 3 || parts[0].isBlank()) return null
+        val parts = value.split("|", limit = 4)
+        if ((parts.size != 3 && parts.size != 4) || parts[0].isBlank()) return null
         val gridView = parts[2].toBooleanStrictOrNull() ?: return null
-        return parts[0] to LibrarySectionDisplayPreference(parts[1], gridView)
+        val isVisible = parts.getOrNull(3)?.toBooleanStrictOrNull() ?: true
+        return parts[0] to LibrarySectionDisplayPreference(parts[1], gridView, isVisible)
     }
 
 }

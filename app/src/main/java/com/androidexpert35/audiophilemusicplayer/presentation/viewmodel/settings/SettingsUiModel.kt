@@ -1,47 +1,25 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.settings
 
-import com.androidexpert35.audiophilemusicplayer.domain.model.audio.SueStatus
-import com.androidexpert35.audiophilemusicplayer.domain.model.audio.UsbAudioStatus
-import com.androidexpert35.audiophilemusicplayer.domain.model.library.MusicFolder
-
 /**
- * Immutable UI state for the Settings screen.
+ * Immutable UI state for the Settings hub screen.
  *
- * @property audiophileEngineEnabled Current value of the dual-engine toggle.
- *   When `true` playback prefers the direct USB audiophile engine whenever a
- *   permitted DAC is available; when `false` it falls back to ExoPlayer for
- *   reduced CPU / battery impact.
- * @property isAudiophileEngineSwitchInProgress Whether the app is currently
- *   hot-swapping playback engines after a user toggle.
- * @property usbAudioStatus Current USB DAC availability snapshot.
- * @property isUsbPlaybackActive Whether runtime telemetry confirms that the
- *   active audiophile pipeline is currently sending audio to a USB output,
- *   including intentionally processed enhancement paths.
- * @property activeUsbPlaybackDeviceName Runtime USB output name reported by
- *   playback telemetry, or `null` when USB playback is inactive or the
- *   platform has not resolved a product name.
- * @property isUsbDeviceRefreshInProgress Whether USB device discovery is being
- *   retried from the Settings screen.
- * @property sueEnabled Whether the Sonic Upscaling Enhancer is currently enabled
- *   in settings.
- * @property sueStatus Real-time status snapshot from the active audiophile
- *   pipeline, or `null` when no track is loaded or the standard engine is active.
- * @property hiResRemasterEnabled Whether the Hi-Res Dynamic Remaster is currently
- *   enabled in settings.
- * @property musicFolders Storage locations the library is scanned from. Empty means the
- *   catalogue cannot be rebuilt until the user adds a folder.
- * @property clearQueueOnExit Whether removing the app task from recents also clears the queue.
+ * Holds only the small pieces of live state needed to render each category card's
+ * one-line status subtitle — the actual settings controls live in the per-category
+ * sub-screens and their own ViewModels.
+ *
+ * @property audiophileEngineEnabled Whether the bit-perfect engine is currently preferred.
+ * @property isUsbDacConnected Whether a USB DAC is currently connected.
+ * @property musicFolderCount Number of folders the library scan is currently scoped to.
+ * @property visibleLibrarySectionCount Number of library sections currently visible.
+ * @property totalLibrarySectionCount Total number of library sections that exist.
+ * @property clearQueueOnExit Whether the playback queue is cleared when the app is
+ *   removed from Recents.
  */
 data class SettingsUiModel(
     val audiophileEngineEnabled: Boolean = false,
-    val isAudiophileEngineSwitchInProgress: Boolean = false,
-    val usbAudioStatus: UsbAudioStatus = UsbAudioStatus(),
-    val isUsbPlaybackActive: Boolean = false,
-    val activeUsbPlaybackDeviceName: String? = null,
-    val isUsbDeviceRefreshInProgress: Boolean = false,
-    val sueEnabled: Boolean = true,
-    val sueStatus: SueStatus? = null,
-    val hiResRemasterEnabled: Boolean = true,
-    val musicFolders: List<MusicFolder> = emptyList(),
+    val isUsbDacConnected: Boolean = false,
+    val musicFolderCount: Int = 0,
+    val visibleLibrarySectionCount: Int = 0,
+    val totalLibrarySectionCount: Int = 0,
     val clearQueueOnExit: Boolean = false,
 )

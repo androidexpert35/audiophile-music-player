@@ -23,10 +23,28 @@ interface SettingsRepository {
     /** Retrieves the persisted sort and layout selections for the library sections. */
     suspend fun getLibraryDisplayPreferences(): Resource<LibraryDisplayPreferences>
 
+    /**
+     * Live stream of the persisted sort, layout, and visibility selections for the
+     * library sections. Emits the current stored value on subscription and every
+     * subsequent change, so a section hidden or reordered from Settings applies to an
+     * already-composed Library screen without requiring it to be recreated.
+     */
+    fun observeLibraryDisplayPreferences(): Flow<LibraryDisplayPreferences>
+
     /** Persists the sort and layout selections for the library sections atomically. */
     suspend fun setLibraryDisplayPreferences(
         preferences: LibraryDisplayPreferences
     ): Resource<Unit>
+
+    /**
+     * Live stream of the user's chosen display order for the library sections, as
+     * [com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType]
+     * names. Emits the current stored value on subscription and every subsequent change.
+     */
+    fun observeLibrarySectionOrder(): Flow<List<String>>
+
+    /** Persists the user's chosen display order for the library sections. */
+    suspend fun setLibrarySectionOrder(order: List<String>): Resource<Unit>
 
     /**
      * Live stream of the "audiophile engine enabled" preference. Emits the

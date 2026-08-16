@@ -29,6 +29,10 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  *   progress; drives the spinning animation on the header icon.
  * @property isCreatePlaylistDialogVisible Whether the create-playlist dialog is open.
  * @property playlistPickerTrack Track awaiting a target playlist selection, if any.
+ * @property visibleOrderedSections Catalogue sections to render as filter chips, already
+ *   filtered by the user's saved visibility choice and ordered by their saved display
+ *   order. Defaults to every section in its declaration order, matching the app's
+ *   original behavior before section visibility/order existed as a setting.
  */
 @Immutable
 data class LibraryUiModel(
@@ -45,7 +49,8 @@ data class LibraryUiModel(
         LibraryContentType.entries.associateWith { LibrarySortOrder.RECENTLY_ADDED },
     val isRefreshing: Boolean = false,
     val isCreatePlaylistDialogVisible: Boolean = false,
-    val playlistPickerTrack: Track? = null
+    val playlistPickerTrack: Track? = null,
+    val visibleOrderedSections: List<LibraryContentType> = LibraryContentType.entries.toList(),
 ) {
     /** Sort strategy currently selected for the visible catalogue section. */
     val sortOrder: LibrarySortOrder

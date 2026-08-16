@@ -1,5 +1,8 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
+import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES
+
+
 /**
  * Central key registry for the app's persistent settings.
  *
@@ -54,6 +57,18 @@ object SettingsPreferences {
 
     /** Stores the encoded per-section sort and list/grid choices for the library. */
     const val KEY_LIBRARY_DISPLAY_PREFERENCES: String = "library_display_preferences"
+
+    /**
+     * SharedPreferences key for the user's chosen display order of the library sections.
+     *
+     * Stored as a comma-delimited [com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType]
+     * name sequence rather than inside [KEY_LIBRARY_DISPLAY_PREFERENCES]'s `StringSet`, because a
+     * `StringSet` does not guarantee iteration order.
+     */
+    const val KEY_LIBRARY_SECTION_ORDER: String = "library_section_order"
+
+    /** Matches the section order the app has always shown, so existing users see no change. */
+    val DEFAULT_LIBRARY_SECTION_ORDER: List<String> = listOf("TRACKS", "PLAYLISTS", "ALBUMS", "ARTISTS")
 
 
     /**

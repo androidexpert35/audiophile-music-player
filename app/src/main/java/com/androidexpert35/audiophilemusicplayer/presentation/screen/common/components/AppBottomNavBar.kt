@@ -65,6 +65,7 @@ fun AppBottomNavBar(
                             AppRoutes.PlaylistOverview.routeDefinition.baseRoute
                         ) == true
                 }
+                BottomNavDestination.SETTINGS -> currentRoute in AppRoutes.settingsRoutes
                 else -> currentRoute == destination.route
             }
 

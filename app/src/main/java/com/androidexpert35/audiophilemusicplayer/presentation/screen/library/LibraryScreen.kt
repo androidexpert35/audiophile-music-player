@@ -133,6 +133,7 @@ private fun LibraryContent(
 
             // Songs | Playlists | Albums | Artists — deselect by re-tapping.
             LibraryFilterChipsRow(
+                visibleSections = model.visibleOrderedSections,
                 selectedContentType = model.selectedContentType,
                 onSelectContentType = { onEvent(LibraryUiEvent.SelectContentType(it)) }
             )

@@ -19,6 +19,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUs
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibraryDisplayPreferencesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibrarySectionOrderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
@@ -57,6 +59,8 @@ class LibraryViewModelTest {
     private val getAlbumsUseCase = mockk<GetAlbumsUseCase>()
     private val getArtistsUseCase = mockk<GetArtistsUseCase>()
     private val getLibraryDisplayPreferencesUseCase = mockk<GetLibraryDisplayPreferencesUseCase>()
+    private val observeLibraryDisplayPreferencesUseCase = mockk<ObserveLibraryDisplayPreferencesUseCase>()
+    private val observeLibrarySectionOrderUseCase = mockk<ObserveLibrarySectionOrderUseCase>()
     private val getArtistImageUseCase = mockk<GetArtistImageUseCase>()
     private val playTrackUseCase = mockk<PlayTrackUseCase>()
     private val toggleLikeSongUseCase = mockk<ToggleLikeSongUseCase>()
@@ -244,6 +248,12 @@ class LibraryViewModelTest {
             com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
         )
         coEvery { setLibraryDisplayPreferencesUseCase.invoke(any()) } returns Resource.Success(Unit)
+        every { observeLibraryDisplayPreferencesUseCase.invoke() } returns flowOf(
+            com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
+        )
+        every { observeLibrarySectionOrderUseCase.invoke() } returns flowOf(
+            LibraryContentType.entries.map { it.name }
+        )
         every { observeLikedSongIdsUseCase.invoke() } returns flowOf(emptySet())
         every { observeRecentlyPlayedUseCase.invoke(any()) } returns flowOf(emptyList())
         every { observeMediaStoreChangesUseCase.invoke() } returns kotlinx.coroutines.flow.emptyFlow()
@@ -272,7 +282,7 @@ class LibraryViewModelTest {
         viewModel.onEvent(LibraryUiEvent.OpenSettings)
         advanceUntilIdle()
 
-        assertEquals(AppRoutes.Settings.route, navigationManager.lastRoute)
+        assertEquals(AppRoutes.SettingsHub.route, navigationManager.lastRoute)
     }
 
     @Test
@@ -363,6 +373,12 @@ class LibraryViewModelTest {
             com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
         )
         coEvery { setLibraryDisplayPreferencesUseCase.invoke(any()) } returns Resource.Success(Unit)
+        every { observeLibraryDisplayPreferencesUseCase.invoke() } returns flowOf(
+            com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
+        )
+        every { observeLibrarySectionOrderUseCase.invoke() } returns flowOf(
+            LibraryContentType.entries.map { it.name }
+        )
         coEvery { playTrackUseCase.invoke(any(), any()) } returns Resource.Success(Unit)
         coEvery { toggleLikeSongUseCase.invoke(any()) } returns Resource.Success(Unit)
         every { observeLikedSongIdsUseCase.invoke() } returns flowOf(emptySet())
@@ -376,6 +392,8 @@ class LibraryViewModelTest {
         getAlbumsUseCase = getAlbumsUseCase,
         getArtistsUseCase = getArtistsUseCase,
         getLibraryDisplayPreferencesUseCase = getLibraryDisplayPreferencesUseCase,
+        observeLibraryDisplayPreferencesUseCase = observeLibraryDisplayPreferencesUseCase,
+        observeLibrarySectionOrderUseCase = observeLibrarySectionOrderUseCase,
         getArtistImageUseCase = getArtistImageUseCase,
         playTrackUseCase = playTrackUseCase,
         toggleLikeSongUseCase = toggleLikeSongUseCase,
