@@ -1,8 +1,5 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.screen.library.components
 
-import android.content.ContentUris
-import android.provider.MediaStore
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,34 +17,26 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.components.TrackOptionsMenu
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
-import com.androidexpert35.audiophilemusicplayer.presentation.theme.MotionTokens
 
 /** Width of each track tile in the popular-songs horizontal scroll. */
 private val TrackCardWidth = 152.dp
@@ -138,22 +127,6 @@ internal fun TrackArtworkCard(
     onGoToArtistClick: (() -> Unit)? = null,
     actionMenuIconTint: Color? = null,
 ) {
-    val context = LocalContext.current
-
-    // Prefer the locally-cached artUri (populated for DSD/DSF embedded art).
-    // Fall back to the MediaStore album content URI for standard FLAC/MP3/AAC
-    // tracks whose albumId is a positive MediaStore row identifier.
-    val albumArtData = remember(track.artUri, track.albumId) {
-        when {
-            !track.artUri.isNullOrBlank() -> track.artUri
-            track.albumId > 0L -> ContentUris.withAppendedId(
-                MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
-                track.albumId
-            )
-            else -> null
-        }
-    }
-
     Surface(
         modifier = (if (cardWidth != null) modifier.width(cardWidth) else modifier)
             .clickable(onClick = onClick),
@@ -177,29 +150,14 @@ internal fun TrackArtworkCard(
                         } else {
                             Modifier.aspectRatio(1f)
                         }
-                    )
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                // Icon placeholder — always drawn first; the AsyncImage overlays it
-                // when the local album art loads successfully.
-                Icon(
-                    imageVector = Icons.Filled.MusicNote,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f)
+                TrackAlbumArtwork(
+                    track = track,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxSize()
                 )
-
-                if (albumArtData != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(albumArtData)
-                            .crossfade(MotionTokens.DurationShort)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
 
                 // Position badge — top-left corner
                 position?.let { rank ->
