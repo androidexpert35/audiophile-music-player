@@ -274,6 +274,12 @@
     <string name="settings_open_source_title">Vedi il codice sorgente</string>
     <string name="settings_open_source_description">Audiophile Music Player è open source. Sfoglia il codice, segnala problemi o contribuisci su GitHub.</string>
 
+    <!-- About -->
+    <string name="settings_about_intro">Audiophile Music Player è gratuito, senza pubblicità e senza funzioni a pagamento. L’ho creato con amore e passione, da audiofilo per altri audiofili: il player che avrei voluto usare ogni giorno, libero e trasparente su ciò che fa al suono.</string>
+    <string name="settings_about_version">Versione %1$s</string>
+    <string name="settings_donation_title">Offrimi un caffè</string>
+    <string name="settings_donation_description">L’app resterà gratuita e senza compromessi. Se ti piace, un caffè mi aiuta a continuare a migliorarla.</string>
+
     <!-- Settings Hub -->
     <string name="settings_category_audio_engine_title">Motore audio e DSP</string>
     <string name="settings_category_audio_engine_subtitle_on">Motore bit-perfect attivo</string>
