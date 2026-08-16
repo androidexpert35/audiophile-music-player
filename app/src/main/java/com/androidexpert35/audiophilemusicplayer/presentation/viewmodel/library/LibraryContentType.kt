@@ -28,4 +28,13 @@ enum class LibraryContentType(val labelRes: Int) {
     /** Artists section — displays indexed artists from the local library. */
     ARTISTS(R.string.library_artists_section_label),
 
+    /** Genres section — groups indexed tracks by their source genre tags. */
+    GENRES(R.string.library_genres_section_label),
+
+    /** Years section — groups indexed tracks by their source release years. */
+    YEARS(R.string.library_years_section_label),
+
+    /** Composers section — groups indexed tracks by their source composer tags. */
+    COMPOSERS(R.string.library_composers_section_label),
+
 }

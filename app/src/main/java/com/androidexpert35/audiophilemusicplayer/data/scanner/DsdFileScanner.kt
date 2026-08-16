@@ -213,6 +213,8 @@ class DsdFileScanner @Inject constructor(
         var durationMs = 0L
         var trackNumber = 0
         var year = 0
+        var genre: String? = null
+        var composer: String? = null
         var sampleRateHz = 0
         var embeddedPicture: ByteArray? = null
 
@@ -235,6 +237,12 @@ class DsdFileScanner @Inject constructor(
                 ?.substringBefore('/')?.toIntOrNull()?.let { trackNumber = it }
             mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
                 ?.toIntOrNull()?.let { year = it }
+            genre = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            composer = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
             embeddedPicture = try { mmr.getEmbeddedPicture() } catch (_: Exception) { null }
         } catch (_: Exception) {
             // MMR silently fails on some DFF files; header parsing below is the fallback.
@@ -263,6 +271,8 @@ class DsdFileScanner @Inject constructor(
                     if (album == UNKNOWN_ALBUM) id3.album?.let { album = it }
                     if (trackNumber == 0) id3.trackNumber.takeIf { it > 0 }?.let { trackNumber = it }
                     if (year == 0) id3.year.takeIf { it > 0 }?.let { year = it }
+                    if (genre == null) genre = id3.genre
+                    if (composer == null) composer = id3.composer
                     if (embeddedPicture == null) embeddedPicture = id3.pictureBytes
                 }
             }
@@ -314,6 +324,8 @@ class DsdFileScanner @Inject constructor(
             // Read from the binary header since MMR does not expose DSD sample rate.
             sampleRateHz = sampleRateHz,
             bitDepth = 1, // DSD is inherently 1-bit; mark explicitly for display purposes.
+            genre = genre,
+            composer = composer,
         )
     }.getOrNull()
 
@@ -342,6 +354,8 @@ class DsdFileScanner @Inject constructor(
      * @property album Album title from the TALB frame, or `null` when absent.
      * @property trackNumber Track number from the TRCK frame, `0` when absent.
      * @property year Release year from TDRC or TYER, `0` when absent.
+     * @property genre Genre from TCON, or `null` when absent.
+     * @property composer Composer from TCOM, or `null` when absent.
      * @property pictureBytes Raw JPEG/PNG bytes from the first APIC frame, or `null`.
      */
     private class Id3TagResult(
@@ -350,6 +364,8 @@ class DsdFileScanner @Inject constructor(
         val album: String? = null,
         val trackNumber: Int = 0,
         val year: Int = 0,
+        val genre: String? = null,
+        val composer: String? = null,
         val pictureBytes: ByteArray? = null,
     )
 
@@ -394,6 +410,8 @@ class DsdFileScanner @Inject constructor(
         var album: String? = null
         var trackNumber = 0
         var year = 0
+        var genre: String? = null
+        var composer: String? = null
         var pictureBytes: ByteArray? = null
 
         // Iterate frames until padding (all-zero ID) or tag boundary.
@@ -422,11 +440,13 @@ class DsdFileScanner @Inject constructor(
                         ?.substringBefore('/')?.toIntOrNull() ?: 0
                 "TDRC", "TYER" -> if (year == 0)
                     year = decodeId3TextFrame(frameData)?.take(4)?.toIntOrNull() ?: 0
+                "TCON" -> if (genre == null) genre = decodeId3TextFrame(frameData)
+                "TCOM" -> if (composer == null) composer = decodeId3TextFrame(frameData)
                 "APIC" -> if (pictureBytes == null) pictureBytes = extractApicBytes(frameData)
             }
         }
 
-        Id3TagResult(title, artist, album, trackNumber, year, pictureBytes)
+        Id3TagResult(title, artist, album, trackNumber, year, genre, composer, pictureBytes)
     }.getOrDefault(Id3TagResult())
 
     /**

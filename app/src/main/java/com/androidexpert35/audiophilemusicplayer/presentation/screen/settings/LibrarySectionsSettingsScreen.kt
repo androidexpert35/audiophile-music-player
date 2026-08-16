@@ -133,6 +133,9 @@ private val LibraryContentType.icon: ImageVector
         LibraryContentType.PLAYLISTS -> Icons.AutoMirrored.Rounded.QueueMusic
         LibraryContentType.ALBUMS -> Icons.Rounded.Album
         LibraryContentType.ARTISTS -> Icons.Rounded.Person
+        LibraryContentType.GENRES -> Icons.Rounded.MusicNote
+        LibraryContentType.YEARS -> Icons.Rounded.Album
+        LibraryContentType.COMPOSERS -> Icons.Rounded.Person
     }
 
 @Composable

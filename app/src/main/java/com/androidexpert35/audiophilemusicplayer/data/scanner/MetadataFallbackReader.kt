@@ -77,7 +77,7 @@ class MetadataFallbackReader @Inject constructor(
      * Fills in missing text metadata for a [ScannedAudioFile] using
      * [MediaMetadataRetriever] as a secondary read path.
      *
-     * The retriever is opened, queried for title/artist/album/year, then
+     * The retriever is opened, queried for title/artist/album/year/genre/composer, then
      * immediately released — no long-lived handles are kept. Fields already
      * populated by MediaStore are left untouched.
      *
@@ -107,9 +107,17 @@ class MetadataFallbackReader @Inject constructor(
                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
                 .let(FlacVorbisCommentParser::parseYear)
             val year = retrieverYear ?: readFlacVorbisYear(file)
+            val genre = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            val composer = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
             // Only copy() when at least one field was recovered to avoid unnecessary allocation.
-            if (artist == null && album == null && title == null && year == null) {
+            if (artist == null && album == null && title == null && year == null && genre == null && composer == null) {
                 file
             } else {
                 file.copy(
@@ -117,6 +125,8 @@ class MetadataFallbackReader @Inject constructor(
                     artistName = artist ?: file.artistName,
                     albumTitle = album ?: file.albumTitle,
                     year = year ?: file.year,
+                    genre = genre ?: file.genre,
+                    composer = composer ?: file.composer,
                 )
             }
         } catch (_: Exception) {

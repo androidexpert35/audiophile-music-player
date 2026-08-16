@@ -9,7 +9,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  */
 sealed interface LibraryUiEvent {
 
-    /** Switches the visible library section between songs, playlists, albums, and artists. */
+    /** Switches the visible library section. */
     data class SelectContentType(val contentType: LibraryContentType) : LibraryUiEvent
 
     /** Load all tracks from the device. */
@@ -66,6 +66,9 @@ sealed interface LibraryUiEvent {
 
     /** Appends a selected song to the end of the active playback queue. */
     data class AddToQueue(val track: Track) : LibraryUiEvent
+
+    /** Starts playback of every track sharing the selected metadata value. */
+    data class PlayFacet(val facet: LibraryFacet) : LibraryUiEvent
 
     /** Toggles the retained list or two-column grid mode for the visible catalogue section. */
     data object ToggleViewMode : LibraryUiEvent

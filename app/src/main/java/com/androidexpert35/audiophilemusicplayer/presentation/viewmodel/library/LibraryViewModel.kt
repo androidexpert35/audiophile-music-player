@@ -117,6 +117,9 @@ class LibraryViewModel @Inject constructor(
     /** Prevents duplicate visible-row requests while one lookup is already running. */
     private val pendingArtistImageRequests = mutableSetOf<String>()
 
+    /** Latest full display preference map, retained when writing a sort or layout update. */
+    private var latestLibraryDisplayPreferences = LibraryDisplayPreferences()
+
     init {
         loadLibraryDisplayPreferences()
         loadFullLibrary()
@@ -142,6 +145,7 @@ class LibraryViewModel @Inject constructor(
             is LibraryUiEvent.AddTrackToPlaylist -> addTrackToPlaylist(event.playlistId)
             is LibraryUiEvent.PlayNext -> playNext(event.track)
             is LibraryUiEvent.AddToQueue -> addToQueue(event.track)
+            is LibraryUiEvent.PlayFacet -> playFacet(event.facet)
             is LibraryUiEvent.ToggleViewMode -> toggleViewMode()
             is LibraryUiEvent.SetSortOrder -> setSortOrder(event.sortOrder)
             is LibraryUiEvent.ToggleLikeSong -> toggleLike(event.track.id)
@@ -246,6 +250,14 @@ class LibraryViewModel @Inject constructor(
         )
     }
 
+    /** Starts the selected metadata grouping as an ordered, self-contained playback queue. */
+    private fun playFacet(facet: LibraryFacet) {
+        playTrack(
+            track = facet.tracks.firstOrNull() ?: return,
+            queue = facet.tracks,
+        )
+    }
+
     /** Opens the album overview screen for the given track's album, if it has one. */
     private fun openTrackAlbum(track: Track) {
         if (track.albumId == 0L) return
@@ -315,6 +327,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch(exceptionHandler) {
             getLibraryDisplayPreferencesUseCase().fold(
                 onSuccess = { preferences ->
+                    latestLibraryDisplayPreferences = preferences
                     val current = uiState.value.data ?: LibraryUiModel()
                     val restored = LibraryContentType.entries.associateWith { contentType ->
                         preferences.preferenceFor(contentType.name)
@@ -345,6 +358,7 @@ class LibraryViewModel @Inject constructor(
             observeLibraryDisplayPreferencesUseCase(),
             observeLibrarySectionOrderUseCase(),
         ) { preferences, order ->
+            latestLibraryDisplayPreferences = preferences
             val orderedTypes = order.mapNotNull { name ->
                 LibraryContentType.entries.firstOrNull { it.name == name }
             }
@@ -379,6 +393,7 @@ class LibraryViewModel @Inject constructor(
                     sortOrder = model.sortOrders[contentType]?.name
                         ?: LibrarySortOrder.RECENTLY_ADDED.name,
                     isGridView = model.gridViews[contentType] ?: false,
+                    isVisible = latestLibraryDisplayPreferences.preferenceFor(contentType.name).isVisible,
                 )
             }
         )

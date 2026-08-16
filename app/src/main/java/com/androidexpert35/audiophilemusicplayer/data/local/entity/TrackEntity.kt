@@ -33,6 +33,9 @@ import androidx.room.PrimaryKey
  *   invisible to MediaStore it is a `file://` URI pointing to the APIC picture cached
  *   in the app's `cacheDir` by [com.androidexpert35.audiophilemusicplayer.data.scanner.DsdFileScanner].
  *   `null` when no artwork could be extracted at index time.
+ * @property year Best-effort release year, or `0` when it is absent from the source.
+ * @property genre Best-effort genre tag, or `null` when unavailable.
+ * @property composer Best-effort composer tag, or `null` when unavailable.
  */
 @Entity(
     tableName = "tracks",
@@ -41,7 +44,10 @@ import androidx.room.PrimaryKey
         Index(value = ["artistId"]),
         Index(value = ["title"]),
         Index(value = ["artistName"]),
-        Index(value = ["albumTitle"])
+        Index(value = ["albumTitle"]),
+        Index(value = ["year"]),
+        Index(value = ["genre"]),
+        Index(value = ["composer"]),
     ]
 )
 data class TrackEntity(
@@ -64,5 +70,8 @@ data class TrackEntity(
     val channelCount: Int,
     val isLossless: Boolean,
     val artUri: String? = null,
+    val year: Int = 0,
+    val genre: String? = null,
+    val composer: String? = null,
 )
 

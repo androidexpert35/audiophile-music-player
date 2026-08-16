@@ -21,6 +21,9 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
  *   For regular MediaStore-indexed tracks this is the
  *   `content://media/external/audio/albumart/<albumId>` URI; for DSD files it is a
  *   `file://` path to an APIC picture extracted at scan time. `null` when absent.
+ * @property year Best-effort release year, or `0` when the source is untagged.
+ * @property genre Best-effort genre metadata, or `null` when unavailable.
+ * @property composer Best-effort composer metadata, or `null` when unavailable.
  */
 data class Track(
     val id: Long,
@@ -36,5 +39,8 @@ data class Track(
     val fileSizeBytes: Long,
     val dateAdded: Long,
     val artUri: String? = null,
+    val year: Int = 0,
+    val genre: String? = null,
+    val composer: String? = null,
 )
 

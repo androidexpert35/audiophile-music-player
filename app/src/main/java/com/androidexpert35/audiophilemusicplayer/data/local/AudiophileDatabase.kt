@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_10_11
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_11_12
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_1_2
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_2_3
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_3_4
@@ -54,6 +55,8 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  *   `.m3u`/`.m3u8` playlists discovered inside granted music folders.
  * - Version 11: added the artist-normalization version via [MIGRATION_10_11] and
  *   discarded the reconstructible catalogue so upgrades re-enter folder onboarding.
+ * - Version 12: added track release-year, genre, and composer metadata via
+ *   [MIGRATION_11_12] for the corresponding library sections.
  */
 @Database(
     entities = [
@@ -67,7 +70,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         LyricsCacheEntity::class,
         ImportedPlaylistEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(LongListTypeConverter::class, StringListTypeConverter::class)
@@ -301,6 +304,25 @@ abstract class AudiophileDatabase : RoomDatabase() {
                 db.execSQL("DELETE FROM albums")
                 db.execSQL("DELETE FROM artists")
                 db.execSQL("DELETE FROM imported_playlists")
+                db.execSQL("DELETE FROM library_index_state")
+            }
+        }
+
+        /**
+         * Migration from schema version 11 to 12.
+         *
+         * Adds the metadata used to build the Genres, Years, and Composers library
+         * sections, then invalidates the completion marker. The next launch re-indexes
+         * the existing user-granted folders so the new sections populate immediately.
+         */
+        val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN year INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE tracks ADD COLUMN genre TEXT")
+                db.execSQL("ALTER TABLE tracks ADD COLUMN composer TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_year ON tracks(year)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_genre ON tracks(genre)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_composer ON tracks(composer)")
                 db.execSQL("DELETE FROM library_index_state")
             }
         }

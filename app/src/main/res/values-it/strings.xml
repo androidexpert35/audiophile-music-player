@@ -349,6 +349,9 @@
     <string name="library_playlists_section_label">Playlist</string>
     <string name="library_albums_section_label">Album</string>
     <string name="library_artists_section_label">Artisti</string>
+    <string name="library_genres_section_label">Generi</string>
+    <string name="library_years_section_label">Anni</string>
+    <string name="library_composers_section_label">Compositori</string>
     <string name="library_favorites_title">Brani preferiti</string>
     <string name="cd_like_track">Aggiungi ai preferiti</string>
     <string name="cd_unlike_track">Rimuovi dai preferiti</string>
@@ -399,9 +402,15 @@
     <string name="library_empty_albums_message">Gli album della tua raccolta indicizzata appariranno qui quando i metadati audio saranno disponibili.</string>
     <string name="library_empty_artists_title">Nessun artista disponibile</string>
     <string name="library_empty_artists_message">Gli artisti della tua raccolta indicizzata appariranno qui quando i metadati audio saranno disponibili.</string>
+    <string name="library_empty_metadata_title">Nessun metadato disponibile</string>
+    <string name="library_empty_metadata_message">Aggiungi tag di genere, anno o compositore ai file musicali e aggiorna la libreria.</string>
     <string name="library_empty_search_title">Nessun brano corrispondente</string>
     <string name="library_empty_search_message">Prova con un altro titolo del brano, nome dell’artista o titolo dell’album.</string>
     <string name="library_playback_empty_queue">Questa selezione non contiene ancora brani riproducibili.</string>
+    <plurals name="library_facet_track_count">
+        <item quantity="one">%1$d brano</item>
+        <item quantity="other">%1$d brani</item>
+    </plurals>
     <string name="library_playback_album_unavailable">Impossibile trovare brani riproducibili per %1$s.</string>
     <string name="cd_open_library_settings">Apri impostazioni libreria</string>
     <string name="cd_clear_library_search">Cancella ricerca nella libreria</string>

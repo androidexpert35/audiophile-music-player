@@ -343,6 +343,33 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `given a hidden section when another section display choice changes then its visibility is retained`() = runTest {
+        val preferences = com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences(
+            sections = mapOf(
+                LibraryContentType.GENRES.name to
+                    com.androidexpert35.audiophilemusicplayer.domain.model.library.LibrarySectionDisplayPreference(
+                        isVisible = false
+                    )
+            )
+        )
+        stubInitialLibrary()
+        coEvery { getLibraryDisplayPreferencesUseCase.invoke() } returns Resource.Success(preferences)
+        every { observeLibraryDisplayPreferencesUseCase.invoke() } returns flowOf(preferences)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(LibraryUiEvent.ToggleViewMode)
+        advanceUntilIdle()
+
+        coVerify {
+            setLibraryDisplayPreferencesUseCase.invoke(
+                match { saved -> !saved.preferenceFor(LibraryContentType.GENRES.name).isVisible }
+            )
+        }
+    }
+
+    @Test
     fun `given favorites playlist when selected then playlist detail opens without starting playback`() = runTest {
         val favorites = Playlist(
             id = "favorites.m3u",

@@ -68,7 +68,9 @@ object SettingsPreferences {
     const val KEY_LIBRARY_SECTION_ORDER: String = "library_section_order"
 
     /** Matches the section order the app has always shown, so existing users see no change. */
-    val DEFAULT_LIBRARY_SECTION_ORDER: List<String> = listOf("TRACKS", "PLAYLISTS", "ALBUMS", "ARTISTS")
+    val DEFAULT_LIBRARY_SECTION_ORDER: List<String> = listOf(
+        "TRACKS", "PLAYLISTS", "ALBUMS", "ARTISTS", "GENRES", "YEARS", "COMPOSERS"
+    )
 
 
     /**

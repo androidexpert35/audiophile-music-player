@@ -38,6 +38,8 @@ object MediaStoreColumns {
         MediaStore.Audio.Media.DISC_NUMBER,
         MediaStore.Audio.Media.MIME_TYPE,
         MediaStore.Audio.Media.YEAR,
+        MediaStore.Audio.AudioColumns.GENRE,
+        MediaStore.Audio.AudioColumns.COMPOSER,
         // API 31+ columns — available on all supported devices (minSdk 33).
         MediaStore.Audio.Media.SAMPLERATE,
         MediaStore.Audio.Media.BITS_PER_SAMPLE,

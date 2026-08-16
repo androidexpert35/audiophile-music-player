@@ -37,9 +37,7 @@ class LibrarySectionsSettingsViewModelTest {
     private val navigationManager = FakeNavigationManager()
 
     private val preferencesFlow = MutableStateFlow(LibraryDisplayPreferences())
-    private val orderFlow = MutableStateFlow(
-        listOf("TRACKS", "PLAYLISTS", "ALBUMS", "ARTISTS")
-    )
+    private val orderFlow = MutableStateFlow(LibraryContentType.entries.map { it.name })
 
     @Test
     fun `given default preferences when observed then every section is listed visible in saved order`() = runTest {
@@ -49,15 +47,10 @@ class LibrarySectionsSettingsViewModelTest {
 
         val rows = viewModel.uiState.value.data?.rows
         assertEquals(
-            listOf(
-                LibraryContentType.TRACKS,
-                LibraryContentType.PLAYLISTS,
-                LibraryContentType.ALBUMS,
-                LibraryContentType.ARTISTS,
-            ),
+            LibraryContentType.entries.toList(),
             rows?.map { it.section }
         )
-        assertEquals(listOf(true, true, true, true), rows?.map { it.isVisible })
+        assertEquals(List(LibraryContentType.entries.size) { true }, rows?.map { it.isVisible })
     }
 
     @Test
@@ -87,6 +80,9 @@ class LibrarySectionsSettingsViewModelTest {
                 "PLAYLISTS" to LibrarySectionDisplayPreference(isVisible = false),
                 "ALBUMS" to LibrarySectionDisplayPreference(isVisible = false),
                 "ARTISTS" to LibrarySectionDisplayPreference(isVisible = false),
+                "GENRES" to LibrarySectionDisplayPreference(isVisible = false),
+                "YEARS" to LibrarySectionDisplayPreference(isVisible = false),
+                "COMPOSERS" to LibrarySectionDisplayPreference(isVisible = false),
             )
         )
         stubObservationUseCases()
@@ -114,7 +110,9 @@ class LibrarySectionsSettingsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            setLibrarySectionOrderUseCase.invoke(listOf("PLAYLISTS", "ALBUMS", "TRACKS", "ARTISTS"))
+            setLibrarySectionOrderUseCase.invoke(
+                listOf("PLAYLISTS", "ALBUMS", "TRACKS", "ARTISTS", "GENRES", "YEARS", "COMPOSERS")
+            )
         }
         assertEquals(
             listOf(
@@ -122,6 +120,9 @@ class LibrarySectionsSettingsViewModelTest {
                 LibraryContentType.ALBUMS,
                 LibraryContentType.TRACKS,
                 LibraryContentType.ARTISTS,
+                LibraryContentType.GENRES,
+                LibraryContentType.YEARS,
+                LibraryContentType.COMPOSERS,
             ),
             viewModel.uiState.value.data?.rows?.map { it.section }
         )

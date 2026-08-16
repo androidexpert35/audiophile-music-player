@@ -53,7 +53,8 @@ original document via the SAF permission already granted on its parent tree (`Co
 `AudiophileDatabase` (file `audiophile_music.db`) is the local cache and the source of
 truth for indexed library, session state, liked songs, playback history/counts, and lyrics.
 
-- **Entities** (`entity/`): `TrackEntity`, `AlbumEntity`, `ArtistEntity`,
+- **Entities** (`entity/`): `TrackEntity` (including source year, genre, and composer
+  metadata), `AlbumEntity`, `ArtistEntity`,
   `LibraryIndexStateEntity`, `PlaybackStateEntity`, `LikedSongEntity`,
   `RecentlyPlayedEntity`, `LyricsCacheEntity`, `ImportedPlaylistEntity`.
 - **DAOs** (`dao/`): `LibraryIndexDao`, `PlaybackStateDao`, `LikedSongDao`,
@@ -62,8 +63,8 @@ truth for indexed library, session state, liked songs, playback history/counts, 
   `StringListTypeConverter` (imported-playlist track URIs).
 
 ### Migrations are mandatory
-Current schema **version is 11** with explicit migrations `MIGRATION_1_2` …
-`MIGRATION_10_11`, registered in both `AudiophileDatabase` and `AppModule`'s
+Current schema **version is 12** with explicit migrations `MIGRATION_1_2` …
+`MIGRATION_11_12`, registered in both `AudiophileDatabase` and `AppModule`'s
 `databaseBuilder`. When you change any entity:
 
 1. Bump `@Database(version = N)`.
@@ -145,7 +146,9 @@ index complete without stamping its signature.
   path, then suffix, then unambiguous-filename fallback; unresolved entries are skipped).
   Results are cached in `ImportedPlaylistDao`, not the track/album/artist tables, and
   merged into `PlaylistRepositoryImpl.observePlaylists()` as `PlaylistKind.IMPORTED`.
-- `MetadataFallbackReader` fills gaps when MediaStore metadata is missing.
+- `MetadataFallbackReader` fills gaps when MediaStore metadata is missing. The track
+  cache retains best-effort year, genre, and composer tags so the local Library can
+  build those sections without a network request or an additional scan.
 - Artist catalogue aggregation expands semicolon (`;`), slash (`/`), and vertical-bar
   (`|`) credits into separate artist rows while preserving ampersands inside names.
   Schema 11 clears the reconstructible track/album/artist/imported-playlist index and its
@@ -216,7 +219,9 @@ the current track and persists that one-track session for the next launch. Each 
 in [`playback.md`](playback.md). Direct USB PCM format negotiation is always
 automatic and source-native; no manual format override is exposed.
 
-The library's per-section sort order and list/grid choice are stored together under
+The library's per-section sort order, list/grid choice, and visibility are stored together under
 `SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES`. They are exposed through
 `GetLibraryDisplayPreferencesUseCase` / `SetLibraryDisplayPreferencesUseCase` so the
-library restores every tab's choices after an app restart.
+library restores every tab's choices after an app restart. The separate ordered string
+setting preserves the user-selected filter-chip order, including Genres, Years, and
+Composers.

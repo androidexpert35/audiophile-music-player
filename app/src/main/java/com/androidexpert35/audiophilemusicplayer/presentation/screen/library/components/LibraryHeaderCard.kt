@@ -80,12 +80,7 @@ internal fun LibraryHeaderCard(
                         onClick = { onSelectContentType(contentType) },
                         label = {
                             Text(
-                                text = when (contentType) {
-                                    LibraryContentType.TRACKS -> stringResource(R.string.library_tracks_section_label)
-                                    LibraryContentType.PLAYLISTS -> stringResource(R.string.library_playlists_section_label)
-                                    LibraryContentType.ALBUMS -> stringResource(R.string.library_albums_section_label)
-                                    LibraryContentType.ARTISTS -> stringResource(R.string.library_artists_section_label)
-                                }
+                                text = stringResource(contentType.labelRes)
                             )
                         }
                     )

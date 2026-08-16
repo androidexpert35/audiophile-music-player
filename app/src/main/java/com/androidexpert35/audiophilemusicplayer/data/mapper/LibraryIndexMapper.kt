@@ -38,6 +38,9 @@ fun ScannedAudioFile.toTrackEntity(): TrackEntity {
         channelCount = 2,
         isLossless = codec.isLossless,
         artUri = artUri,
+        year = year,
+        genre = genre,
+        composer = composer,
     )
 }
 
@@ -132,6 +135,9 @@ fun TrackEntity.toDomainTrack(): Track {
         fileSizeBytes = fileSizeBytes,
         dateAdded = dateAdded,
         artUri = artUri,
+        year = year,
+        genre = genre,
+        composer = composer,
     )
 }
 

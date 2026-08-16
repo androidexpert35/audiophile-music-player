@@ -24,6 +24,7 @@ import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiEvent
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiModel
+import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.facetsFor
 
 /**
  * Scrollable grid view for every library content type.
@@ -47,7 +48,10 @@ fun LibraryGridContent(
         LibraryContentType.ALBUMS,
         LibraryContentType.ARTISTS -> 3
         LibraryContentType.TRACKS,
-        LibraryContentType.PLAYLISTS -> 2
+        LibraryContentType.PLAYLISTS,
+        LibraryContentType.GENRES,
+        LibraryContentType.YEARS,
+        LibraryContentType.COMPOSERS -> 2
     }
 
     LazyVerticalGrid(
@@ -132,6 +136,29 @@ fun LibraryGridContent(
                             artist = artist,
                             onImageRequest = { onEvent(LibraryUiEvent.LoadArtistImage(artist)) },
                             onClick = { onEvent(LibraryUiEvent.OpenArtistDescription(artist)) }
+                        )
+                    }
+                }
+            }
+
+            LibraryContentType.GENRES,
+            LibraryContentType.YEARS,
+            LibraryContentType.COMPOSERS -> {
+                val facets = model.facetsFor(model.selectedContentType)
+                if (facets.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LibraryEmptyState(
+                            icon = Icons.Filled.LibraryMusic,
+                            title = stringResource(R.string.library_empty_metadata_title),
+                            message = stringResource(R.string.library_empty_metadata_message),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                } else {
+                    items(items = facets, key = { facet -> "facet_grid_${model.selectedContentType}_${facet.key}" }) { facet ->
+                        LibraryFacetRow(
+                            facet = facet,
+                            onClick = { onEvent(LibraryUiEvent.PlayFacet(facet)) },
                         )
                     }
                 }

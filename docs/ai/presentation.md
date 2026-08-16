@@ -106,6 +106,12 @@ private fun PlayerContent(model: PlayerUiModel, onEvent: (PlayerUiEvent) -> Unit
   actions. `PlaylistArtwork` is the shared preview boundary: standard playlists render a cover
   mosaic, while `PlaylistKind.FAVORITES` renders the reserved gradient heart.
 
+The Library filter row is driven by `LibraryContentType` and the persisted Library Sections
+settings. Genres, Years, and Composers are metadata facets derived from the local indexed tracks;
+their rows show a track count and start a queue containing that facet when tapped. Settings can
+hide any section (while retaining at least one visible) and drag-reorder the filter row; both
+changes apply to the live Library immediately.
+
 ---
 
 ## Navigation

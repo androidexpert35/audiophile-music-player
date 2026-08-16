@@ -106,6 +106,12 @@ class MediaStoreScanner @Inject constructor(
                 val discNumber = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISC_NUMBER))
                 val mimeType = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)).orEmpty()
                 val year = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR))
+                val genre = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.AudioColumns.GENRE))
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                val composer = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.AudioColumns.COMPOSER))
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
                 // SAMPLERATE and BITS_PER_SAMPLE are available from API 31 (minSdk = 33).
                 val sampleRateHz = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SAMPLERATE))
                 val bitDepth = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.BITS_PER_SAMPLE))
@@ -150,6 +156,8 @@ class MediaStoreScanner @Inject constructor(
                     artUri = albumArtUri,
                     sampleRateHz = sampleRateHz,
                     bitDepth = bitDepth,
+                    genre = genre,
+                    composer = composer,
                 )
             }
         }

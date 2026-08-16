@@ -60,6 +60,18 @@ data class LibraryUiModel(
     val isGridView: Boolean
         get() = gridViews[selectedContentType] ?: false
 
+    /** Genre groups derived locally from the indexed tracks' metadata. */
+    val genreFacets: List<LibraryFacet>
+        get() = tracks.toGenreFacets()
+
+    /** Release-year groups derived locally from the indexed tracks' metadata. */
+    val yearFacets: List<LibraryFacet>
+        get() = tracks.toYearFacets()
+
+    /** Composer groups derived locally from the indexed tracks' metadata. */
+    val composerFacets: List<LibraryFacet>
+        get() = tracks.toComposerFacets()
+
     /**
      * Derived ordered list of recently-played [Track] objects, most-recent first.
      *
@@ -71,4 +83,28 @@ data class LibraryUiModel(
             val trackMap = tracks.associateBy { it.id }
             return recentlyPlayedTrackIds.mapNotNull { id -> trackMap[id] }
         }
+}
+
+/** Returns the metadata facets for [contentType], sorted with that section's saved choice. */
+internal fun LibraryUiModel.facetsFor(contentType: LibraryContentType): List<LibraryFacet> {
+    val facets = when (contentType) {
+        LibraryContentType.GENRES -> genreFacets
+        LibraryContentType.YEARS -> yearFacets
+        LibraryContentType.COMPOSERS -> composerFacets
+        else -> emptyList()
+    }
+    val recentlyPlayedIndex = recentlyPlayedTrackIds.withIndex().associate { (index, id) -> id to index }
+
+    return when (sortOrders[contentType] ?: LibrarySortOrder.RECENTLY_ADDED) {
+        LibrarySortOrder.ALPHABETICAL -> facets.sortedBy { it.name.lowercase() }
+        LibrarySortOrder.RECENTLY_ADDED -> facets.sortedByDescending { facet ->
+            facet.tracks.maxOfOrNull(Track::dateAdded) ?: Long.MIN_VALUE
+        }
+        LibrarySortOrder.RECENTLY_PLAYED -> facets.sortedWith(
+            compareBy<LibraryFacet> { facet ->
+                facet.tracks.minOfOrNull { track -> recentlyPlayedIndex[track.id] ?: Int.MAX_VALUE }
+                    ?: Int.MAX_VALUE
+            }.thenBy { it.name.lowercase() }
+        )
+    }
 }

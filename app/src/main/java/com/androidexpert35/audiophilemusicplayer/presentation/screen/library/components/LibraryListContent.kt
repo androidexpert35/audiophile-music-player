@@ -22,6 +22,7 @@ import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiEvent
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiModel
+import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.facetsFor
 
 /**
  * Scrollable single-column list view for all content types.
@@ -135,8 +136,31 @@ fun LibraryListContent(
                 }
             }
 
+            LibraryContentType.GENRES,
+            LibraryContentType.YEARS,
+            LibraryContentType.COMPOSERS -> {
+                val facets = model.facetsFor(model.selectedContentType)
+                if (facets.isEmpty()) {
+                    item(key = "empty_metadata") {
+                        LibraryEmptyState(
+                            icon = Icons.Filled.LibraryMusic,
+                            title = stringResource(R.string.library_empty_metadata_title),
+                            message = stringResource(R.string.library_empty_metadata_message),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                } else {
+                    items(items = facets, key = { facet -> "facet_${model.selectedContentType}_${facet.key}" }) { facet ->
+                        LibraryFacetRow(
+                            facet = facet,
+                            onClick = { onEvent(LibraryUiEvent.PlayFacet(facet)) },
+                        )
+                    }
+                }
+            }
+
             // TRACKS displays the full local song catalogue.
-            else -> {
+            LibraryContentType.TRACKS -> {
                 if (model.tracks.isEmpty()) {
                     item(key = "empty_tracks") {
                         LibraryEmptyState(

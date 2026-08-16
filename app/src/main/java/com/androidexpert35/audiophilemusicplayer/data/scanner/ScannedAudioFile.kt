@@ -21,6 +21,8 @@ package com.androidexpert35.audiophilemusicplayer.data.scanner
  * @property fileSizeBytes File size in bytes.
  * @property dateAdded Epoch seconds when the file was added to storage.
  * @property year Best-effort release year for album aggregation.
+ * @property genre Best-effort genre tag, or `null` when the source does not provide one.
+ * @property composer Best-effort composer tag, or `null` when the source does not provide one.
  * @property artUri Content URI for album artwork, when derivable.
  * @property sampleRateHz Sample rate in Hertz read from MediaStore (API 31+), or `0` when unavailable.
  * @property bitDepth Bits per sample read from MediaStore (API 31+), or `0` when unavailable.
@@ -44,5 +46,7 @@ data class ScannedAudioFile(
     val artUri: String?,
     val sampleRateHz: Int = 0,
     val bitDepth: Int = 0,
+    val genre: String? = null,
+    val composer: String? = null,
 )
 

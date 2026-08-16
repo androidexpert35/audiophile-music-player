@@ -355,6 +355,9 @@
     <string name="library_playlists_section_label">Playlists</string>
     <string name="library_albums_section_label">Albums</string>
     <string name="library_artists_section_label">Artists</string>
+    <string name="library_genres_section_label">Genres</string>
+    <string name="library_years_section_label">Years</string>
+    <string name="library_composers_section_label">Composers</string>
     <string name="library_favorites_title">Liked Songs</string>
     <string name="cd_like_track">Like track</string>
     <string name="cd_unlike_track">Unlike track</string>
@@ -426,9 +429,15 @@
     <string name="library_empty_albums_message">Albums from your indexed collection will appear here once audio metadata is available.</string>
     <string name="library_empty_artists_title">No artists available</string>
     <string name="library_empty_artists_message">Artists from your indexed collection will appear here once audio metadata is available.</string>
+    <string name="library_empty_metadata_title">No metadata available</string>
+    <string name="library_empty_metadata_message">Add genre, year, or composer tags to your music files and refresh the library.</string>
     <string name="library_empty_search_title">No matching tracks</string>
     <string name="library_empty_search_message">Try a different track title, artist name, or album title.</string>
     <string name="library_playback_empty_queue">This selection does not contain any playable tracks yet.</string>
+    <plurals name="library_facet_track_count">
+        <item quantity="one">%1$d song</item>
+        <item quantity="other">%1$d songs</item>
+    </plurals>
     <string name="library_playback_album_unavailable">Could not find playable tracks for %1$s.</string>
     <string name="cd_open_library_settings">Open library settings</string>
     <string name="cd_clear_library_search">Clear library search</string>

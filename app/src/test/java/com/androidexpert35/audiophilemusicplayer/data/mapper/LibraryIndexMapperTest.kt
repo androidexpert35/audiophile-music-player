@@ -30,6 +30,21 @@ class LibraryIndexMapperTest {
         assertEquals(listOf("Bob Marley & the Wailers"), artists.map { it.name })
     }
 
+    @Test
+    fun `given track metadata when indexing then retains genre year and composer`() {
+        val source = scannedFile(id = 1L, albumId = 10L, artistName = "Composer Artist").copy(
+            year = 1999,
+            genre = "Jazz",
+            composer = "Duke Ellington",
+        )
+
+        val track = source.toTrackEntity().toDomainTrack()
+
+        assertEquals(1999, track.year)
+        assertEquals("Jazz", track.genre)
+        assertEquals("Duke Ellington", track.composer)
+    }
+
     private fun scannedFile(
         id: Long,
         albumId: Long,

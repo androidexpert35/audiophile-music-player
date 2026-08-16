@@ -99,6 +99,7 @@ object AppModule {
             AudiophileDatabase.MIGRATION_8_9,
             AudiophileDatabase.MIGRATION_9_10,
             AudiophileDatabase.MIGRATION_10_11,
+            AudiophileDatabase.MIGRATION_11_12,
         )
         .build()
 
