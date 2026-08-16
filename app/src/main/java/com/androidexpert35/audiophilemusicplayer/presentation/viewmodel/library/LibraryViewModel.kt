@@ -375,13 +375,21 @@ class LibraryViewModel @Inject constructor(
             }
         }
             .onEach { visibleOrderedSections ->
-                val current = uiState.value.data ?: return@onEach
+                // Both preference flows emit their stored value synchronously on
+                // subscription, so this runs during init while the catalogue query is
+                // still in flight and there is no model yet. Seeding an empty model
+                // instead of skipping the emission is what makes the saved order
+                // survive: the later catalogue load copies this snapshot forward, and
+                // SharedPreferences never re-emits an unchanged value to correct it.
+                val current = uiState.value.data ?: LibraryUiModel()
                 val selectedContentType = if (current.selectedContentType in visibleOrderedSections) {
                     current.selectedContentType
                 } else {
                     visibleOrderedSections.firstOrNull() ?: LibraryContentType.TRACKS
                 }
-                setSuccessState(
+                // Patches data only — the initial catalogue load owns the loading status
+                // and must keep showing its spinner until the tracks actually arrive.
+                updateUiData(
                     current.copy(
                         visibleOrderedSections = visibleOrderedSections,
                         selectedContentType = selectedContentType,

@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.androidexpert35.audiophilemusicplayer.R
@@ -38,6 +39,7 @@ import com.androidexpert35.audiophilemusicplayer.R
  * @param onAddToPlaylist Opens the playlist destination selector when supported.
  * @param onGoToAlbum Navigates to the track's album, or `null` when unavailable or redundant.
  * @param onGoToArtist Navigates to the track's artist, or `null` when unavailable or redundant.
+ * @param iconTint Optional explicit tint for the three-dots trigger icon.
  * @param modifier Optional modifier for the menu anchor.
  */
 @Composable
@@ -47,6 +49,7 @@ internal fun TrackOptionsMenu(
     onAddToPlaylist: (() -> Unit)?,
     onGoToAlbum: (() -> Unit)? = null,
     onGoToArtist: (() -> Unit)? = null,
+    iconTint: Color? = null,
     modifier: Modifier = Modifier
 ) {
     if (onPlayNext == null && onAddToQueue == null && onAddToPlaylist == null &&
@@ -65,7 +68,7 @@ internal fun TrackOptionsMenu(
             Icon(
                 imageVector = Icons.Filled.MoreVert,
                 contentDescription = stringResource(R.string.cd_track_more_options),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }

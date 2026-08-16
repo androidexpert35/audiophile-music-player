@@ -114,6 +114,17 @@ track actions, and uses only the filtered list as its playback queue. Settings c
 (while retaining at least one visible) and drag-reorder the filter row; both changes apply to the
 live Library immediately.
 
+Both section preference flows read SharedPreferences synchronously on subscription, so in
+`LibraryViewModel` they emit during `init` — before the IO-backed catalogue and Room streams have
+produced any UI model. That observer must therefore seed an empty `LibraryUiModel` rather than skip
+the emission: SharedPreferences never re-emits an unchanged value, so a dropped first emission
+leaves the saved order lost until the next settings edit. It patches `UIState.data` through
+`updateUiData` so the initial catalogue load keeps owning the loading status.
+
+`TrackArtworkCard` is the shared artwork-first track card for the artist popular-songs row and
+the three-column Songs grid. It resolves local or MediaStore album artwork, retains the music-note
+fallback, and uses the existing HD badge for lossless tracks; do not create a parallel grid card.
+
 ---
 
 ## Navigation

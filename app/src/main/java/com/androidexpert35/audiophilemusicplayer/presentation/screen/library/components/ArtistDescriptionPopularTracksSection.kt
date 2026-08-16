@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,12 +30,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -42,6 +45,7 @@ import coil3.request.crossfade
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.components.TrackOptionsMenu
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.MotionTokens
 
@@ -83,7 +87,7 @@ internal fun ArtistDescriptionPopularTracksSection(
             items = tracks,
             key = { _, track -> track.id }
         ) { index, track ->
-            ArtistPopularTrackCard(
+            TrackArtworkCard(
                 position = index + 1,
                 track = track,
                 isCurrentlyPlaying = currentPlayingTrackId == track.id,
@@ -94,24 +98,45 @@ internal fun ArtistDescriptionPopularTracksSection(
 }
 
 /**
- * Single tile used in the artist "Popular Songs" horizontal row.
+ * Reusable artwork-first tile for artist popular songs and Library track grids.
  *
- * Renders a square album-art thumbnail at the top, a position badge in the
- * top-left corner, and the track title plus duration below the image.
+ * Renders album artwork with a music-note fallback, an optional rank badge and
+ * contextual track menu, then title, optional artist name, duration, and the
+ * same HD badge used by the artist's popular-songs row for lossless tracks.
  *
- * @param position 1-based rank of the track in the popular list.
  * @param track Track whose metadata and artwork are rendered.
  * @param isCurrentlyPlaying Whether this tile represents the active playback track.
  * @param onClick Callback invoked when the tile is tapped.
  * @param modifier Optional [Modifier] for the root [Surface].
+ * @param position Optional 1-based rank shown in the artwork's top-left corner.
+ * @param cardWidth Fixed card width for horizontal rows; `null` fills a grid cell.
+ * @param artworkHeight Fixed artwork height for horizontal rows; `null` produces square art.
+ * @param showArtistName Whether to show the performer below the title.
+ * @param showDuration Whether to show the track duration below the title.
+ * @param onPlayNextClick Optional callback inserting the track after the active item.
+ * @param onAddToQueueClick Optional callback adding the track to the queue.
+ * @param onAddToPlaylistClick Optional callback opening the playlist picker.
+ * @param onGoToAlbumClick Optional callback opening the track album.
+ * @param onGoToArtistClick Optional callback opening the track artist.
+ * @param actionMenuIconTint Optional tint for the card's three-dots action trigger.
  */
 @Composable
-private fun ArtistPopularTrackCard(
-    position: Int,
+internal fun TrackArtworkCard(
     track: Track,
     isCurrentlyPlaying: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    position: Int? = null,
+    cardWidth: Dp? = TrackCardWidth,
+    artworkHeight: Dp? = TrackCardArtHeight,
+    showArtistName: Boolean = false,
+    showDuration: Boolean = true,
+    onPlayNextClick: (() -> Unit)? = null,
+    onAddToQueueClick: (() -> Unit)? = null,
+    onAddToPlaylistClick: (() -> Unit)? = null,
+    onGoToAlbumClick: (() -> Unit)? = null,
+    onGoToArtistClick: (() -> Unit)? = null,
+    actionMenuIconTint: Color? = null,
 ) {
     val context = LocalContext.current
 
@@ -130,8 +155,7 @@ private fun ArtistPopularTrackCard(
     }
 
     Surface(
-        modifier = modifier
-            .width(TrackCardWidth)
+        modifier = (if (cardWidth != null) modifier.width(cardWidth) else modifier)
             .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.large,
         color = if (isCurrentlyPlaying) {
@@ -147,7 +171,13 @@ private fun ArtistPopularTrackCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(TrackCardArtHeight)
+                    .then(
+                        if (artworkHeight != null) {
+                            Modifier.height(artworkHeight)
+                        } else {
+                            Modifier.aspectRatio(1f)
+                        }
+                    )
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -172,23 +202,35 @@ private fun ArtistPopularTrackCard(
                 }
 
                 // Position badge — top-left corner
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .size(22.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = position.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                position?.let { rank ->
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .size(22.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = rank.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
+
+                TrackOptionsMenu(
+                    onPlayNext = onPlayNextClick,
+                    onAddToQueue = onAddToQueueClick,
+                    onAddToPlaylist = onAddToPlaylistClick,
+                    onGoToAlbum = onGoToAlbumClick,
+                    onGoToArtist = onGoToArtistClick,
+                    iconTint = actionMenuIconTint,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
 
                 // Now-playing indicator badge — top-right corner
                 if (isCurrentlyPlaying) {
@@ -224,22 +266,35 @@ private fun ArtistPopularTrackCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                if (showArtistName) {
                     Text(
-                        text = formatTrackDuration(track.durationMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = track.artistName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    if (track.audioFormat.isLossless) {
-                        Text(
-                            text = stringResource(R.string.common_hd_badge),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                }
+                if (showDuration || track.audioFormat.isLossless) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (showDuration) {
+                            Text(
+                                text = formatTrackDuration(track.durationMs),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (track.audioFormat.isLossless) {
+                            Text(
+                                text = stringResource(R.string.common_hd_badge),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }

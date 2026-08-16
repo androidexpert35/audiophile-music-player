@@ -14,6 +14,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibraryDi
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveUsbAudioStatusUseCase
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.settings.components.SettingsCategory
+import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryContentType
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +44,9 @@ class SettingsViewModelTest {
     private val libraryDisplayPreferencesFlow = MutableStateFlow(LibraryDisplayPreferences())
     private val clearQueueOnExitFlow = MutableStateFlow(false)
 
+    /** Derived so adding a catalogue section never silently stales these expectations. */
+    private val sectionCount = LibraryContentType.entries.size
+
     @Test
     fun `given every source flow when combined then hub model reflects all category subtitles`() = runTest {
         stubObservationUseCases()
@@ -60,8 +64,8 @@ class SettingsViewModelTest {
         assertEquals(true, model?.audiophileEngineEnabled)
         assertEquals(true, model?.isUsbDacConnected)
         assertEquals(1, model?.musicFolderCount)
-        assertEquals(4, model?.totalLibrarySectionCount)
-        assertEquals(4, model?.visibleLibrarySectionCount)
+        assertEquals(sectionCount, model?.totalLibrarySectionCount)
+        assertEquals(sectionCount, model?.visibleLibrarySectionCount)
         assertEquals(true, model?.clearQueueOnExit)
     }
 
@@ -76,8 +80,8 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         val model = viewModel.uiState.value.data
-        assertEquals(4, model?.totalLibrarySectionCount)
-        assertEquals(3, model?.visibleLibrarySectionCount)
+        assertEquals(sectionCount, model?.totalLibrarySectionCount)
+        assertEquals(sectionCount - 1, model?.visibleLibrarySectionCount)
     }
 
     @Test

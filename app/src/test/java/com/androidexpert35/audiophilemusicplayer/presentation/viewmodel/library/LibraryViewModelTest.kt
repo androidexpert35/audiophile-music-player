@@ -40,7 +40,9 @@ import io.mockk.verify
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -383,6 +385,55 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `given a saved section order emitted before the catalogue loads then the chip order is retained`() = runTest {
+        val savedOrder = listOf(
+            LibraryContentType.ALBUMS,
+            LibraryContentType.GENRES,
+            LibraryContentType.TRACKS,
+            LibraryContentType.PLAYLISTS,
+            LibraryContentType.ARTISTS,
+            LibraryContentType.YEARS,
+            LibraryContentType.COMPOSERS,
+        )
+        stubInitialLibrary()
+        stubSlowLibrarySources()
+        every { observeLibrarySectionOrderUseCase.invoke() } returns flowOf(savedOrder.map { it.name })
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(savedOrder, viewModel.uiState.value.data?.visibleOrderedSections)
+        assertEquals(tracks, viewModel.uiState.value.data?.tracks)
+    }
+
+    @Test
+    fun `given a hidden section emitted before the catalogue loads then it stays off the chip row`() = runTest {
+        val preferences = com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences(
+            sections = mapOf(
+                LibraryContentType.TRACKS.name to
+                    com.androidexpert35.audiophilemusicplayer.domain.model.library.LibrarySectionDisplayPreference(
+                        isVisible = false
+                    )
+            )
+        )
+        stubInitialLibrary()
+        stubSlowLibrarySources()
+        every { observeLibraryDisplayPreferencesUseCase.invoke() } returns flowOf(preferences)
+        coEvery { getLibraryDisplayPreferencesUseCase.invoke() } coAnswers {
+            delay(10)
+            Resource.Success(preferences)
+        }
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val model = viewModel.uiState.value.data
+        assertEquals(false, model?.visibleOrderedSections?.contains(LibraryContentType.TRACKS))
+        // The default selection was just hidden, so it must fall back to a visible section.
+        assertEquals(LibraryContentType.PLAYLISTS, model?.selectedContentType)
+    }
+
+    @Test
     fun `given favorites playlist when selected then playlist detail opens without starting playback`() = runTest {
         val favorites = Playlist(
             id = "favorites.m3u",
@@ -403,6 +454,30 @@ class LibraryViewModelTest {
         assertEquals(AppRoutes.playlistOverviewRoute(favorites.id), navigationManager.lastRoute)
         assertEquals(PlaylistKind.FAVORITES, playlist.kind)
         coVerify(exactly = 0) { playTrackUseCase.invoke(any(), any()) }
+    }
+
+    /**
+     * Makes every catalogue and Room-backed source answer only after a delay.
+     *
+     * On a device those are IO-bound while the two library-section preference flows read
+     * SharedPreferences synchronously on subscription — so the section order reaches the
+     * ViewModel before any other source has produced a UI model. Stubs that answer
+     * instantly hide that ordering, and with it the bug where the first (and, absent a
+     * further settings change, only) section-order emission is discarded.
+     */
+    private fun stubSlowLibrarySources() {
+        coEvery { getTracksUseCase.invoke() } coAnswers { delay(10); Resource.Success(tracks) }
+        coEvery { getAlbumsUseCase.invoke() } coAnswers { delay(10); Resource.Success(albums) }
+        coEvery { getArtistsUseCase.invoke() } coAnswers { delay(10); Resource.Success(artists) }
+        coEvery { getLibraryDisplayPreferencesUseCase.invoke() } coAnswers {
+            delay(10)
+            Resource.Success(
+                com.androidexpert35.audiophilemusicplayer.domain.model.library.LibraryDisplayPreferences()
+            )
+        }
+        every { observeLikedSongIdsUseCase.invoke() } returns flow { delay(10); emit(emptySet()) }
+        every { observeRecentlyPlayedUseCase.invoke(any()) } returns flow { delay(10); emit(emptyList()) }
+        every { observePlaylistsUseCase.invoke() } returns flow { delay(10); emit(emptyList()) }
     }
 
     private fun stubInitialLibrary() {
