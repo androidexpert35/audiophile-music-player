@@ -39,7 +39,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.common.comp
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
 
 /** Width of each track tile in the popular-songs horizontal scroll. */
-private val TrackCardWidth = 152.dp
+private val TrackCardWidth = 140.dp
 
 /** Height of the album-art portion of each popular-track tile. */
 private val TrackCardArtHeight = 116.dp
@@ -155,8 +155,11 @@ internal fun TrackArtworkCard(
             ) {
                 TrackAlbumArtwork(
                     track = track,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.fillMaxSize()
+                    // Keep the album-art boundary square as in the original artist card;
+                    // the enclosing Surface alone rounds the card's outer corners.
+                    shape = null,
+                    modifier = Modifier.fillMaxSize(),
+                    fallbackIconSize = 24.dp,
                 )
 
                 // Position badge — top-left corner

@@ -30,18 +30,19 @@ import com.androidexpert35.audiophilemusicplayer.presentation.theme.MotionTokens
  * Renders a track thumbnail from its album artwork, with a music-note fallback.
  *
  * Prefers artwork embedded or cached in [Track.artUri], then uses the corresponding
- * MediaStore album artwork when available. The supplied [shape] clips both sources
- * consistently in compact list rows and larger artwork cards.
+ * MediaStore album artwork when available. When supplied, [shape] clips both
+ * sources consistently in compact list rows and larger artwork cards.
  *
  * @param track Track whose album artwork is shown.
- * @param shape Shape applied to the thumbnail and its artwork.
+ * @param shape Optional shape applied to the thumbnail and its artwork. A `null`
+ *   value leaves the thumbnail rectangular.
  * @param modifier Optional [Modifier] that determines the thumbnail size.
  * @param fallbackIconSize Size of the music-note fallback icon.
  */
 @Composable
 internal fun TrackAlbumArtwork(
     track: Track,
-    shape: Shape,
+    shape: Shape?,
     modifier: Modifier = Modifier,
     fallbackIconSize: Dp = 48.dp,
 ) {
@@ -59,7 +60,7 @@ internal fun TrackAlbumArtwork(
 
     Box(
         modifier = modifier
-            .clip(shape)
+            .then(if (shape != null) Modifier.clip(shape) else Modifier)
             .background(MaterialTheme.colorScheme.secondaryContainer),
         contentAlignment = Alignment.Center
     ) {
