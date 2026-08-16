@@ -28,6 +28,9 @@ import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.LibraryUiModel
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.library.facetsFor
 
+/** Slightly wider-than-square artwork keeps track grid cards compact. */
+private const val TrackGridArtworkAspectRatio = 1.2f
+
 /**
  * Scrollable grid view for every library content type.
  *
@@ -197,6 +200,7 @@ fun LibraryGridContent(
                             onClick = { onEvent(LibraryUiEvent.PlayTrack(track)) },
                             cardWidth = null,
                             artworkHeight = null,
+                            artworkAspectRatio = TrackGridArtworkAspectRatio,
                             showArtistName = true,
                             showDuration = false,
                             onPlayNextClick = { onEvent(LibraryUiEvent.PlayNext(track)) },

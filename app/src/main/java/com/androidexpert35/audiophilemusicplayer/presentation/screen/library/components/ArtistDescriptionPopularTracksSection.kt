@@ -100,6 +100,7 @@ internal fun ArtistDescriptionPopularTracksSection(
  * @param position Optional 1-based rank shown in the artwork's top-left corner.
  * @param cardWidth Fixed card width for horizontal rows; `null` fills a grid cell.
  * @param artworkHeight Fixed artwork height for horizontal rows; `null` produces square art.
+ * @param artworkAspectRatio Width-to-height ratio used when [artworkHeight] is `null`.
  * @param showArtistName Whether to show the performer below the title.
  * @param showDuration Whether to show the track duration below the title.
  * @param onPlayNextClick Optional callback inserting the track after the active item.
@@ -118,6 +119,7 @@ internal fun TrackArtworkCard(
     position: Int? = null,
     cardWidth: Dp? = TrackCardWidth,
     artworkHeight: Dp? = TrackCardArtHeight,
+    artworkAspectRatio: Float = 1f,
     showArtistName: Boolean = false,
     showDuration: Boolean = true,
     onPlayNextClick: (() -> Unit)? = null,
@@ -148,7 +150,7 @@ internal fun TrackArtworkCard(
                         if (artworkHeight != null) {
                             Modifier.height(artworkHeight)
                         } else {
-                            Modifier.aspectRatio(1f)
+                            Modifier.aspectRatio(artworkAspectRatio)
                         }
                     ),
                 contentAlignment = Alignment.Center
