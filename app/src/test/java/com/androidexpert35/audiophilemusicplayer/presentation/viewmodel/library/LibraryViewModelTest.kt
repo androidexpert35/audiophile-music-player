@@ -10,6 +10,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.library.Playlist
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.PlaylistKind
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Album
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Artist
+import com.androidexpert35.audiophilemusicplayer.domain.model.playback.PlaybackState
 import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToPlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
@@ -23,6 +24,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibraryDi
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibrarySectionOrderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveRecentlyPlayedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
@@ -70,6 +72,7 @@ class LibraryViewModelTest {
     private val observeRecentlyPlayedUseCase = mockk<ObserveRecentlyPlayedUseCase>()
     private val scanAndIndexMediaUseCase = mockk<ScanAndIndexMediaUseCase>()
     private val observeMediaStoreChangesUseCase = mockk<ObserveMediaStoreChangesUseCase>()
+    private val observePlaybackStateUseCase = mockk<ObservePlaybackStateUseCase>()
     private val observePlaylistsUseCase = mockk<ObservePlaylistsUseCase>()
     private val createPlaylistUseCase = mockk<CreatePlaylistUseCase>()
     private val addTrackToPlaylistUseCase = mockk<AddTrackToPlaylistUseCase>()
@@ -173,6 +176,38 @@ class LibraryViewModelTest {
 
         assertEquals(imageUrl, viewModel.uiState.value.data?.artists?.first()?.imageUrl)
         coVerify(exactly = 1) { getArtistImageUseCase.invoke(artists.first().name) }
+    }
+
+    @Test
+    fun `given a track already playing when the catalogue arrives then its row stays highlighted`() = runTest {
+        stubInitialLibrary()
+        stubSlowLibrarySources()
+        // The engine reports the active track on subscription, before the IO-bound
+        // catalogue query answers — the highlight must survive that ordering.
+        every { observePlaybackStateUseCase.invoke() } returns flowOf(
+            PlaybackState(currentTrack = tracks[1])
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val model = viewModel.uiState.value.data
+        assertEquals(tracks, model?.tracks)
+        assertEquals(tracks[1].id, model?.currentPlayingTrackId)
+    }
+
+    @Test
+    fun `given playback stops when state clears then no library row remains highlighted`() = runTest {
+        stubInitialLibrary()
+        every { observePlaybackStateUseCase.invoke() } returns flowOf(
+            PlaybackState(currentTrack = tracks[0]),
+            PlaybackState.IDLE
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(null, viewModel.uiState.value.data?.currentPlayingTrackId)
     }
 
     @Test
@@ -499,6 +534,7 @@ class LibraryViewModelTest {
         every { observeLikedSongIdsUseCase.invoke() } returns flowOf(emptySet())
         every { observeRecentlyPlayedUseCase.invoke(any()) } returns flowOf(emptyList())
         every { observeMediaStoreChangesUseCase.invoke() } returns kotlinx.coroutines.flow.emptyFlow()
+        every { observePlaybackStateUseCase.invoke() } returns flowOf(PlaybackState.IDLE)
         every { observePlaylistsUseCase.invoke() } returns flowOf(emptyList())
     }
 
@@ -516,6 +552,7 @@ class LibraryViewModelTest {
         observeRecentlyPlayedUseCase = observeRecentlyPlayedUseCase,
         scanAndIndexMediaUseCase = scanAndIndexMediaUseCase,
         observeMediaStoreChangesUseCase = observeMediaStoreChangesUseCase,
+        observePlaybackStateUseCase = observePlaybackStateUseCase,
         observePlaylistsUseCase = observePlaylistsUseCase,
         createPlaylistUseCase = createPlaylistUseCase,
         addTrackToPlaylistUseCase = addTrackToPlaylistUseCase,
