@@ -185,7 +185,8 @@ Rules:
 Networking is **best-effort enrichment only** — never on the critical playback path.
 
 - `DeezerApiService` — artist images and album covers (no API key; public endpoints).
-- `LrcLibApiService` — synced/plain lyrics from LRCLIB.
+- `LrcLibApiService` — synced/plain lyrics from LRCLIB: `/api/get` for an exact match,
+  `/api/search` as the fuzzy fallback.
 - DTOs in `data/remote/dto/`; deserialized with Gson; parsed via `LrcParser` for `.lrc`.
 - Wired in [`NetworkModule`](../../app/src/main/java/com/androidexpert35/audiophilemusicplayer/di/NetworkModule.kt):
   one shared `OkHttpClient` (conservative timeouts) backs both Retrofit clients **and**
@@ -196,6 +197,20 @@ Rules:
 - ✅ Cache results in Room (`LyricsCacheEntity`, `remoteImageUrl`/`remoteArtUrl`
   columns) to avoid repeat calls — including a `notFound` sentinel so missing lyrics
   aren't re-fetched every time.
+- ✅ **Send an identifying `User-Agent` on every LRCLIB call.** LRCLIB is behind
+  Cloudflare, which rejects OkHttp's default `okhttp/<version>` agent with a `520`
+  before the request reaches the API.
+- ✅ Cache a `notFound` sentinel **only** for a genuine "no match" outcome (`/api/get`
+  404 *and* an empty `/api/search`). Never cache a transport failure or any other HTTP
+  status — that turns a temporary outage into permanent "lyrics unavailable". Sentinels
+  also carry a 14-day TTL as a second safety net.
+- ✅ Fall back to `/api/search` when the exact lookup misses: local tags routinely drift
+  from LRCLIB (`(Remastered 2011)` suffixes, `feat.`/`ft.` credits, `Pt.` markers in
+  numbered series titles, a different album, a duration a few seconds off — LRCLIB
+  indexes e.g. `Veleno 7`, and its search returns *zero* results for `Veleno pt.7`).
+  Rank candidates by title/artist identity, and only trust
+  a candidate's synced timings when its duration is within a few seconds of the local
+  file — otherwise keep just its plain lyrics.
 - ✅ Accept Deezer artist images only from normalised exact-name matches; never trust
   the first search result without identity validation. Coil keeps fetched image bytes
   in the app's bounded `remote_image_cache` disk cache.

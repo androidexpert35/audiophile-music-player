@@ -165,20 +165,6 @@ internal fun LibraryTrackRow(
                 onGoToAlbum = onGoToAlbumClick,
                 onGoToArtist = onGoToArtistClick
             )
-
-            if (isCurrentlyPlaying) {
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = stringResource(R.string.album_overview_now_playing_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
         }
     }
 }
@@ -203,6 +189,10 @@ private fun LibraryTrackRowPreview() {
                 dateAdded = 0L
             ),
             onClick = {},
+            onLikeClick = {},
+            isLiked = true,
+            showAlbumTitle = true,
+            isCurrentlyPlaying = true,
             modifier = Modifier.padding(16.dp)
         )
     }

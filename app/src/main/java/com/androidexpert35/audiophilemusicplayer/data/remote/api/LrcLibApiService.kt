@@ -42,5 +42,27 @@ interface LrcLibApiService {
         @Query("album_name") albumName: String,
         @Query("duration") duration: Int,
     ): Response<LrcLibLyricsDto>
+
+    /**
+     * Fuzzy-searches the catalogue when [getLyrics] finds no exact match.
+     *
+     * Unlike `/api/get`, this endpoint tolerates metadata drift — a different
+     * album title, a `(Remastered)` suffix, a missing featured artist, or a
+     * duration that is off by more than the exact matcher allows. It returns up
+     * to 20 candidates ordered by relevance, and an empty array (not a `404`)
+     * when nothing matches, so the caller must rank the results itself.
+     *
+     * Example request:
+     * `GET /api/search?track_name=So+What&artist_name=Miles+Davis`
+     *
+     * @param trackName Track title, ideally stripped of edition suffixes.
+     * @param artistName Performing artist name, or `null` to search on title alone.
+     * @return A [Response] wrapping the candidate list; empty when no match exists.
+     */
+    @GET("search")
+    suspend fun searchLyrics(
+        @Query("track_name") trackName: String,
+        @Query("artist_name") artistName: String?,
+    ): Response<List<LrcLibLyricsDto>>
 }
 

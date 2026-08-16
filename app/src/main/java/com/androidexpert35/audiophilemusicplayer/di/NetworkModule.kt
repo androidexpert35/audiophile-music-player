@@ -1,7 +1,9 @@
 package com.androidexpert35.audiophilemusicplayer.di
 
+import com.androidexpert35.audiophilemusicplayer.BuildConfig
 import com.androidexpert35.audiophilemusicplayer.data.remote.api.DeezerApiService
 import com.androidexpert35.audiophilemusicplayer.data.remote.api.LrcLibApiService
+import com.androidexpert35.audiophilemusicplayer.di.NetworkModule.LRCLIB_USER_AGENT
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,6 +34,18 @@ object NetworkModule {
 
     /** Base URL for the LRCLIB lyrics API. */
     private const val LRCLIB_BASE_URL = "https://lrclib.net/api/"
+
+    /**
+     * Identifying `User-Agent` sent with every LRCLIB request.
+     *
+     * LRCLIB sits behind Cloudflare, which rejects OkHttp's default
+     * `okhttp/<version>` agent with a `520` before the request ever reaches the
+     * API. Their documentation also asks clients to identify themselves, so the
+     * app name, version, and project URL are all included.
+     */
+    private const val LRCLIB_USER_AGENT =
+        "AudiophileMusicPlayer/${BuildConfig.VERSION_NAME} " +
+            "(https://github.com/androidexpert35/audiophile-music-player)"
 
     /**
      * Provides the shared [OkHttpClient] used by both Retrofit and Coil.
@@ -80,8 +94,10 @@ object NetworkModule {
     /**
      * Provides the [Retrofit] instance configured for the LRCLIB lyrics API.
      *
-     * Reuses the shared [OkHttpClient] so both API clients benefit from the same
-     * connection pool and timeout settings.
+     * Derives its client from the shared [OkHttpClient] via `newBuilder()` so the
+     * connection pool and timeouts stay shared, while adding the
+     * [LRCLIB_USER_AGENT] header required to get past Cloudflare. The header is
+     * scoped to this client so Deezer and Coil traffic is untouched.
      *
      * @param okHttpClient Shared HTTP client.
      * @return Singleton [Retrofit] instance for LRCLIB.
@@ -91,7 +107,17 @@ object NetworkModule {
     @LrcLibRetrofit
     fun provideLrcLibRetrofit(okHttpClient: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl(LRCLIB_BASE_URL)
-        .client(okHttpClient)
+        .client(
+            okHttpClient.newBuilder()
+                .addInterceptor { chain ->
+                    chain.proceed(
+                        chain.request().newBuilder()
+                            .header("User-Agent", LRCLIB_USER_AGENT)
+                            .build()
+                    )
+                }
+                .build()
+        )
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 

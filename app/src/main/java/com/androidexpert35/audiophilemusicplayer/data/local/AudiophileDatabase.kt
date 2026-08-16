@@ -7,6 +7,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_10_11
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_11_12
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_12_13
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_1_2
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_2_3
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_3_4
@@ -57,6 +58,8 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  *   discarded the reconstructible catalogue so upgrades re-enter folder onboarding.
  * - Version 12: added track release-year, genre, and composer metadata via
  *   [MIGRATION_11_12] for the corresponding library sections.
+ * - Version 13: cleared the poisoned lyrics "not found" sentinels via
+ *   [MIGRATION_12_13].
  */
 @Database(
     entities = [
@@ -70,7 +73,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         LyricsCacheEntity::class,
         ImportedPlaylistEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(LongListTypeConverter::class, StringListTypeConverter::class)
@@ -324,6 +327,24 @@ abstract class AudiophileDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_genre ON tracks(genre)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_composer ON tracks(composer)")
                 db.execSQL("DELETE FROM library_index_state")
+            }
+        }
+
+        /**
+         * Migration from schema version 12 to 13.
+         *
+         * Clears every cached lyrics "not found" sentinel.
+         *
+         * LRCLIB sits behind Cloudflare, which began rejecting OkHttp's default
+         * `User-Agent` with a `520`. The repository read that empty body as "this
+         * track has no lyrics" and cached it permanently, so affected tracks would
+         * keep reporting missing lyrics even once the request itself was fixed.
+         * Dropping the sentinels lets those tracks be looked up again; successfully
+         * cached lyrics are kept.
+         */
+        val MIGRATION_12_13: Migration = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DELETE FROM lyrics_cache WHERE notFound = 1")
             }
         }
     }
