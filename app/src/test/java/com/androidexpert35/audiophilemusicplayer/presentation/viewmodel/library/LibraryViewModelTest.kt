@@ -294,6 +294,7 @@ class LibraryViewModelTest {
         every { observeLikedSongIdsUseCase.invoke() } returns flowOf(emptySet())
         every { observeRecentlyPlayedUseCase.invoke(any()) } returns flowOf(emptyList())
         every { observeMediaStoreChangesUseCase.invoke() } returns kotlinx.coroutines.flow.emptyFlow()
+        every { observePlaybackStateUseCase.invoke() } returns flowOf(PlaybackState.IDLE)
         every { observePlaylistsUseCase.invoke() } returns flowOf(emptyList())
 
         val viewModel = createViewModel()
