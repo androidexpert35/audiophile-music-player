@@ -27,6 +27,8 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.track.Track
  *   Every section defaults to [LibrarySortOrder.RECENTLY_ADDED].
  * @property isRefreshing `true` while a user-requested or MediaStore-change re-index is in
  *   progress; drives the spinning animation on the header icon.
+ * @property currentPlayingTrackId Identifier of the track currently loaded in playback, or
+ *   `null` when nothing is playing; drives the highlighted row in the Songs surface.
  * @property isCreatePlaylistDialogVisible Whether the create-playlist dialog is open.
  * @property playlistPickerTrack Track awaiting a target playlist selection, if any.
  * @property visibleOrderedSections Catalogue sections to render as filter chips, already
@@ -48,6 +50,7 @@ data class LibraryUiModel(
     val sortOrders: Map<LibraryContentType, LibrarySortOrder> =
         LibraryContentType.entries.associateWith { LibrarySortOrder.RECENTLY_ADDED },
     val isRefreshing: Boolean = false,
+    val currentPlayingTrackId: Long? = null,
     val isCreatePlaylistDialogVisible: Boolean = false,
     val playlistPickerTrack: Track? = null,
     val visibleOrderedSections: List<LibraryContentType> = LibraryContentType.entries.toList(),

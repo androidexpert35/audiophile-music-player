@@ -23,6 +23,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibraryDi
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLibrarySectionOrderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveMediaStoreChangesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaylistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveRecentlyPlayedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayNextUseCase
@@ -45,8 +46,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -74,6 +77,7 @@ import javax.inject.Inject
  * @property observeRecentlyPlayedUseCase Live stream of recently-played track IDs.
  * @property scanAndIndexMediaUseCase Re-indexes the Room library cache from MediaStore.
  * @property observeMediaStoreChangesUseCase Emits whenever the device audio library changes.
+ * @property observePlaybackStateUseCase Live playback snapshots used to highlight the active row.
  * @property observePlaylistsUseCase Streams the local M3U playlist collection.
  * @property createPlaylistUseCase Persists a newly named empty M3U playlist.
  * @property addTrackToPlaylistUseCase Appends a selected track to an M3U playlist.
@@ -95,6 +99,7 @@ class LibraryViewModel @Inject constructor(
     private val observeRecentlyPlayedUseCase: ObserveRecentlyPlayedUseCase,
     private val scanAndIndexMediaUseCase: ScanAndIndexMediaUseCase,
     private val observeMediaStoreChangesUseCase: ObserveMediaStoreChangesUseCase,
+    private val observePlaybackStateUseCase: ObservePlaybackStateUseCase,
     private val observePlaylistsUseCase: ObservePlaylistsUseCase,
     private val createPlaylistUseCase: CreatePlaylistUseCase,
     private val addTrackToPlaylistUseCase: AddTrackToPlaylistUseCase,
@@ -124,6 +129,7 @@ class LibraryViewModel @Inject constructor(
         loadLibraryDisplayPreferences()
         loadFullLibrary()
         observeUserCollections()
+        observePlaybackState()
         observePlaylists()
         observeAndReindexOnMediaStoreChanges()
         observeVisibleOrderedSections()
@@ -457,6 +463,31 @@ class LibraryViewModel @Inject constructor(
                         recentlyPlayedTrackIds = recentlyPlayedIds
                     ).withSortApplied()
                 )
+            }
+            .launchIn(viewModelScope)
+    }
+
+    /**
+     * Keeps [LibraryUiModel.currentPlayingTrackId] aligned with the active playback item so the
+     * matching row stays highlighted in the Songs list and grid.
+     *
+     * The playback flow also emits on every position tick, so only the track identifier is
+     * observed and de-duplicated — the model is rebuilt on an actual track change, never once
+     * per progress update.
+     *
+     * The first emission arrives during init, while the catalogue query is still in flight and
+     * no model exists yet. Seeding an empty model instead of dropping that emission is what makes
+     * a track that was already playing when the screen opened highlight immediately: the later
+     * catalogue load copies this snapshot forward, and the playback flow will not re-emit an
+     * unchanged track to correct it.
+     */
+    private fun observePlaybackState() {
+        observePlaybackStateUseCase()
+            .map { playbackState -> playbackState.currentTrack?.id }
+            .distinctUntilChanged()
+            .onEach { playingTrackId ->
+                val current = uiState.value.data ?: LibraryUiModel()
+                updateUiData(current.copy(currentPlayingTrackId = playingTrackId))
             }
             .launchIn(viewModelScope)
     }

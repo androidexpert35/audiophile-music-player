@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -96,6 +97,12 @@ private fun LibraryFacetTracksContent(
     onEvent: (LibraryUiEvent) -> Unit,
 ) {
     val shellBottomPadding = LocalShellBottomPadding.current
+
+    // Stable provider so each row scopes its own isCurrentlyPlaying recomposition —
+    // same pattern as the root Songs surface.
+    val currentPlayingTrackIdState = rememberUpdatedState(model.currentPlayingTrackId)
+    val playingTrackIdProvider: () -> Long? = remember { { currentPlayingTrackIdState.value } }
+
     Scaffold(
         topBar = {
             AppTopBar(
@@ -124,14 +131,14 @@ private fun LibraryFacetTracksContent(
             if (isGrid) {
                 LibraryGridContent(
                     model = model,
-                    playingTrackIdProvider = { null },
+                    playingTrackIdProvider = playingTrackIdProvider,
                     shellBottomPadding = shellBottomPadding,
                     onEvent = onEvent,
                 )
             } else {
                 LibraryListContent(
                     model = model,
-                    playingTrackIdProvider = { null },
+                    playingTrackIdProvider = playingTrackIdProvider,
                     shellBottomPadding = shellBottomPadding,
                     onEvent = onEvent,
                 )

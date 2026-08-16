@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -110,6 +111,12 @@ private fun LibraryContent(
     // the floating mini-player + bottom navigation bar.
     val shellBottomPadding = LocalShellBottomPadding.current
 
+    // rememberUpdatedState keeps the same State<Long?> reference across recompositions, so the
+    // provider lambda never changes identity and each row's derivedStateOf scopes its own
+    // isCurrentlyPlaying recomposition: only the two rows swapping playing state recompose.
+    val currentPlayingTrackIdState = rememberUpdatedState(model.currentPlayingTrackId)
+    val playingTrackIdProvider: () -> Long? = remember { { currentPlayingTrackIdState.value } }
+
     Scaffold(
         containerColor = Color.Transparent,
         snackbarHost = {
@@ -155,14 +162,14 @@ private fun LibraryContent(
                 if (isGrid) {
                     LibraryGridContent(
                         model = model,
-                        playingTrackIdProvider = { null }, // Stubbed until ViewModel exposes playbackState
+                        playingTrackIdProvider = playingTrackIdProvider,
                         shellBottomPadding = shellBottomPadding,
                         onEvent = onEvent
                     )
                 } else {
                     LibraryListContent(
                         model = model,
-                        playingTrackIdProvider = { null }, // Stubbed until ViewModel exposes playbackState
+                        playingTrackIdProvider = playingTrackIdProvider,
                         shellBottomPadding = shellBottomPadding,
                         onEvent = onEvent
                     )

@@ -12,16 +12,19 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
@@ -69,6 +72,18 @@ internal fun LibraryTrackRow(
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
+    // Text and icons must follow the container they sit on, otherwise the onSurface
+    // palette stays legible only on the idle surfaceContainer background.
+    val titleColor = if (isCurrentlyPlaying) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val secondaryColor = if (isCurrentlyPlaying) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -81,8 +96,10 @@ internal fun LibraryTrackRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                // Trailing padding is trimmed because the icon buttons already carry
+                // their own touch-target inset; the reclaimed width goes to the title.
+                .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TrackAlbumArtwork(
@@ -123,48 +140,65 @@ internal fun LibraryTrackRow(
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitleText,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = secondaryColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = metadataText,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            // Heart icon — always shown; filled when liked, outlined when not
-            IconButton(
-                onClick = onLikeClick,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = if (isLiked) {
-                        stringResource(R.string.cd_unlike_track)
+                    color = if (isCurrentlyPlaying) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        stringResource(R.string.cd_like_track)
-                    },
-                    tint = if (isLiked) AudiophilePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                        MaterialTheme.colorScheme.primary
+                    }
                 )
             }
 
-            TrackOptionsMenu(
-                onPlayNext = onPlayNextClick,
-                onAddToQueue = onAddToQueueClick,
-                onAddToPlaylist = onAddToPlaylistClick,
-                onGoToAlbum = onGoToAlbumClick,
-                onGoToArtist = onGoToArtistClick
-            )
+            // Both actions form their own tight cluster: the row's 8.dp arrangement never
+            // opens a gap between the heart and the overflow trigger, and the 48.dp
+            // interactive minimum each IconButton reserves around its 40.dp visual is
+            // released here. Together that width goes back to the track title, while the
+            // explicit 40.dp still leaves a comfortable touch target on both actions.
+            CompositionLocalProvider(
+                LocalMinimumInteractiveComponentSize provides Dp.Unspecified
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Heart icon — always shown; filled when liked, outlined when not
+                    IconButton(
+                        onClick = onLikeClick,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = if (isLiked) {
+                                stringResource(R.string.cd_unlike_track)
+                            } else {
+                                stringResource(R.string.cd_like_track)
+                            },
+                            tint = if (isLiked) AudiophilePrimary else secondaryColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    TrackOptionsMenu(
+                        onPlayNext = onPlayNextClick,
+                        onAddToQueue = onAddToQueueClick,
+                        onAddToPlaylist = onAddToPlaylistClick,
+                        onGoToAlbum = onGoToAlbumClick,
+                        onGoToArtist = onGoToArtistClick,
+                        iconTint = secondaryColor,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
         }
     }
 }
