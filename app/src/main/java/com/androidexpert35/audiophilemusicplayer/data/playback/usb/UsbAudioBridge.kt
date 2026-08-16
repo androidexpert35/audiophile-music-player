@@ -230,8 +230,11 @@ internal object UsbAudioBridge {
      * the correct value for the FiiO KA5 and most XMOS/ESS-based consumer UAC2 DACs.
      *
      * @param handle                   Context handle from [nativeInitWithFileDescriptor].
-     * @param controlInterfaceNumber   `bInterfaceNumber` of the Audio Control interface
-     *                                 (almost always `0` for UAC2 devices).
+     * @param controlInterfaceNumber   `bInterfaceNumber` of the Audio Control interface,
+     *                                 or `< 0` to auto-detect it from the config
+     *                                 descriptor. Auto-detection is required for
+     *                                 composite BT/USB DACs (e.g. HiBy W4), which do
+     *                                 not keep Audio Control at interface 0.
      * @param clockSourceId            UAC2 `bClockID` of the Clock Source entity, or ≤ 0
      *                                 to auto-detect from the config descriptor.
      * @param sampleRateHz             Target sample rate in Hz (e.g., `192000`).

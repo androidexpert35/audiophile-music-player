@@ -22,6 +22,12 @@ import kotlin.math.abs
 internal object UsbStreamingTargetSelector {
     private const val TAG = "UsbAudioSink"
     private const val USB_AUDIO_STREAMING_SUBCLASS = 0x02
+
+    /**
+     * UAC version 2.0 interface protocol (`bInterfaceProtocol = IP_VERSION_02_00`).
+     * UAC1 interfaces report `0x00` here.
+     */
+    private const val UAC_VERSION_2_PROTOCOL = 0x20
     private const val ISO_PACKET_PAYLOAD_MASK = 0x07FF
     private const val ISO_TRANSACTIONS_SHIFT = 11
     private const val ISO_TRANSACTIONS_MASK = 0x3
@@ -348,6 +354,26 @@ internal object UsbStreamingTargetSelector {
 
         return maxOf(fullSpeedBytesPerSecond, highSpeedBytesPerSecond)
     }
+
+    /**
+     * `true` when [device] exposes at least one UAC 2.0 AudioStreaming interface
+     * (`bInterfaceProtocol = 0x20`).
+     *
+     * This is the gate for every direct-USB transport in the app: the libusb
+     * pipeline and the legacy `UsbRequest` path both speak UAC2 only (Clock
+     * Source entity, UAC2 alternate-setting semantics, High-Speed microframe
+     * scheduling). UAC1 full-speed devices — Bluetooth/USB combo DACs such as
+     * the HiBy W4 in UAC1 mode, FiiO SNOWSKY Retro Nano, iFi GO blu — must stay
+     * on the kernel/AudioTrack path, where the platform UAC1 driver handles
+     * them correctly.
+     */
+    fun hasUac2AudioStreamingInterface(device: UsbDevice): Boolean =
+        (0 until device.interfaceCount)
+            .map(device::getInterface)
+            .any { usbInterface ->
+                isAudioStreamingInterface(usbInterface) &&
+                    usbInterface.interfaceProtocol == UAC_VERSION_2_PROTOCOL
+            }
 
     private fun isAudioStreamingInterface(usbInterface: UsbInterface): Boolean =
         usbInterface.interfaceClass == UsbConstants.USB_CLASS_AUDIO &&

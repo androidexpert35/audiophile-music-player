@@ -257,10 +257,11 @@ internal class LibusbDsdAudioSink(
             //   88 200 × 32 = 2 822 400 bit/s/ch → DSD64 ✓
             //
             // clockSourceId = -1 → auto-detect from config descriptor (fallback bClockID=1).
-            // controlInterfaceNumber = 0 → UAC2 Audio Control interface.
+            // controlInterfaceNumber = -1 → auto-detect the Audio Control interface
+            // from the descriptor (composite BT/USB DACs do not keep it at 0).
             val clockResult = UsbAudioBridge.nativeSetUac2ClockSampleRate(
                 handle = driverHandle,
-                controlInterfaceNumber = 0,
+                controlInterfaceNumber = -1,
                 clockSourceId = -1,
                 sampleRateHz = dsdFrameRateHz,
             )

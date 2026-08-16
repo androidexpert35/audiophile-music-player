@@ -54,7 +54,26 @@ class AudiophileSimpleBasePlayer @Inject constructor(
      */
     private val appHandler = Handler(Looper.getMainLooper())
 
-    private var playlist: MutableList<MediaItem> = mutableListOf()
+    /**
+     * One queue slot: the [mediaItem] plus the stable [uid] Media3 uses to track
+     * the slot across state snapshots.
+     *
+     * The UID must be unique **per queue entry, not per track**:
+     * `SimpleBasePlayer.State.Builder.setPlaylist` rejects duplicate UIDs with an
+     * `IllegalArgumentException`, so a queue holding the same song twice (repeated
+     * "add to queue", or a playlist listing one file twice) would crash every
+     * `invalidateState()` if the UID were derived from `mediaId` alone. The UID is
+     * assigned once, when the entry joins the queue, and never regenerated —
+     * Media3 relies on UID stability to correlate items across snapshots, so a
+     * position-derived UID would break transitions whenever the queue is
+     * reordered.
+     */
+    private data class QueueEntry(val uid: String, val mediaItem: MediaItem)
+
+    /** Monotonic source of per-entry UID suffixes; only touched on the main thread. */
+    private var queueUidSequence: Long = 0L
+
+    private var playlist: MutableList<QueueEntry> = mutableListOf()
 
     /**
      * Queue in its user-selected order, retained while [playlist] is shuffled.
@@ -62,7 +81,7 @@ class AudiophileSimpleBasePlayer @Inject constructor(
      * Keeping this separately lets turning shuffle off restore the original queue
      * without interrupting the current item.
      */
-    private var originalPlaylist: List<MediaItem> = emptyList()
+    private var originalPlaylist: List<QueueEntry> = emptyList()
 
     private var currentMediaItemIndex: Int = 0
     private var playWhenReady: Boolean = false
@@ -134,10 +153,10 @@ class AudiophileSimpleBasePlayer @Inject constructor(
     // ── State snapshot ───────────────────────────────────────────────────────
 
     override fun getState(): State {
-        val mediaItemData = playlist.map { item ->
-            MediaItemData.Builder(item.mediaId.ifEmpty { item.localConfiguration?.uri?.toString().orEmpty() })
-                .setMediaItem(item)
-                .setDurationUs(durationUsFor(item))
+        val mediaItemData = playlist.map { entry ->
+            MediaItemData.Builder(entry.uid)
+                .setMediaItem(entry.mediaItem)
+                .setDurationUs(durationUsFor(entry.mediaItem))
                 .build()
         }
 
@@ -213,12 +232,24 @@ class AudiophileSimpleBasePlayer @Inject constructor(
 
     // ── Command handlers ─────────────────────────────────────────────────────
 
+    /**
+     * Wraps [item] in a [QueueEntry] with a freshly assigned, entry-unique UID.
+     *
+     * The human-readable identity (mediaId, or the URI when the id is empty) is
+     * kept as the UID prefix purely for log/debug readability; uniqueness comes
+     * from the monotonic sequence suffix.
+     */
+    private fun toQueueEntry(item: MediaItem): QueueEntry {
+        val identity = item.mediaId.ifEmpty { item.localConfiguration?.uri?.toString().orEmpty() }
+        return QueueEntry(uid = "$identity#${queueUidSequence++}", mediaItem = item)
+    }
+
     override fun handleSetMediaItems(
         mediaItems: List<MediaItem>,
         startIndex: Int,
         startPositionMs: Long,
     ): ListenableFuture<*> {
-        originalPlaylist = mediaItems.toList()
+        originalPlaylist = mediaItems.map(::toQueueEntry)
         playlist = originalPlaylist.toMutableList()
         currentMediaItemIndex = startIndex.coerceIn(0, max(0, playlist.lastIndex))
         if (shuffleModeEnabled) shuffleUpcomingItems()
@@ -233,7 +264,7 @@ class AudiophileSimpleBasePlayer @Inject constructor(
         if (playlist.isNotEmpty() && insertionIndex <= currentMediaItemIndex) {
             currentMediaItemIndex += mediaItems.size
         }
-        playlist.addAll(insertionIndex, mediaItems)
+        playlist.addAll(insertionIndex, mediaItems.map(::toQueueEntry))
         // An explicit queue mutation becomes the new listener-selected order. This
         // keeps play-next deterministic even when the previous queue was shuffled.
         originalPlaylist = playlist.toList()
@@ -392,7 +423,7 @@ class AudiophileSimpleBasePlayer @Inject constructor(
     }
 
     private fun loadCurrent(startPositionMs: Long, autoPlay: Boolean) {
-        val item = playlist.getOrNull(currentMediaItemIndex) ?: run {
+        val item = playlist.getOrNull(currentMediaItemIndex)?.mediaItem ?: run {
             clearPendingSeek()
             engine.stop()
             return
@@ -454,6 +485,7 @@ class AudiophileSimpleBasePlayer @Inject constructor(
         preloadedNextMediaItemIndex = nextIndex
         val nextUri = playlist
             .getOrNull(nextIndex ?: INDEX_UNSET)
+            ?.mediaItem
             ?.localConfiguration
             ?.uri
             ?.toString()
@@ -481,14 +513,15 @@ class AudiophileSimpleBasePlayer @Inject constructor(
             playlist = playlist,
             originalPlaylist = originalPlaylist,
             currentIndex = currentMediaItemIndex,
+            uidOf = QueueEntry::uid,
         ).toMutableList()
     }
 
     /** Restores [originalPlaylist] while preserving the currently playing item. */
     private fun restoreOriginalQueueOrder() {
-        val currentMediaId = playlist.getOrNull(currentMediaItemIndex)?.mediaId
+        val currentUid = playlist.getOrNull(currentMediaItemIndex)?.uid
         playlist = originalPlaylist.toMutableList()
-        currentMediaItemIndex = playlist.indexOfFirst { it.mediaId == currentMediaId }
+        currentMediaItemIndex = playlist.indexOfFirst { it.uid == currentUid }
             .takeIf { it >= 0 }
             ?: currentMediaItemIndex.coerceIn(0, max(0, playlist.lastIndex))
     }

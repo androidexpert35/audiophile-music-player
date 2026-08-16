@@ -17,6 +17,11 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.DsdRate
  *   descriptor table.
  * @property isDirectUsbTransportSupported `true` when Android can initialize at
  *   least one queued USB streaming endpoint for the selected DAC.
+ * @property isUac2Protocol `true` when [connectedDevice] exposes at least one
+ *   UAC 2.0 AudioStreaming interface (`bInterfaceProtocol = 0x20`). UAC1
+ *   full-speed devices (Bluetooth/USB combo DACs and dongles in their UAC1
+ *   compatibility mode) report `false` and must stay on the platform
+ *   AudioTrack path — every direct-USB transport in the app speaks UAC2 only.
  * @property supportedDsdRates Native one-bit DSD families inferred from the
  *   DAC's USB descriptors.
  * @property dsdOutputMode Preferred DSD transport currently available on the
@@ -28,6 +33,7 @@ data class UsbAudioDeviceState(
     val supportedProfiles: List<UsbAudioOutputProfile> = emptyList(),
     val areSupportedProfilesEstimated: Boolean = false,
     val isDirectUsbTransportSupported: Boolean = false,
+    val isUac2Protocol: Boolean = false,
     val supportedDsdRates: List<DsdRate> = emptyList(),
     val dsdOutputMode: DsdOutputMode = DsdOutputMode.Unsupported,
 ) {
@@ -45,8 +51,14 @@ data class UsbAudioDeviceState(
      * [android.hardware.usb.UsbRequest] path) and therefore works on
      * OEM-kernel-locked devices where the UAC2 class driver
      * has exclusive interface ownership.
+     *
+     * [isUac2Protocol] is required: the libusb pipeline programs the UAC2
+     * Clock Source entity and schedules High-Speed microframes, neither of
+     * which exists on a UAC1 full-speed device. Routing a UAC1 DAC here used
+     * to fail deep inside native endpoint selection after the device had
+     * already been disturbed by claim/control traffic (the field "BT combo DAC
+     * switches off in audiophile mode" bug).
      */
     val isLibusbReady: Boolean
-        get() = connectedDevice != null && isPermissionGranted
+        get() = connectedDevice != null && isPermissionGranted && isUac2Protocol
 }
-

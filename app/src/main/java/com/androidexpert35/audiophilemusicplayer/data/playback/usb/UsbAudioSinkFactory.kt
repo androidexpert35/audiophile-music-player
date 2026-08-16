@@ -788,35 +788,33 @@ class UsbAudioSinkFactory @Inject constructor(
             // The native fallback is bClockID=1, correct for the FiiO KA5 and
             // the majority of UAC2 consumer DACs (XMOS/ESS reference designs).
             //
-            // controlInterfaceNumber = 0 → the USB Audio standard mandates that the
-            // Audio Control interface is always interface 0 for single-function DACs.
-            // Multi-function devices may differ; audit with a USB descriptor dump if
-            // the clock set fails even after the DAC accepts 44.1/48 kHz.
+            // controlInterfaceNumber = -1 → auto-detect the Audio Control
+            // interface from the config descriptor. Single-function DACs keep it
+            // at interface 0, but composite BT/USB combos (HiBy W4 and similar)
+            // enumerate it elsewhere — a hardcoded 0 would address the clock
+            // SET_CUR to the wrong interface.
             val clockResult = UsbAudioBridge.nativeSetUac2ClockSampleRate(
                 handle = driverHandle,
-                controlInterfaceNumber = 0,
+                controlInterfaceNumber = -1,
                 clockSourceId = -1,                  // -1 = auto-detect from descriptor
                 sampleRateHz = format.sampleRateHz,
             )
-            if (clockResult < 0) {
-                // Non-fatal: some DACs accept implicit clock negotiation or silently
-                // ignore the control transfer.  Log a prominent warning so the user
-                // can identify the cause if "FSR ERROR" still appears, but allow the
-                // playback sequence to proceed — the ISO stream may still work.
-                Log.w(
-                    TAG,
-                    "createLibusbPcmSink: nativeSetUac2ClockSampleRate FAILED " +
-                        "(status=$clockResult, sampleRate=${format.sampleRateHz} Hz) — " +
-                        "proceeding; if the DAC shows 'FSR ERROR' check the bClockID " +
-                        "in the USB descriptor dump and pass it explicitly"
-                )
-            } else {
-                Log.i(
-                    TAG,
-                    "createLibusbPcmSink: UAC2 clock source → ${format.sampleRateHz} Hz ✓ " +
-                        "(status=$clockResult)"
-                )
+            // FATAL on failure: an unprogrammed PLL keeps the DAC at its previous
+            // rate while the ISO stream delivers data at the new one — audibly
+            // distorted output that on some firmware persists until the DAC is
+            // re-plugged (the field "distortion after track skips" bug). Throwing
+            // here lands in the catch below, which rolls the libusb context back;
+            // the session loader then falls back to the platform AudioTrack path.
+            check(clockResult >= 0) {
+                "nativeSetUac2ClockSampleRate failed (status=$clockResult " +
+                    "sampleRate=${format.sampleRateHz} Hz) — refusing to stream " +
+                    "against an unprogrammed DAC clock"
             }
+            Log.i(
+                TAG,
+                "createLibusbPcmSink: UAC2 clock source → ${format.sampleRateHz} Hz ✓ " +
+                    "(status=$clockResult)"
+            )
 
             // ── Step 3d: Activate the PCM ISO alternate setting (AFTER clock setup) ──
             // On FiiO KA series and XMOS/Savitech chips the DAC's PLL must be
@@ -1095,22 +1093,22 @@ class UsbAudioSinkFactory @Inject constructor(
             // This is now safe because Step 3b confirms the chip left DSD mode.
             val clockResult = UsbAudioBridge.nativeSetUac2ClockSampleRate(
                 handle                 = driverHandle,
-                controlInterfaceNumber = 0,
+                controlInterfaceNumber = -1,            // auto-detect AC interface (composite-safe)
                 clockSourceId          = -1,            // auto-detect from descriptor
                 sampleRateHz           = format.sampleRateHz,
             )
-            if (clockResult < 0) {
-                Log.w(
-                    TAG,
-                    "createLibusbPcmEnhancedSink: nativeSetUac2ClockSampleRate FAILED " +
-                        "(status=$clockResult sampleRate=${format.sampleRateHz} Hz) — proceeding"
-                )
-            } else {
-                Log.i(
-                    TAG,
-                    "createLibusbPcmEnhancedSink: UAC2 clock → ${format.sampleRateHz} Hz ✓"
-                )
+            // FATAL on failure — same contract as createLibusbPcmSink: streaming
+            // against an unprogrammed PLL plays at the wrong rate. The catch below
+            // rolls back the libusb context and the caller falls back to AudioTrack.
+            check(clockResult >= 0) {
+                "nativeSetUac2ClockSampleRate failed (status=$clockResult " +
+                    "sampleRate=${format.sampleRateHz} Hz) — refusing to stream " +
+                    "against an unprogrammed DAC clock"
             }
+            Log.i(
+                TAG,
+                "createLibusbPcmEnhancedSink: UAC2 clock → ${format.sampleRateHz} Hz ✓"
+            )
 
             // ── Step 3d: activate ISO alt setting (after clock setup) ────────────
             // PLL programmed (Step 3c) BEFORE SET_INTERFACE — required by XMOS/Savitech.

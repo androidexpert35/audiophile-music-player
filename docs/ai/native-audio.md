@@ -84,8 +84,16 @@ Key source files:
 - `uac2_descriptor_parser.cpp`, `uac2_dsd_detector.cpp` — UAC2 parsing + DSD capability.
 - `uac2_clock_control.{h,cpp}` — the ONLY encoder of the UAC2 SET_CUR clock
   transfer (bmRequestType `0x21`, Interface recipient), plus Clock Source
-  discovery and the ranked clock-ID probing used at session setup. Every clock
-  transfer (setup, DSD switch, teardown soft-reset) must go through it.
+  discovery. The descriptor walk returns both the `bClockID` and the Audio
+  Control `bInterfaceNumber` (composite BT/USB DACs do not keep Audio Control
+  at interface 0). Session setup tries only the parsed `bClockID` with the
+  UAC2 reference default (1) as sole fallback — **never** add speculative IDs:
+  a SET_CUR to a non-existent clock entity stalls EP0 and, on XMOS/FiiO
+  firmware, wedges the control pipe until the DAC is re-plugged (field bug:
+  distortion after rapid track skips). A clock-set failure is fatal for the
+  libusb PCM session; the Kotlin factory falls back to AudioTrack rather than
+  stream against an unprogrammed PLL. Every clock transfer (setup, DSD switch,
+  teardown soft-reset) must go through this module.
 - `dop_formatter.cpp`, `native_dsd_formatter.cpp`, `dsd_playback_manager.cpp` —
   DoP encoding, native DSD_U32LE formatting, and native-DSD→DoP automatic fallback.
 - `engine_swap_bridge.cpp` — JNI for `ACTION_USB_DEVICE_ATTACHED` hot-plug engine swap

@@ -1,7 +1,11 @@
 package com.androidexpert35.audiophilemusicplayer.data.playback.usb
 
+import android.hardware.usb.UsbConstants
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbInterface
 import android.util.Log
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import org.junit.After
@@ -12,27 +16,29 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Field-bug reproduction: UAC1.0 full-speed DACs pass every Kotlin-side gate
- * that routes playback onto the libusb engine, even though that engine is
- * UAC2-only.
+ * Field-bug regression coverage: UAC1.0 full-speed DACs must never reach the
+ * UAC2-only libusb engine.
  *
  * Bluetooth/USB combo DACs built on Qualcomm QCC51xx (FiiO/SNOWSKY Retro Nano,
- * iFi GO blu, Qudelix 5K, Shanling UP4/5, …) enumerate as USB Audio Class 1.0
- * full-speed devices. Their class-specific FORMAT_TYPE_I descriptor carries the
- * discrete sample-rate table *inline* (UAC1 layout) — the exact layout
- * [UsbAudioDescriptorParser.parseTypeIFormats] reads — so the Kotlin layer
- * happily reports rich `supportedProfiles`, and
- * [UsbAudioDeviceState.isLibusbReady] is `true` on permission alone. Nothing on
- * the Kotlin side ever checks `bInterfaceProtocol == 0x20` (UAC2) or the bus
- * speed, so the audiophile engine commits to the UAC2-only libusb pipeline and
- * only fails deep inside native endpoint selection.
+ * iFi GO blu, Qudelix 5K, HiBy W-series in UAC1 mode, …) enumerate as USB
+ * Audio Class 1.0 full-speed devices. Their class-specific FORMAT_TYPE_I
+ * descriptor carries the discrete sample-rate table *inline* (UAC1 layout) —
+ * the exact layout [UsbAudioDescriptorParser.parseTypeIFormats] reads — so the
+ * Kotlin layer reports rich `supportedProfiles` for them, and before the fix
+ * [UsbAudioDeviceState.isLibusbReady] was `true` on permission alone: the
+ * audiophile engine committed to the UAC2-only libusb pipeline and failed only
+ * deep inside native endpoint selection, after the device had already been
+ * disturbed by claim/control traffic.
  *
- * A UAC1 device also contains no UAC2 CLOCK_SOURCE (0x24/0x0A) descriptor, so
- * `uac2_find_clock_source_id()` cannot succeed and
- * `uac2_force_clock_sample_rate()` falls back to probing speculative clock IDs
- * (41, 40, 10, 11, 12, 1) — control transfers a UAC1 firmware never expects.
- * The descriptor assertions below pin down both facts against a realistic
- * QCC-style descriptor image.
+ * The gate now requires [UsbAudioDeviceState.isUac2Protocol], populated by
+ * [UsbStreamingTargetSelector.hasUac2AudioStreamingInterface]
+ * (`bInterfaceProtocol == 0x20`); the destructive `supportsQueuedStreaming`
+ * probe is likewise skipped for non-UAC2 devices.
+ *
+ * A UAC1 device also contains no UAC2 CLOCK_SOURCE (0x24/0x0A) descriptor —
+ * the third test pins that down against a realistic QCC-style descriptor
+ * image, documenting why `uac2_find_clock_source_id()` can never succeed on
+ * this device class.
  */
 class Uac1DeviceLibusbGatingTest {
 
@@ -87,7 +93,7 @@ class Uac1DeviceLibusbGatingTest {
     }
 
     @Test
-    fun `libusb readiness gate accepts a uac1 device on permission alone`() {
+    fun `libusb readiness gate rejects a uac1 device even with permission and parsed profiles`() {
         val state = UsbAudioDeviceState(
             connectedDevice = UsbAudioDeviceDescriptor(
                 deviceId = 1002,
@@ -97,15 +103,45 @@ class Uac1DeviceLibusbGatingTest {
             ),
             isPermissionGranted = true,
             supportedProfiles = UsbAudioDescriptorParser().parseTypeIFormats(uac1RawDescriptors()),
-            // Kernel-locked interface: UsbRequest probing failed…
             isDirectUsbTransportSupported = false,
+            isUac2Protocol = false,     // what the scanner derives for a UAC1 device
         )
 
-        // …yet the libusb gate still reports ready: no UAC-version or bus-speed
-        // check exists anywhere on the Kotlin side. The UAC2-only native
-        // pipeline is entered unconditionally for a UAC1 full-speed device.
-        assertTrue(state.isLibusbReady)
+        // The UAC2-only libusb pipeline must never be entered for a UAC1
+        // full-speed device, regardless of how capable its parsed profile
+        // table looks.
+        assertFalse(state.isLibusbReady)
         assertFalse(state.isDirectUsbReady)
+
+        // The same snapshot with a UAC2 AudioStreaming interface is accepted.
+        assertTrue(state.copy(isUac2Protocol = true).isLibusbReady)
+    }
+
+    @Test
+    fun `uac2 protocol predicate keys on bInterfaceProtocol 0x20`() {
+        fun streamingInterface(protocol: Int): UsbInterface = mockk {
+            every { interfaceClass } returns UsbConstants.USB_CLASS_AUDIO
+            every { interfaceSubclass } returns 0x02      // AudioStreaming
+            every { interfaceProtocol } returns protocol
+        }
+
+        fun deviceWith(vararg interfaces: UsbInterface): UsbDevice = mockk {
+            every { interfaceCount } returns interfaces.size
+            interfaces.forEachIndexed { index, usbInterface ->
+                every { getInterface(index) } returns usbInterface
+            }
+        }
+
+        // UAC1 combo DAC: AudioStreaming with bInterfaceProtocol=0x00.
+        val uac1Device = deviceWith(streamingInterface(protocol = 0x00))
+        assertFalse(UsbStreamingTargetSelector.hasUac2AudioStreamingInterface(uac1Device))
+
+        // UAC2 DAC: at least one AudioStreaming interface with IP_VERSION_02_00.
+        val uac2Device = deviceWith(
+            streamingInterface(protocol = 0x00),
+            streamingInterface(protocol = 0x20),
+        )
+        assertTrue(UsbStreamingTargetSelector.hasUac2AudioStreamingInterface(uac2Device))
     }
 
     @Test

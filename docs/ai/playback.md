@@ -168,6 +168,16 @@ isochronous transfer happens in native code ([`native-audio.md`](native-audio.md
 
 - `UsbDeviceScanner` + `UsbAudioBridge` — discover/attach DACs, request
   `UsbManager` permission, observe hot-plug.
+  **Never scan from the main thread.** Every scan opens the device and issues
+  `claimInterface` / `setInterface` `ioctl`s; `SET_INTERFACE` alone blocks in the
+  kernel for up to 5 s (`USB_CTRL_SET_TIMEOUT`) and the probe walks several
+  candidate endpoints. All scans go through the scanner's private
+  `rescanAndPublish()` (hops to `@IoDispatcher`, serialised by a `Mutex`), the
+  USB broadcasts are delivered on a private `HandlerThread`, and
+  `refreshDeviceState()` is `suspend` for the same reason. The destructive
+  force-claim probe is cached per plug session (`vendor:product:deviceId`), so it
+  detaches the kernel UAC driver at most once per attach instead of on every
+  broadcast.
 - `UsbAudioDescriptorParser` / `UsbAudioDeviceDescriptor` — parse UAC2 descriptors to
   learn supported formats, alt-settings, and DSD capability.
 - `UsbBitPerfectRouter` — applies `AudioManager.setPreferredMixerAttributes(BIT_PERFECT)`

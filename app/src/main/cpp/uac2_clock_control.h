@@ -39,39 +39,55 @@ int uac2_set_clock_sample_rate(
  * (CS_INTERFACE / subtype 0x0A inside an Audio Control interface) and returns
  * its bClockID.
  *
+ * The same walk also discovers **which interface number carries the Audio
+ * Control function**. On single-function DACs that is interface 0 (USB Audio
+ * spec §3.4), but composite devices — Bluetooth/USB combos such as the HiBy W4
+ * (QCC5181 + audio), where the SoC exposes vendor/HID interfaces first — may
+ * enumerate Audio Control at a non-zero index. Class requests addressed to the
+ * wrong interface are rejected at best; at worst they reach a vendor interface
+ * of the companion chip, which field reports link to firmware crashes and
+ * device shutdowns.
+ *
+ * @param handle           Open libusb device handle.
+ * @param ac_interface_out Optional out-param receiving the bInterfaceNumber of
+ *                         the first Audio Control interface encountered, or -1
+ *                         when none exists. Populated even when no CLOCK_SOURCE
+ *                         descriptor is found.
  * @return bClockID on success, or -1 when not found / on any libusb error.
  */
-int uac2_find_clock_source_id(libusb_device_handle *handle) noexcept;
+int uac2_find_clock_source_id(
+        libusb_device_handle *handle,
+        int *ac_interface_out = nullptr) noexcept;
 
 /**
- * Programs a UAC2 Clock Source by cycling through a ranked candidate list of
- * bClockID values until the DAC acknowledges the SET_CUR request.
+ * Programs a UAC2 Clock Source, trying the descriptor-parsed bClockID first
+ * and the UAC2 reference default (bClockID=1) as the only fallback.
  *
- * Needed because some chips (XMOS / Savitech, e.g. FiiO KA series) misreport
- * or hide the bClockID in their descriptors across firmware revisions; probing
- * the descriptor-parsed ID first and then the known-in-the-wild fallbacks
- * guarantees a successful transfer regardless of firmware version.
+ * Speculative IDs (41, 40, 10, 11, 12) were deliberately REMOVED from the
+ * candidate list: a SET_CUR addressed to a clock entity the firmware does not
+ * expose STALLs EP0, and on XMOS/FiiO firmware that stall wedges the control
+ * pipe **for the remainder of the session** — every later SET_CUR (including
+ * IDs that would have worked) then fails with LIBUSB_ERROR_PIPE until the DAC
+ * is physically re-plugged. See the Step-3 commentary in usb_teardown.cpp,
+ * where the same field failure forced the identical fix on the teardown path.
+ * Combined with a non-fatal caller this produced the field bug where rapid
+ * track skips left the DAC PLL at the previous rate (audible distortion until
+ * re-plug).
  *
- * Candidate ranking: parsed descriptor ID, then 41 (FiiO KA early firmware),
- * 40 (QCC5100 designs), 10/11/12 (Cirrus/TI entity numbering), 1 (UAC2
- * reference default: XMOS/ESS, FiiO KA5 production firmware).
- *
- * The Audio Control interface is assumed at interface 0, which holds for all
- * single-function UAC2 DACs (USB Audio spec §3.4); multi-function devices are
- * handled by the caller's explicit-interface fallback.
- *
- * @param handle          Open libusb device handle.
- * @param parsed_clock_id bClockID from a descriptor scan, or ≤ 0 if unknown.
- * @param sample_rate_hz  Target sample rate in Hz.
- * @param winning_id_out  Optional out-param receiving the acknowledged bClockID
- *                        (needed later by the DSD teardown soft-reset — sending
- *                        SET_CUR to an unrecognised ID stalls the control
- *                        endpoint with LIBUSB_ERROR_PIPE).
- * @return                4 (bytes transferred) on success; -1 when every
- *                        candidate is exhausted.
+ * @param handle            Open libusb device handle.
+ * @param control_interface bInterfaceNumber of the Audio Control interface
+ *                          (from uac2_find_clock_source_id's ac_interface_out).
+ * @param parsed_clock_id   bClockID from a descriptor scan, or ≤ 0 if unknown.
+ * @param sample_rate_hz    Target sample rate in Hz.
+ * @param winning_id_out    Optional out-param receiving the acknowledged
+ *                          bClockID (needed later by the DSD teardown
+ *                          soft-reset).
+ * @return                  4 (bytes transferred) on success; -1 when every
+ *                          candidate is exhausted.
  */
 int uac2_force_clock_sample_rate(
         libusb_device_handle *handle,
+        uint8_t control_interface,
         int parsed_clock_id,
         uint32_t sample_rate_hz,
         int *winning_id_out = nullptr) noexcept;

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -216,8 +217,26 @@ class AudioEngineManager @Inject constructor(
             // loadAndAwaitReady posts loadTrack to the audio thread, then suspends on the
             // state StateFlow until the decoder is non-null — making any subsequent
             // play() from the Media3 adapter unconditionally safe.
+            //
+            // The wait is bounded. The audiophile engine's Handler thread performs
+            // blocking work while loading (ContentResolver.openFileDescriptor into
+            // MediaProvider, FFmpeg open, USB claim), so a wedged provider or DAC can
+            // keep the engine out of READY indefinitely. Without a timeout this
+            // suspension holds [swapMutex] forever and every later switchTo — including
+            // the user toggling audiophile mode back off — deadlocks behind it, which
+            // presents as "the player stopped working after enabling Audiophile".
             if (transition.savedUri != null && !transition.wasPlaying) {
-                loadAndAwaitReady(transition.savedUri, transition.savedPosition)
+                val settled = withTimeoutOrNull(ENGINE_SWAP_READY_TIMEOUT_MS) {
+                    loadAndAwaitReady(transition.savedUri, transition.savedPosition)
+                }
+                if (settled == null) {
+                    Log.w(
+                        PATH_TAG,
+                        "Engine swap to ${transition.to.engineType} did not reach READY within " +
+                            "${ENGINE_SWAP_READY_TIMEOUT_MS}ms — releasing the swap lock; the track " +
+                            "stays loaded and a later play() will re-gate on engine state"
+                    )
+                }
             }
         }
     }
@@ -361,9 +380,29 @@ class AudioEngineManager @Inject constructor(
     }
 
 
+    /**
+     * Stops [engine] before the incoming strategy takes over the output.
+     *
+     * `stopAndReleaseOutput` completes only once the audiophile Handler thread
+     * has drained the posted teardown, and that thread can be parked in a
+     * blocking USB release or content-resolver call. The wait is bounded for the
+     * same reason as the readiness gate in [switchTo]: an unbounded one strands
+     * [swapMutex] and wedges every later engine toggle.
+     */
     private suspend fun stopEngineForSwap(engine: AudioPlayerEngine) {
         when (engine) {
-            is AudiophileEngine -> engine.stopAndReleaseOutput()
+            is AudiophileEngine -> {
+                val stopped = withTimeoutOrNull(ENGINE_SWAP_STOP_TIMEOUT_MS) {
+                    engine.stopAndReleaseOutput()
+                }
+                if (stopped == null) {
+                    Log.w(
+                        PATH_TAG,
+                        "Audiophile engine teardown exceeded ${ENGINE_SWAP_STOP_TIMEOUT_MS}ms — " +
+                            "continuing the swap; the pending release still runs on the audio thread"
+                    )
+                }
+            }
             else -> engine.stop()
         }
     }
@@ -383,5 +422,17 @@ class AudioEngineManager @Inject constructor(
 
     private companion object {
         const val PATH_TAG = AUDIPHILE_PATH_TAG
+
+        /**
+         * Upper bound on waiting for the incoming engine to reach READY during a swap.
+         *
+         * Generous enough for a cold FFmpeg open of a large DSD file over a slow
+         * content provider, short enough that a wedged audio thread cannot hold
+         * the swap lock past a user's patience.
+         */
+        const val ENGINE_SWAP_READY_TIMEOUT_MS = 8_000L
+
+        /** Upper bound on waiting for the outgoing engine to release its output. */
+        const val ENGINE_SWAP_STOP_TIMEOUT_MS = 5_000L
     }
 }

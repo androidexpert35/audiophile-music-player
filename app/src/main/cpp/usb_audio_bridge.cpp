@@ -656,7 +656,10 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
  * @param env                       JNI environment (unused).
  * @param clazz                     UsbAudioBridge class (unused).
  * @param handle                    Context handle from nativeInitWithFileDescriptor.
- * @param control_interface_number  bInterfaceNumber of the Audio Control interface (usually 0).
+ * @param control_interface_number  bInterfaceNumber of the Audio Control interface,
+ *                                  or < 0 to auto-detect it from the config
+ *                                  descriptor (required for composite BT/USB
+ *                                  DACs where Audio Control is not interface 0).
  * @param clock_source_id           bClockID of the Clock Source entity, or ≤ 0 for auto-detect.
  * @param sample_rate_hz            Target sample rate in Hz (e.g., 192000).
  * @return                          ≥ 0 on success; libusb negative error code on failure.
@@ -687,16 +690,25 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
         return -2;
     }
 
-    // ── Clock Source ID resolution ────────────────────────────────────────────
+    // ── Clock Source ID + Audio Control interface resolution ─────────────────
+    //
+    // The descriptor walk yields BOTH the bClockID and the bInterfaceNumber of
+    // the Audio Control interface.  The latter matters on composite devices
+    // (Bluetooth/USB combo DACs such as the HiBy W4): Audio Control is not
+    // guaranteed to be interface 0 there, and a clock SET_CUR whose wIndex low
+    // byte names the wrong interface is rejected — or, worse, delivered to a
+    // vendor interface of the companion chip.
+    int detected_ac_iface = -1;
+    const int detected_clock_id =
+            uac2_find_clock_source_id(ctx->device_handle, &detected_ac_iface);
+
     uint8_t csid = (clock_source_id > 0)
         ? static_cast<uint8_t>(clock_source_id)
         : 0u;
 
     if (csid == 0u) {
-        // Attempt auto-detection from the config descriptor.
-        const int detected = uac2_find_clock_source_id(ctx->device_handle);
-        if (detected > 0) {
-            csid = static_cast<uint8_t>(detected);
+        if (detected_clock_id > 0) {
+            csid = static_cast<uint8_t>(detected_clock_id);
             ULOGI("nativeSetUac2ClockSampleRate: auto-detected bClockID=%u", csid);
         } else {
             // Fallback: UAC2 reference designs (XMOS, ESS ESS9038) and the FiiO
@@ -710,11 +722,19 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
         }
     }
 
-    ULOGI("nativeSetUac2ClockSampleRate: handing off to clock-ID probing — "
-          "parsed csid=%u  rate=%u Hz  ctrl_iface=%d",
+    // Control interface priority: explicit caller value (≥ 0) → descriptor
+    // detection → interface 0 (single-function UAC2 default, USB Audio §3.4).
+    const int ctrl_iface = (control_interface_number >= 0)
+        ? static_cast<int>(control_interface_number)
+        : (detected_ac_iface >= 0 ? detected_ac_iface : 0);
+
+    ULOGI("nativeSetUac2ClockSampleRate: parsed csid=%u  rate=%u Hz  "
+          "ctrl_iface=%d (caller=%d detected=%d)",
           static_cast<unsigned>(csid),
           static_cast<unsigned>(sample_rate_hz),
-          static_cast<int>(control_interface_number));
+          ctrl_iface,
+          static_cast<int>(control_interface_number),
+          detected_ac_iface);
 
     // ── Claim Audio Control interface before the control transfer ─────────────
     //
@@ -733,10 +753,6 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
     // lenient firmware.  We proceed regardless so the probing loop can
     // determine empirically whether the transfer works.
     {
-        const int ctrl_iface = (control_interface_number >= 0)
-            ? static_cast<int>(control_interface_number)
-            : 0;
-
         const int ctrl_claim_ret = libusb_claim_interface(ctx->device_handle, ctrl_iface);
         if (ctrl_claim_ret == LIBUSB_SUCCESS) {
             ULOGI("nativeSetUac2ClockSampleRate: ctrl interface %d claimed OK — "
@@ -758,10 +774,11 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
         }
     }
 
-    // Use the candidate-probing helper rather than the single-shot call.
-    // uac2_force_clock_sample_rate() always uses control interface 0; if the
-    // caller explicitly provided a non-zero control_interface_number we honour
-    // it through the single-shot path as a last resort after probing fails.
+    // Program the clock through the descriptor-driven helper: parsed bClockID
+    // first, UAC2 reference default (1) as the only fallback — the speculative
+    // ID blast was removed because a SET_CUR to a non-existent entity wedges
+    // EP0 on XMOS/FiiO firmware for the rest of the session (see
+    // uac2_clock_control.h).
     //
     // winning_clock_id captures which bClockID the DAC actually ACK'd so we can
     // persist it in the context.  During DSD teardown the soft-reset sends the
@@ -769,47 +786,22 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
     // LIBUSB_ERROR_PIPE (-9), which stalls the control endpoint and causes the
     // subsequent PCM session's clock programming to fail silently.
     int winning_clock_id = 0;
-    const int brute_result = uac2_force_clock_sample_rate(
+    const int clock_result = uac2_force_clock_sample_rate(
             ctx->device_handle,
+            static_cast<uint8_t>(ctrl_iface),
             static_cast<int>(csid),
             static_cast<uint32_t>(sample_rate_hz),
             &winning_clock_id);
 
-    if (brute_result == 4) {
+    if (clock_result == 4) {
         // Persist the winning clock source ID for use in Phase 6.5 DSD teardown.
         ctx->resolved_clock_source_id = static_cast<uint8_t>(winning_clock_id);
         ULOGI("nativeSetUac2ClockSampleRate: resolved_clock_source_id=%u "
               "stored in context (used by DSD soft-reset Phase 6.5 to avoid"
               " LIBUSB_ERROR_PIPE on teardown clock reset)",
               static_cast<unsigned>(ctx->resolved_clock_source_id));
-        return brute_result;   // success — one of the candidates ACK'd
     }
-
-    // Candidate probing exhausted every standard ID.  If the caller specified
-    // an explicit non-zero control interface, make one last attempt with the
-    // exact (csid, ctrl_iface) pair they requested — covers exotic multi-
-    // function devices where the Audio Control interface is not 0.
-    if (control_interface_number != 0) {
-        ULOGW("nativeSetUac2ClockSampleRate: clock probing failed — "
-              "retrying with explicit ctrl_iface=%d as last resort",
-              static_cast<int>(control_interface_number));
-        const int last_resort = uac2_set_clock_sample_rate(
-                ctx->device_handle,
-                static_cast<uint8_t>(control_interface_number),
-                csid,
-                static_cast<uint32_t>(sample_rate_hz));
-        if (last_resort < 0) {
-            ULOGE("nativeSetUac2ClockSampleRate: explicit ctrl_iface=%d attempt "
-                  "failed too: %s (%d)",
-                  static_cast<int>(control_interface_number),
-                  libusb_error_name(last_resort), last_resort);
-        } else {
-            ctx->resolved_clock_source_id = csid;
-        }
-        return last_resort;
-    }
-
-    return brute_result;   // -1 from uac2_force_clock_sample_rate
+    return clock_result;   // 4 on success; -1 when both candidates failed
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

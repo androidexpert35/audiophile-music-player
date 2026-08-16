@@ -65,8 +65,14 @@ int uac2_set_clock_sample_rate(
             kControlTimeoutMs);
 }
 
-int uac2_find_clock_source_id(libusb_device_handle *handle) noexcept
+int uac2_find_clock_source_id(
+        libusb_device_handle *handle,
+        int *ac_interface_out) noexcept
 {
+    if (ac_interface_out != nullptr) {
+        *ac_interface_out = -1;
+    }
+
     libusb_device *dev = libusb_get_device(handle);
     if (!dev) {
         CLKLOGW("uac2_find_clock_source_id: libusb_get_device() returned null");
@@ -89,6 +95,17 @@ int uac2_find_clock_source_id(libusb_device_handle *handle) noexcept
             // Only examine Audio Control interfaces.
             if (alt.bInterfaceClass    != kUsbClassAudio)           continue;
             if (alt.bInterfaceSubClass != kUsbSubclassAudioControl) continue;
+
+            // Record the FIRST Audio Control interface number even when the
+            // Clock Source descriptor is missing/unparseable: composite
+            // devices (BT/USB combo DACs) do not keep Audio Control at
+            // interface 0, and every clock SET_CUR must address the real AC
+            // interface in wIndex or the request lands on another function.
+            if (ac_interface_out != nullptr && *ac_interface_out < 0) {
+                *ac_interface_out = static_cast<int>(alt.bInterfaceNumber);
+                CLKLOGI("uac2_find_clock_source_id: Audio Control interface = %d",
+                        *ac_interface_out);
+            }
 
             // Walk the class-specific (extra) descriptor bytes.
             const uint8_t *p    = alt.extra;
@@ -132,25 +149,27 @@ int uac2_find_clock_source_id(libusb_device_handle *handle) noexcept
 
 int uac2_force_clock_sample_rate(
         libusb_device_handle *handle,
+        uint8_t control_interface,
         int parsed_clock_id,
         uint32_t sample_rate_hz,
         int *winning_id_out) noexcept
 {
-    // Ranked candidate list — parsed descriptor ID first, then empirically
-    // derived fallbacks covering every FiiO KA variant and major XMOS/Cirrus
-    // reference designs seen in the field.  Sentinel 0 terminates the list.
-    const int candidates[] = { parsed_clock_id, 41, 40, 10, 11, 12, 1, 0 };
+    // Minimal, descriptor-driven candidate list — the parsed bClockID first,
+    // then the UAC2 reference default (1).  Speculative IDs (41/40/10/11/12)
+    // are deliberately excluded: a SET_CUR to a non-existent clock entity
+    // STALLs EP0 and, on XMOS/FiiO firmware, wedges the control pipe for the
+    // remainder of the session (every later SET_CUR fails with
+    // LIBUSB_ERROR_PIPE until the DAC is re-plugged).  Sentinel 0 terminates
+    // the list.  See uac2_clock_control.h and the Step-3 commentary in
+    // usb_teardown.cpp for the field history behind this restriction.
+    const int candidates[] = { parsed_clock_id, 1, 0 };
 
-    // The Audio Control interface is interface 0 for single-function UAC2 DACs
-    // (USB Audio spec §3.4).  Multi-function devices are covered by the
-    // caller's explicit-interface fallback path.
-    constexpr uint8_t kCtrlIface = 0U;
-
-    CLKLOGI("uac2_force_clock_sample_rate: target=%u Hz parsed_id=%d",
-            sample_rate_hz, parsed_clock_id);
+    CLKLOGI("uac2_force_clock_sample_rate: target=%u Hz parsed_id=%d ctrl_iface=%u",
+            sample_rate_hz, parsed_clock_id,
+            static_cast<unsigned>(control_interface));
 
     // Track already-tried IDs so exact duplicates are skipped.
-    int tried[8] = {0};
+    int tried[4] = {0};
     int tried_count = 0;
 
     for (const int *p = candidates; *p != 0; ++p) {
@@ -166,7 +185,7 @@ int uac2_force_clock_sample_rate(
 
         const int ret = uac2_set_clock_sample_rate(
                 handle,
-                kCtrlIface,
+                control_interface,
                 static_cast<uint8_t>(clock_id),
                 sample_rate_hz);
 
@@ -184,10 +203,13 @@ int uac2_force_clock_sample_rate(
                 clock_id, libusb_error_name(ret), ret);
     }
 
-    // Every candidate exhausted — the DAC is likely not UAC2, or its Audio
-    // Control interface is on a non-zero interface number.
+    // Every candidate exhausted — the DAC is likely not UAC2, its Audio
+    // Control interface differs from the one supplied, or the firmware is
+    // temporarily rejecting control transfers (e.g. mid PLL re-lock).  The
+    // caller must treat this as fatal for the direct-USB session: streaming
+    // ISO data against an unprogrammed PLL plays at the wrong rate.
     CLKLOGE("uac2_force_clock_sample_rate: ALL clock IDs failed "
-            "(tried %d %d %d %d %d %d) — FSR ERROR / hardware mute likely",
-            tried[0], tried[1], tried[2], tried[3], tried[4], tried[5]);
+            "(tried %d %d on ctrl_iface=%u) — aborting direct-USB clock setup",
+            tried[0], tried[1], static_cast<unsigned>(control_interface));
     return -1;
 }

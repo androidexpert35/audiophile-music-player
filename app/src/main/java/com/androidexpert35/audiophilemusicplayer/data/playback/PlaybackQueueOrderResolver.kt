@@ -1,6 +1,5 @@
 package com.androidexpert35.audiophilemusicplayer.data.playback
 
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import kotlin.random.Random
 
@@ -29,21 +28,24 @@ internal object PlaybackQueueOrderResolver {
     /**
      * Retains the played prefix and randomises each queue item that has not played yet.
      *
-     * Queue media IDs are the stable track IDs assigned by [PlaybackController], so
-     * they can safely identify items retained in the prefix.
+     * [uidOf] must yield an identity that is unique **per queue entry** (not per
+     * track): with a track-level identity, a queue holding the same song twice
+     * would silently drop the second copy from the upcoming section as soon as
+     * the first copy entered the played prefix.
      */
-    fun shuffleUpcoming(
-        playlist: List<MediaItem>,
-        originalPlaylist: List<MediaItem>,
+    fun <T> shuffleUpcoming(
+        playlist: List<T>,
+        originalPlaylist: List<T>,
         currentIndex: Int,
+        uidOf: (T) -> Any,
         random: Random = Random.Default,
-    ): List<MediaItem> {
+    ): List<T> {
         if (currentIndex !in playlist.indices) return playlist
 
         val playedPrefix = playlist.take(currentIndex + 1)
-        val playedMediaIds = playedPrefix.map(MediaItem::mediaId).toSet()
+        val playedUids = playedPrefix.map(uidOf).toSet()
         val shuffledUpcoming = originalPlaylist
-            .filterNot { it.mediaId in playedMediaIds }
+            .filterNot { uidOf(it) in playedUids }
             .shuffled(random)
 
         return playedPrefix + shuffledUpcoming
