@@ -78,6 +78,38 @@ class UsbVolumeControllerTest {
         assertEquals(85, controller.volumePct.value)
     }
 
+    @Test
+    fun `given a pre-1_1 global level when a dac is first activated then that level is inherited`() {
+        storedValues[SettingsPreferences.LEGACY_KEY_USB_VOLUME_PCT] = 100
+        val controller = UsbVolumeController(sharedPreferences)
+
+        controller.activateDevice(descriptor(vendorId = 0x2972, productId = 0x0047, name = "FiiO KA1"))
+
+        // 100% is the only position the native taper maps to exact unity, so an
+        // upgrading listener must not be silently dropped onto the 60% default.
+        assertEquals(100, controller.volumePct.value)
+    }
+
+    @Test
+    fun `given a pre-1_1 global level when a dac level is changed then only the per-device key is written`() {
+        storedValues[SettingsPreferences.LEGACY_KEY_USB_VOLUME_PCT] = 100
+        val controller = UsbVolumeController(sharedPreferences)
+        val fiio = descriptor(vendorId = 0x2972, productId = 0x0047, name = "FiiO KA1")
+        val hiby = descriptor(vendorId = 0x32BB, productId = 0x0004, name = "HiBy FC3")
+
+        controller.activateDevice(fiio)
+        controller.setVolumePct(42)
+
+        // The legacy value is read-only: it still seeds DACs never adjusted yet …
+        assertEquals(100, storedValues[SettingsPreferences.LEGACY_KEY_USB_VOLUME_PCT])
+        controller.activateDevice(hiby)
+        assertEquals(100, controller.volumePct.value)
+
+        // … while the device that was adjusted owns its own key from then on.
+        controller.activateDevice(fiio)
+        assertEquals(42, controller.volumePct.value)
+    }
+
     private fun descriptor(
         vendorId: Int,
         productId: Int,

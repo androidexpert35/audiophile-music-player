@@ -1,6 +1,8 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
+import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPreferences.DEFAULT_USB_VOLUME_PCT
 import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPreferences.KEY_LIBRARY_DISPLAY_PREFERENCES
+import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsPreferences.KEY_USB_VOLUME_PCT_PREFIX
 
 
 /**
@@ -96,7 +98,21 @@ object SettingsPreferences {
     const val KEY_USB_VOLUME_PCT_PREFIX: String = "usb_volume_pct_device_"
 
     /**
-     * Default USB volume on first install.
+     * Pre-1.1 key holding a single USB volume level shared by every DAC.
+     *
+     * Superseded by [KEY_USB_VOLUME_PCT_PREFIX], but still **read** as the seed
+     * for any DAC that has no per-device level yet. Dropping it outright reset
+     * every upgrading listener to [DEFAULT_USB_VOLUME_PCT]; for anyone who had
+     * deliberately set 100% — the only position the native taper maps to exact
+     * unity, and therefore the only bit-perfect one — that silently inserted a
+     * −8.9 dB digital attenuation into a path whose entire purpose is to avoid
+     * one. Never written again: the first [KEY_USB_VOLUME_PCT_PREFIX] write for
+     * a device takes over permanently.
+     */
+    const val LEGACY_KEY_USB_VOLUME_PCT: String = "usb_volume_pct"
+
+    /**
+     * Default USB volume for a DAC with no stored level and no legacy value.
      *
      * Each newly encountered DAC starts at 60% before its first PCM sample is
      * produced. The native quadratic taper maps that position to a gain of 0.36

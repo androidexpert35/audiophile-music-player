@@ -86,14 +86,23 @@ Key source files:
   transfer (bmRequestType `0x21`, Interface recipient), plus Clock Source
   discovery. The descriptor walk returns both the `bClockID` and the Audio
   Control `bInterfaceNumber` (composite BT/USB DACs do not keep Audio Control
-  at interface 0). Session setup tries only the parsed `bClockID` with the
-  UAC2 reference default (1) as sole fallback — **never** add speculative IDs:
+  at interface 0). Session setup tries the parsed `bClockID` first and then the
+  other Clock Source entities the descriptor **declares** (multi-clock DACs put
+  an internal PLL next to an S/PDIF or word-clock source, and the first
+  descriptor is not always the one feeding the USB stream); the UAC2 reference
+  default (1) is used only when the walk finds no Clock Source at all —
+  **never** add speculative IDs, and never append a bare 1 behind a parsed ID:
   a SET_CUR to a non-existent clock entity stalls EP0 and, on XMOS/FiiO
   firmware, wedges the control pipe until the DAC is re-plugged (field bug:
-  distortion after rapid track skips). A clock-set failure is fatal for the
-  libusb PCM session; the Kotlin factory falls back to AudioTrack rather than
-  stream against an unprogrammed PLL. Every clock transfer (setup, DSD switch,
-  teardown soft-reset) must go through this module.
+  distortion after rapid track skips). Each candidate is retried
+  `kClockSetAttemptsPerId` times with a `kClockRetryDelayMs` pause, so a DAC
+  still re-locking its PLL from the previous track's teardown is not mistaken
+  for one refusing the rate. Only after that is a clock-set failure fatal for
+  the libusb PCM session; the Kotlin factory then falls back to AudioTrack
+  rather than stream against an unprogrammed PLL — a correct but audibly
+  degraded outcome, which is why the transient must be retried rather than
+  reported. Every clock transfer (setup, DSD switch, teardown soft-reset) must
+  go through this module.
 - `dop_formatter.cpp`, `native_dsd_formatter.cpp`, `dsd_playback_manager.cpp` —
   DoP encoding, native DSD_U32LE formatting, and native-DSD→DoP automatic fallback.
 - `engine_swap_bridge.cpp` — JNI for `ACTION_USB_DEVICE_ATTACHED` hot-plug engine swap
@@ -158,6 +167,16 @@ PCM follows an exact integer-only unity path.
 Full volume can therefore be sample-exact for an unprocessed PCM path. Software
 attenuation is not mathematically bit-perfect relative to the source, but it is
 performed once at the maximum precision the negotiated DAC container exposes.
+
+Because position `1.0` is the *only* bit-perfect position, the stored level is
+part of the bit-perfect contract, not a cosmetic preference. Levels persist per
+DAC under `KEY_USB_VOLUME_PCT_PREFIX + sha256(vendor:product:serial|name)`;
+`UsbVolumeController.seedVolumePct()` seeds any device with no stored level from
+the pre-1.1 global key (`LEGACY_KEY_USB_VOLUME_PCT`) before falling back to
+`DEFAULT_USB_VOLUME_PCT`. Never drop that read: shipping the per-device keys
+without it reset every upgrading listener to the default, which silently
+inserted a −8.9 dB digital multiply into the one path whose purpose is to avoid
+one.
 
 ### DSD transport selection and fallback
 

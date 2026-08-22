@@ -61,18 +61,28 @@ int uac2_find_clock_source_id(
 
 /**
  * Programs a UAC2 Clock Source, trying the descriptor-parsed bClockID first
- * and the UAC2 reference default (bClockID=1) as the only fallback.
+ * and then every OTHER Clock Source entity the configuration descriptor
+ * declares. The UAC2 reference default (bClockID=1) is used only when the
+ * descriptor walk finds no Clock Source at all.
  *
  * Speculative IDs (41, 40, 10, 11, 12) were deliberately REMOVED from the
- * candidate list: a SET_CUR addressed to a clock entity the firmware does not
- * expose STALLs EP0, and on XMOS/FiiO firmware that stall wedges the control
- * pipe **for the remainder of the session** — every later SET_CUR (including
- * IDs that would have worked) then fails with LIBUSB_ERROR_PIPE until the DAC
- * is physically re-plugged. See the Step-3 commentary in usb_teardown.cpp,
- * where the same field failure forced the identical fix on the teardown path.
+ * candidate list, and a bare 1 is never appended behind a successfully parsed
+ * ID: a SET_CUR addressed to a clock entity the firmware does not expose
+ * STALLs EP0, and on XMOS/FiiO firmware that stall wedges the control pipe
+ * **for the remainder of the session** — every later SET_CUR (including IDs
+ * that would have worked) then fails with LIBUSB_ERROR_PIPE until the DAC is
+ * physically re-plugged. See the Step-3 commentary in usb_teardown.cpp, where
+ * the same field failure forced the identical fix on the teardown path.
  * Combined with a non-fatal caller this produced the field bug where rapid
  * track skips left the DAC PLL at the previous rate (audible distortion until
- * re-plug).
+ * re-plug). Enumerating the *declared* entities keeps multi-clock DACs (an
+ * internal PLL plus an S/PDIF or word-clock source, where the first descriptor
+ * is not the one feeding the USB stream) covered at none of that risk.
+ *
+ * Every candidate is attempted several times with a short pause in between, so
+ * a DAC that is merely mid PLL re-lock is not mistaken for one that refuses
+ * the rate — a distinction the caller cannot recover from, since it abandons
+ * the direct-USB session and falls back to the resampling platform mixer.
  *
  * @param handle            Open libusb device handle.
  * @param control_interface bInterfaceNumber of the Audio Control interface

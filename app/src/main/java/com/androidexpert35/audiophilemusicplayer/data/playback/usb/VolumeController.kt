@@ -88,10 +88,13 @@ class UsbVolumeController @Inject constructor(
     /**
      * Current volume as an integer percentage in `[0, 100]`.
      *
-     * Initialised to the safe fallback and replaced with the selected DAC's
-     * persisted value by [activateDevice] before a USB sink is prepared.
+     * Initialised to the seed level ([seedVolumePct]) and replaced with the
+     * selected DAC's persisted value by [activateDevice] before a USB sink is
+     * prepared. Seeding rather than hardcoding the default keeps the level the
+     * volume keys report consistent with what the first sink will actually
+     * apply, before any device has been activated.
      */
-    private val _volumePct = MutableStateFlow(SettingsPreferences.DEFAULT_USB_VOLUME_PCT)
+    private val _volumePct = MutableStateFlow(seedVolumePct())
 
     /**
      * Observable volume level in the range `[0, 100]`.
@@ -137,6 +140,11 @@ class UsbVolumeController @Inject constructor(
      * indistinguishable units of the same model consequently share a level.
      * Selection is idempotent and may safely be repeated for every sink build.
      *
+     * A DAC seen for the first time inherits the pre-1.1 global level
+     * ([SettingsPreferences.LEGACY_KEY_USB_VOLUME_PCT]) when one exists, and only
+     * falls back to [SettingsPreferences.DEFAULT_USB_VOLUME_PCT] on a genuinely
+     * fresh install. See [seedVolumePct] for why that matters to bit-perfection.
+     *
      * @param device USB identity snapshot associated with the sink being opened.
      */
     internal fun activateDevice(device: UsbAudioDeviceDescriptor) {
@@ -146,7 +154,7 @@ class UsbVolumeController @Inject constructor(
             activeDevicePreferenceKey = preferenceKey
             sharedPreferences.getInt(
                 preferenceKey,
-                SettingsPreferences.DEFAULT_USB_VOLUME_PCT,
+                seedVolumePct(),
             ).coerceIn(MIN_VOLUME_PCT, MAX_VOLUME_PCT).also { restored ->
                 _volumePct.value = restored
             }
@@ -157,6 +165,26 @@ class UsbVolumeController @Inject constructor(
                 "volume=$restoredVolume%",
         )
     }
+
+    /**
+     * Level a never-before-seen DAC starts from.
+     *
+     * Per-device persistence replaced a single global key, and the old value was
+     * left behind rather than migrated: every listener upgrading from 1.0.x was
+     * therefore reset to [SettingsPreferences.DEFAULT_USB_VOLUME_PCT] on the next
+     * connection. That is not a cosmetic reset — the native taper reaches exact
+     * unity only at 100%, so a listener who had chosen full scale specifically to
+     * keep the wire byte-exact was silently moved onto a 0.36 digital multiply.
+     * Reading the legacy key as the seed restores their choice for the first DAC
+     * they connect, and for any later one they have not yet adjusted.
+     *
+     * The legacy key is only read, never written: the first [setVolumePct] call
+     * for a device writes its own key and owns the level from then on.
+     */
+    private fun seedVolumePct(): Int = sharedPreferences.getInt(
+        SettingsPreferences.LEGACY_KEY_USB_VOLUME_PCT,
+        SettingsPreferences.DEFAULT_USB_VOLUME_PCT,
+    )
 
     // ── Bridge lifecycle ──────────────────────────────────────────────────────────
 
