@@ -195,6 +195,28 @@ targets exist, Native DSD starts at `DSD bit rate / 32`. A detected early STALL:
 Incomplete DSD input frames are carried into the next decoder read; no tail bytes
 are silently discarded. DoP marker phase is chained across every formatted chunk.
 
+### Silence is format-dependent — never memset(0) an audio buffer
+
+`IsoTransferPool` writes `silence_byte()` — not a literal `0` — wherever it has no
+audio: the buffers pre-filled at allocation, the tail of a partial underrun, a
+fully empty ring, and the pre-playback window before a ring is attached.
+
+- PCM and DoP idle at `kPcmSilenceByte` (`0x00`), the pool default. A marker-less
+  zero DoP frame drops the DAC back to PCM, which is silence.
+- **Native DSD idles at `kNativeDsdSilenceByte` (`0x69`).** A 1-bit stream encodes
+  amplitude as the density of ones, so a run of `0x00` is a full-scale *negative
+  DC*, not silence. `nativeStartDsdPlayback` calls `set_silence_byte()` once the
+  transport is known and before the cold-boot burst, which also re-primes the
+  already-allocated buffers. Bit order is irrelevant — `0x96` is equally balanced.
+
+Getting this wrong is not subtle: the pool submits all N transfers before the
+decoder pump produces its first byte, so the DAC receives ~100 ms of DC and steps
+its output rail. DACs with an internal DSD soft-mute (XMOS, e.g. FiiO KA5) hide
+it; Cirrus-based dongles (Snowsky Tiny B) reproduce it as a loud tick at the start
+of every DSD track. It is at full analogue scale whatever the volume setting says,
+because `DecoderToRingBridge` deliberately never applies the volume multiply to a
+1-bit stream.
+
 ---
 
 ## Build (CMake — `app/src/main/cpp/CMakeLists.txt`)

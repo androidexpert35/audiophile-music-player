@@ -81,6 +81,8 @@
 #include <string>
 #include <vector>
 
+#include "dsd_wire_mode.h"   // kPcmSilenceByte / kNativeDsdSilenceByte
+
 // Forward declarations — the pool holds raw pointers but doesn't expose
 // libusb internals to callers above the data layer.
 struct libusb_transfer;
@@ -599,6 +601,35 @@ public:
     }
 
     /**
+     * Selects the byte this pool writes wherever it has no audio to send —
+     * the pre-filled buffers before the first submission, the tail of a partial
+     * underrun, a fully empty ring, and the pre-playback window where no ring
+     * is attached yet.
+     *
+     * Defaults to [kPcmSilenceByte], correct for PCM and for DoP. A native DSD
+     * session **must** switch this to [kNativeDsdSilenceByte]: zeros are a
+     * full-scale negative DC in a 1-bit stream, not silence, and the DAC
+     * reconstructs them as an audible step. See `dsd_wire_mode.h`.
+     *
+     * Also rewrites every already-allocated transfer buffer to [value], so the
+     * very first submission after a cold boot carries the right idle pattern
+     * rather than the creation-time default.
+     *
+     * @param value Idle byte to write from now on.
+     *
+     * @warning Precondition: **no transfer of this pool may be in flight.**
+     *   The buffer rewrite is a plain memset over DMA-visible memory. Call it
+     *   during session bring-up (after the pool is allocated, before the first
+     *   `libusb_submit_transfer`) or while the pool is fully quiesced.
+     */
+    void set_silence_byte(uint8_t value) noexcept;
+
+    /** Byte currently written for idle/underrun padding. */
+    [[nodiscard]] uint8_t silence_byte() const noexcept {
+        return silence_byte_.load(std::memory_order_relaxed);
+    }
+
+    /**
      * Return true while the 200 ms DSD stall observation window is active.
      *
      * Used internally by the callback to gate stall recording.  Clients may
@@ -711,6 +742,11 @@ private:
     /// Written with memory_order_release so the callback's acquire-load sees
     /// dsd_window_start_ns_ after the window is armed.
     std::atomic<bool>                  dsd_window_active_{false};
+
+    /// Byte written wherever the pool has no audio to send. Read on the libusb
+    /// event thread (callback hot path), written from the bring-up thread while
+    /// the pool is quiesced. See set_silence_byte().
+    std::atomic<uint8_t>               silence_byte_{kPcmSilenceByte};
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

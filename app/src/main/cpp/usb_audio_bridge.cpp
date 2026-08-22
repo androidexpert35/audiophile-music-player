@@ -1263,6 +1263,27 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_usb_UsbAudioBridge_
           startInDop == JNI_TRUE ? "DoP" : "Native DSD ",
           startInDop == JNI_TRUE ? "" : (useLsbf ? "LSBF" : "MSBF"));
 
+    // ── Step E2: idle pattern for the ISO pool ───────────────────────────────
+    //
+    // Must happen here — after the transport is known, before the cold-boot
+    // burst below puts all N transfers in flight. The pool pre-fills its
+    // buffers at allocation time, when the session type is not yet decided, so
+    // a native DSD session would otherwise open with a full pool of 0x00. In a
+    // 1-bit stream that is not silence but a full-scale negative DC step, and
+    // a DAC without an internal DSD soft-mute reproduces it as a loud tick at
+    // the start of every DSD track (field report: Snowsky Tiny B ticks, FiiO
+    // KA5 does not — the XMOS firmware mutes during PLL lock and hides it).
+    //
+    // The tick is at full analogue scale regardless of the user's volume
+    // setting, because DecoderToRingBridge deliberately does not apply the
+    // volume multiply to a 1-bit stream.
+    if (ctx->transfer_pool) {
+        ctx->transfer_pool->set_silence_byte(
+                ctx->dsd_wire_mode == DsdWireMode::Native
+                    ? kNativeDsdSilenceByte
+                    : kPcmSilenceByte);
+    }
+
     // ── Create DsdPlaybackManager ─────────────────────────────────────────────
     if (startInDop == JNI_FALSE && supportsDopFallback == JNI_TRUE) {
         JavaVM *vm = nullptr;

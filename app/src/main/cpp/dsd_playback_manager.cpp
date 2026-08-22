@@ -515,6 +515,10 @@ void DsdPlaybackManager::execute_fallback_to_dop() noexcept
     ctx_->transfer_pool = std::move(dop_pool);
     ctx_->dsd_formatter = make_dsd_frame_formatter(false);
     ctx_->dsd_wire_mode = DsdWireMode::Dop;
+    // No set_silence_byte() call here on purpose: this is a freshly created
+    // pool, and a DoP stream idles correctly on the default kPcmSilenceByte
+    // (a marker-less zero frame drops the DAC back to PCM, i.e. silence).
+    // Only native DSD needs the 0x69 override — see nativeStartDsdPlayback.
     (void)ctx_->playback_state.transition_to(UsbPlaybackState::Priming);
 
     // ── Phase F: Pre-fill ring with DoP-framed DSD silence ────────────────────

@@ -471,7 +471,11 @@ void iso_transfer_callback(libusb_transfer *transfer)
     //   not from the payload content.  Submitting a shorter transfer would create
     //   a gap in the 125 µs microframe grid, causing the DAC's PLL to lose lock
     //   and producing a loud click or endpoint STALL.  We always fill exactly
-    //   `new_total` bytes — silence (zeros) when live data is unavailable.
+    //   `new_total` bytes — silence when live data is unavailable.
+    //
+    //   "Silence" is the pool's configured idle byte, NOT a hardcoded zero: a
+    //   native DSD stream idles at 0x69, because zeros in a 1-bit stream are a
+    //   full-scale negative DC rather than silence. See set_silence_byte().
     //
     // ### Normal path (ring has enough data)
     //
@@ -482,7 +486,7 @@ void iso_transfer_callback(libusb_transfer *transfer)
     // ### Underrun path (ring is partially or completely empty)
     //
     //   1. Pop as many bytes as are currently available (partial fill).
-    //   2. Zero-pad the remainder to maintain the correct transfer length.
+    //   2. Pad the remainder with the idle byte to keep the transfer length.
     //   3. Increment the underrun counter for out-of-band monitoring.
 
     // Reinterpret libusb's unsigned char* as uint8_t* for pop().
@@ -491,6 +495,11 @@ void iso_transfer_callback(libusb_transfer *transfer)
     const auto  required = static_cast<std::size_t>(new_total);  // Bresenham-exact
 
     SpscRingBuffer *const ring = slot->pool->ring_buffer();
+
+    // Idle pattern for every path below that has no audio to send. Relaxed load
+    // is correct: the value is set once during bring-up while this pool has no
+    // transfer in flight, so no happens-before with audio data is required.
+    const int silence = static_cast<int>(slot->pool->silence_byte());
 
     if (__builtin_expect(ring != nullptr, 1)) {
         // ── Fast path: ring has a full transfer's worth of decoded audio ──────
@@ -508,12 +517,12 @@ void iso_transfer_callback(libusb_transfer *transfer)
             if (partial > 0) {
                 // Partial fill: copy available bytes to the front of the buffer.
                 ring->pop(buf8, partial);
-                // Zero-pad the unfilled tail so the DAC receives a valid-length
+                // Pad the unfilled tail so the DAC receives a valid-length
                 // transfer carrying silence for the missing samples.
-                std::memset(buf8 + partial, 0, required - partial);
+                std::memset(buf8 + partial, silence, required - partial);
             } else {
                 // Ring is completely empty — output a full silence frame.
-                std::memset(buf8, 0, required);
+                std::memset(buf8, silence, required);
             }
 
             // Signal the monitoring layer.  relaxed ordering is correct: this
@@ -539,7 +548,7 @@ void iso_transfer_callback(libusb_transfer *transfer)
     } else {
         // Ring not yet attached (pre-playback or post-teardown state).
         // Output silence so the DAC clock keeps running cleanly.
-        std::memset(buf8, 0, required);
+        std::memset(buf8, silence, required);
     }
 
     // ── 7. Apply Bresenham packet lengths to the transfer descriptor ──────────
@@ -727,8 +736,9 @@ std::unique_ptr<IsoTransferPool> IsoTransferPool::create(
         return nullptr;
     }
 
-    PLOGI("IsoTransferPool::create: SUCCESS — %u transfer slots ready, all buffers zeroed",
-          cfg.pool_size);
+    PLOGI("IsoTransferPool::create: SUCCESS — %u transfer slots ready, "
+          "all buffers idle-filled with 0x%02X",
+          cfg.pool_size, static_cast<unsigned>(pool->silence_byte()));
     return pool;
 }
 
@@ -786,7 +796,7 @@ bool IsoTransferPool::allocate(libusb_device_handle *handle, std::string *error_
             buffers_.push_back(buf);
         }
 
-        // ── 3. Zero-fill the entire buffer (absolute silence) ─────────────────
+        // ── 3. Fill the entire buffer with the idle pattern (silence) ─────────
         //
         // For PCM audio, all-zeros is bit-perfect digital silence for all
         // common formats (S16LE, S24LE, S32LE, F32LE).
@@ -797,13 +807,19 @@ bool IsoTransferPool::allocate(libusb_device_handle *handle, std::string *error_
         // is safe — Step 5 will overwrite with properly framed DoP data before
         // the first submission.
         //
-        // Note: zeroing after posix_memalign is mandatory.  The allocator does
+        // For **native DSD** zero is NOT silence — it is a full-scale negative
+        // DC in the 1-bit domain.  That case is handled by set_silence_byte(),
+        // which the DSD bring-up calls before the first submission and which
+        // rewrites these buffers to 0x69.  The default below stays correct for
+        // every PCM and DoP session.
+        //
+        // Note: filling after posix_memalign is mandatory.  The allocator does
         // NOT clear the memory (unlike calloc), so uninitialised bytes could
         // contain arbitrary data from a previous allocation.  Sending random
         // bytes as audio would produce a loud pop through the DAC.
-        memset(buf, 0, static_cast<std::size_t>(buffer_size_per_xfer_));
+        memset(buf, silence_byte(), static_cast<std::size_t>(buffer_size_per_xfer_));
 
-        PLOGD("  slot[%u]: buffer=%p size=%u B aligned=%zu B (zeroed)",
+        PLOGD("  slot[%u]: buffer=%p size=%u B aligned=%zu B (idle-filled)",
               i, buf, buffer_size_per_xfer_,
               reinterpret_cast<uintptr_t>(buf) % BUFFER_ALIGNMENT == 0
                   ? BUFFER_ALIGNMENT : 0U);
@@ -1086,6 +1102,36 @@ void IsoTransferPool::clear_dsd_observation_window() noexcept
     dsd_stall_in_window_.store(false, std::memory_order_relaxed);
 
     PLOGI("IsoTransferPool: DSD observation window cleared");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IsoTransferPool — idle (silence) pattern
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sets the idle byte and re-primes every allocated transfer buffer with it.
+ *
+ * The re-prime is what actually fixes the cold-boot tick: the pool pre-fills
+ * its buffers at allocation time, and a native DSD session submits all N of
+ * them before the decoder pump has produced its first byte. Without this the
+ * DAC's first ~100 ms of native DSD is a run of 0x00 — full-scale negative DC.
+ *
+ * Precondition (documented on the declaration): no transfer in flight.
+ */
+void IsoTransferPool::set_silence_byte(uint8_t value) noexcept
+{
+    const uint8_t previous = silence_byte_.exchange(value, std::memory_order_relaxed);
+
+    for (void *const buf : buffers_) {
+        if (buf != nullptr) {
+            memset(buf, value, static_cast<std::size_t>(buffer_size_per_xfer_));
+        }
+    }
+
+    PLOGI("IsoTransferPool::set_silence_byte: 0x%02X → 0x%02X — %zu buffer(s) re-primed",
+          static_cast<unsigned>(previous),
+          static_cast<unsigned>(value),
+          buffers_.size());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
