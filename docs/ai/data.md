@@ -140,6 +140,16 @@ index complete without stamping its signature.
   through `SeekableDocumentSource` (positioned reads over the document's `FileChannel`,
   because `RandomAccessFile` cannot open these files), and caches embedded APIC artwork
   into `cacheDir` (referenced by `TrackEntity.artUri`).
+  It reports `dateAdded` as the **raw document mtime, or 0 when the provider supplies
+  none** (`COLUMN_LAST_MODIFIED` is an optional column). It must not invent a value
+  there: `MediaIndexRepositoryImpl.withLibraryFirstSeenDates()` is the single place that
+  resolves the library-relative "added" timestamp, because only it can see the previous
+  index. An mtime is not `MediaStore.DATE_ADDED` — a SACD rip copied over today still
+  carries its original stamp — and the Songs tab is the only surface that sorts on this
+  field (`RECENTLY_ADDED` is the default), so getting it wrong buries DSD tracks below
+  the whole library while albums (sorted by year), artists (alphabetical) and the short
+  facet lists keep showing them. That asymmetry is exactly what a user reports as
+  "DSD appears everywhere except in Songs".
 - `M3uFileScanner` finds `.m3u`/`.m3u8` playlists MediaStore never indexes the same way
   `DsdFileScanner` finds DSD files — walking the granted document trees — then resolves
   each entry's path against the same scan pass's combined MediaStore+DSD result (exact

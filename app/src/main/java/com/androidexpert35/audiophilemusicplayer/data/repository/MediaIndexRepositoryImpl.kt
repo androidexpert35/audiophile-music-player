@@ -17,6 +17,7 @@ import com.androidexpert35.audiophilemusicplayer.data.repository.MediaIndexRepos
 import com.androidexpert35.audiophilemusicplayer.data.scanner.DsdFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MediaStoreScanner
+import com.androidexpert35.audiophilemusicplayer.data.scanner.ScannedAudioFile
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import com.androidexpert35.audiophilemusicplayer.domain.model.indexing.MediaIndexingProgress
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MediaIndexRepository
@@ -140,7 +141,7 @@ class MediaIndexRepositoryImpl @Inject constructor(
                 // not covered by READ_MEDIA_AUDIO, so DsdFileScanner walks the same granted
                 // folders through their document-tree grants as a supplementary pass; its
                 // results are merged here before indexing into Room.
-                val dsdFiles = dsdFileScanner.scanDsdFiles(folders)
+                val dsdFiles = dsdFileScanner.scanDsdFiles(folders).withLibraryFirstSeenDates()
                 val scannedFiles = mediaStoreFiles + dsdFiles
                 val totalFiles = scannedFiles.size
 
@@ -274,6 +275,50 @@ class MediaIndexRepositoryImpl @Inject constructor(
      * change event arrives. [awaitClose] unregisters the observer automatically when the
      * collecting scope is cancelled — no manual lifecycle wiring is required.
      */
+    /**
+     * Replaces each DSD file's raw modification time with a library-relative
+     * "added" timestamp, so the Songs tab can sort DSD and MediaStore tracks on
+     * one consistent meaning of "recently added".
+     *
+     * MediaStore reports `DATE_ADDED` — when the file entered the device's index.
+     * A DocumentsProvider can only report an mtime, and often reports nothing at
+     * all (`COLUMN_LAST_MODIFIED` is optional, and a NULL reads back as 0). Both
+     * substitutes break the same way under the default `RECENTLY_ADDED` sort: a
+     * SACD rip copied over today but stamped 2015 — or stamped 0 — sorts below
+     * every other song in the library, which reads to the user as "my DSD files
+     * are missing from Songs" while every other section still lists them (albums
+     * sort by year, artists alphabetically, and the facet lists are short enough
+     * that position does not hide anything).
+     *
+     * The resolution rule needs no schema change and heals the existing index in
+     * place:
+     *
+     * - A stored value **greater than** the file's mtime can only have been
+     *   written by this method (a file is always modified before it is scanned),
+     *   so it is a genuine first-seen stamp and is preserved.
+     * - Anything else — no stored row, or a stored value equal to the mtime, which
+     *   is exactly what earlier builds persisted — is (re)stamped with now.
+     *
+     * So the first index after this change lifts an existing DSD collection to
+     * "added today" once, and every later re-index leaves it alone. A file that is
+     * genuinely rewritten later (retagged) crosses back above its stamp and counts
+     * as newly added, which is the intended reading.
+     */
+    private suspend fun List<ScannedAudioFile>.withLibraryFirstSeenDates(): List<ScannedAudioFile> {
+        if (isEmpty()) return this
+
+        val storedDateAddedById = libraryIndexDao
+            .getTracksByIds(map(ScannedAudioFile::id))
+            .associate { entity -> entity.id to entity.dateAdded }
+        val nowEpochSeconds = System.currentTimeMillis() / 1_000L
+
+        return map { file ->
+            val storedFirstSeen = storedDateAddedById[file.id]
+                ?.takeIf { stored -> stored > file.dateAdded }
+            file.copy(dateAdded = storedFirstSeen ?: nowEpochSeconds)
+        }
+    }
+
     private fun observeAudioContentChanges(): Flow<Unit> = callbackFlow {
         // Emit immediately so the caller has an initial value without waiting for a change event.
         trySend(Unit)

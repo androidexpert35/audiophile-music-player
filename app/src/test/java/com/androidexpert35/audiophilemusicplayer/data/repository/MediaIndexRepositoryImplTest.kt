@@ -13,6 +13,7 @@ import com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MediaStoreScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MusicFolderScope
 import com.tony.coreui.domain.resource.Resource
+import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -175,6 +176,128 @@ class MediaIndexRepositoryImplTest {
 
             assertFalse(createRepository().isLibraryIndexed())
         }
+
+    @Test
+    fun `given a dsd file with an old mtime when first indexed then it is dated as added now`() =
+        runTest {
+            // The reported symptom: a SACD rip copied over today still carries its 2015
+            // mtime, so under the default RECENTLY_ADDED sort it lands below every
+            // MediaStore song and reads as missing from the Songs tab.
+            val ripStampedIn2015 = 1_420_070_400L
+            val dsdFile = dsdScannedFile(id = -42L, dateAdded = ripStampedIn2015)
+            val tracks = arrangeScan(dsdFiles = listOf(dsdFile), storedTracks = emptyList())
+
+            createRepository().scanAndIndexMedia().toList()
+
+            val indexed = tracks.captured.single()
+            assertTrue(
+                "expected a fresh first-seen stamp, got ${indexed.dateAdded}",
+                indexed.dateAdded > ripStampedIn2015,
+            )
+        }
+
+    @Test
+    fun `given a dsd file already carrying a first-seen stamp when re-indexed then it is preserved`() =
+        runTest {
+            // A stored value above the file's mtime can only be a stamp this repository
+            // wrote, so a re-scan must not keep pushing the track back to the top.
+            val mtime = 1_420_070_400L
+            val firstSeen = 1_700_000_000L
+            val dsdFile = dsdScannedFile(id = -42L, dateAdded = mtime)
+            val tracks = arrangeScan(
+                dsdFiles = listOf(dsdFile),
+                storedTracks = listOf(trackEntity(id = -42L, dateAdded = firstSeen)),
+            )
+
+            createRepository().scanAndIndexMedia().toList()
+
+            assertEquals(firstSeen, tracks.captured.single().dateAdded)
+        }
+
+    @Test
+    fun `given a dsd file stored by an older build when re-indexed then the mtime stamp is healed`() =
+        runTest {
+            // Earlier builds persisted the mtime verbatim, so stored == mtime. That is the
+            // broken state in the field and must be re-stamped rather than preserved.
+            val mtime = 1_420_070_400L
+            val dsdFile = dsdScannedFile(id = -42L, dateAdded = mtime)
+            val tracks = arrangeScan(
+                dsdFiles = listOf(dsdFile),
+                storedTracks = listOf(trackEntity(id = -42L, dateAdded = mtime)),
+            )
+
+            createRepository().scanAndIndexMedia().toList()
+
+            assertTrue(tracks.captured.single().dateAdded > mtime)
+        }
+
+    /**
+     * Wires a minimal successful scan returning [dsdFiles] and backed by [storedTracks],
+     * and returns the slot capturing the tracks written to Room.
+     */
+    private fun arrangeScan(
+        dsdFiles: List<com.androidexpert35.audiophilemusicplayer.data.scanner.ScannedAudioFile>,
+        storedTracks: List<TrackEntity>,
+    ): CapturingSlot<List<TrackEntity>> {
+        coEvery { musicFolderRegistry.getScopes() } returns listOf(mockk<MusicFolderScope>())
+        coEvery { musicFolderRegistry.hasStoredFolders() } returns true
+        coEvery { musicFolderRegistry.folderSignature() } returns "sig"
+        coEvery { scanner.scanAudioFilesForIndexing(any(), any()) } returns emptyList()
+        coEvery { dsdFileScanner.scanDsdFiles(any()) } returns dsdFiles
+        coEvery { m3uFileScanner.scanPlaylists(any(), any()) } returns emptyList()
+        coEvery { libraryIndexDao.getTracksByIds(any()) } returns storedTracks
+
+        val tracks = slot<List<TrackEntity>>()
+        coEvery {
+            libraryIndexDao.replaceIndexedLibrary(capture(tracks), any(), any(), any())
+        } returns Unit
+        return tracks
+    }
+
+    private fun dsdScannedFile(
+        id: Long,
+        dateAdded: Long,
+    ) = com.androidexpert35.audiophilemusicplayer.data.scanner.ScannedAudioFile(
+        id = id,
+        title = "Wanna Be Startin' Somethin'",
+        artistId = -7L,
+        artistName = "Michael Jackson",
+        albumId = -9L,
+        albumTitle = "Thriller",
+        durationMs = 363_922L,
+        contentUri = "content://tree/primary%3AMusic/document/01.dsf",
+        filePath = "Music/Thriller/01.dsf",
+        trackNumber = 1,
+        discNumber = 1,
+        mimeType = "audio/x-dsd",
+        fileSizeBytes = 256_000_000L,
+        dateAdded = dateAdded,
+        year = 1982,
+        artUri = null,
+    )
+
+    private fun trackEntity(id: Long, dateAdded: Long) = TrackEntity(
+        id = id,
+        title = "Wanna Be Startin' Somethin'",
+        artistId = -7L,
+        artistName = "Michael Jackson",
+        albumId = -9L,
+        albumTitle = "Thriller",
+        durationMs = 363_922L,
+        contentUri = "content://tree/primary%3AMusic/document/01.dsf",
+        filePath = "Music/Thriller/01.dsf",
+        trackNumber = 1,
+        discNumber = 1,
+        mimeType = "audio/x-dsd",
+        fileSizeBytes = 256_000_000L,
+        dateAdded = dateAdded,
+        sampleRateHz = 2_822_400,
+        bitDepth = 1,
+        channelCount = 2,
+        isLossless = true,
+        artUri = null,
+        year = 1982,
+    )
 
     private fun createRepository(): MediaIndexRepositoryImpl = MediaIndexRepositoryImpl(
         scanner = scanner,

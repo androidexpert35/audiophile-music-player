@@ -317,7 +317,7 @@ class DsdFileScanner @Inject constructor(
             discNumber = 1,
             mimeType = MIME_DSD,
             fileSizeBytes = fileSizeBytes,
-            dateAdded = lastModifiedMs / 1_000L,
+            dateAdded = if (lastModifiedMs > 0L) lastModifiedMs / 1_000L else 0L,
             year = year,
             artUri = artUri,
             // DSD sample rates: DSD64 = 2 822 400 Hz, DSD128 = 5 644 800, DSD256 = 11 289 600.
