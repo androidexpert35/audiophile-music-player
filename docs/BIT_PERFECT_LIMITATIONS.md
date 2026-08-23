@@ -145,12 +145,16 @@ should surface this to the user.
 
 ## 8. Gapless has two tiers
 
-- **True gapless** (no audible transition) when the next track shares
-  sample rate, PCM encoding, and channel count with the current one. The
-  sink is reused; writes continue uninterrupted.
-- **Format-change transition** (brief silence while the sink is rebuilt)
-  when any of those three dimensions change. This is an unavoidable
-  consequence of re-opening the `AudioTrack` with new parameters.
+- **True gapless** (no audible transition) on engine-fed sinks when the next
+  track shares sample rate, PCM encoding, and channel count with the current
+  one. The sink is reused; writes continue uninterrupted. The raw libusb PCM
+  sink is excluded because its pump owns an independent native decoder handle;
+  it reloads the USB session at EOF so a stale EOF cannot terminate the next
+  track.
+- **Session-rebuild transition** (brief silence while the sink is rebuilt) when
+  any of those three dimensions change, or whenever the raw libusb decoder-pump
+  path is active. This is required to reopen `AudioTrack` with new parameters or
+  to replace the native libusb decoder handle safely.
 
 ## 9. Vendor FFmpeg builds
 

@@ -12,9 +12,10 @@ import com.androidexpert35.audiophilemusicplayer.data.playback.native_.FFmpegDec
  * opened [FFmpegDecoder] alongside the format and URI, so the engine can swap
  * decoders at end-of-stream **without** touching the output sink.
  *
- * When formats are incompatible, only the URI is stored. The engine performs
- * a full sink-and-decoder reload on end-of-stream, producing a brief but
- * correct audible transition.
+ * When formats are incompatible, or the sink owns an independent native
+ * decoder pump, only the URI is stored. The engine performs a full
+ * sink-and-decoder reload on end-of-stream, producing a brief but correct
+ * audible transition.
  */
 internal class BitPerfectGaplessQueue {
 
@@ -131,18 +132,29 @@ internal class BitPerfectGaplessQueue {
     companion object {
 
         /**
-         * Returns `true` when [current] and [next] share the same PCM encoding,
-         * sample rate, and channel count — the preconditions for a seamless
-         * sink-preserving decoder swap at end-of-stream.
+         * Returns `true` when the active pipeline can swap to [next] by replacing
+         * only the decoder owned by [BitPerfectPlaybackEngine].
+         *
+         * Besides matching PCM shape, the sink must consume that engine-owned
+         * decoder. A native decoder-pump sink owns a separate decoder handle;
+         * swapping the Kotlin-side decoder would leave the native pump at EOF and
+         * immediately terminate the incoming track.
          *
          * DSD tracks are always excluded from gapless preload because each DSD
          * track requires its own DoP / native transport negotiation during load.
          *
          * @param current Format of the track currently being decoded.
          * @param next Format of the candidate next track.
+         * @param sinkUsesNativeDecoderPump Whether the sink reads from its own
+         *   native decoder instead of the engine-owned [FFmpegDecoder].
          */
-        fun areGaplessCompatible(current: AudioFormatInfo, next: AudioFormatInfo): Boolean =
-            !current.isDsd && !next.isDsd &&
+        fun canSwapDecoderInPlace(
+            current: AudioFormatInfo,
+            next: AudioFormatInfo,
+            sinkUsesNativeDecoderPump: Boolean,
+        ): Boolean =
+            !sinkUsesNativeDecoderPump &&
+                !current.isDsd && !next.isDsd &&
                 next.sampleRateHz == current.sampleRateHz &&
                 next.androidPcmEncoding == current.androidPcmEncoding &&
                 next.channelCount == current.channelCount

@@ -612,6 +612,16 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             return
         }
 
+        // Raw libusb sinks decode through a second native FFmpeg handle owned by
+        // their pump thread. Preloading and later swapping currentDecoder would
+        // leave that native handle at EOF, so the next poll would immediately end
+        // the incoming item. Rebuild the complete USB session at EOF instead.
+        if (sink is LibusbOutputSink) {
+            BitPerfectDiagnosticsLogger.onEnqueueDowngradedToUriOnly("sink-owned-native-decoder")
+            gaplessQueue.enqueueUriOnly(uri)
+            return
+        }
+
         val path = runCatching { resolveUriToPath(context, uri) }.getOrNull()
         if (path == null) {
             BitPerfectDiagnosticsLogger.onEnqueueDowngradedToUriOnly("uri-resolution-failed")
@@ -660,17 +670,23 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     }
 
     /**
-     * Ensures a gapless swap only reuses the sink when both tracks produce the
-     * same downstream carrier format (raw PCM vs float PCM via SUE or force-48k).
+     * Ensures a gapless swap only reuses an engine-fed sink when both tracks
+     * produce the same downstream carrier format (raw PCM vs float PCM via SUE
+     * or force-48k).
      */
     private fun areGaplessPipelinesCompatible(current: AudioFormatInfo, next: AudioFormatInfo): Boolean {
-        if (!BitPerfectGaplessQueue.areGaplessCompatible(current, next)) return false
+        if (!BitPerfectGaplessQueue.canSwapDecoderInPlace(
+                current = current,
+                next = next,
+                sinkUsesNativeDecoderPump = sink is LibusbOutputSink,
+            )
+        ) {
+            return false
+        }
 
         val currentUsesFloatCarrier = activeSueStage?.isActive == true
         val sueEnabled = isSueEnabled()
         val hiResEnabled = isHiResRemasterEnabled()
-        // ✅ CHANGED: signature now passes pre-read settings to avoid re-reading SharedPreferences
-        // twice for the same eligibility check.
         val nextUsesFloatCarrier = ratePolicy.willTrackUseSueOrForce48kStage(next, sueEnabled, hiResEnabled)
         return currentUsesFloatCarrier == nextUsesFloatCarrier
     }

@@ -82,7 +82,7 @@ coordinator only — each concern is delegated to a dedicated helper in the same
 | `BitPerfectSinkRouter` | Picks the output sink (USB direct vs. `AudioTrack`) and builds the DSD transport context from USB hardware state |
 | `BitPerfectPcmRatePolicy` | Resolves PCM sample-rate ownership for the enhancement stage per track load |
 | `BitPerfectRoutingDiagnostics` | Stateless logcat routing banners (`adb logcat -s AudiophileRouting`) |
-| `BitPerfectGaplessQueue` | Preloaded next-track state for gapless / non-gapless auto-advance |
+| `BitPerfectGaplessQueue` | Preloaded next-track state for gapless / non-gapless auto-advance. Sink-preserving decoder swaps are limited to engine-fed sinks; `LibusbOutputSink` owns an independent native decoder and therefore uses the URI-only EOF reload path. |
 | — auto-advance resilience | Every `doEnqueueNext` failure path downgrades to a URI-only entry (load deferred to EOF) instead of returning empty-handed; at EOF an empty queue re-asks `Listener.onNextTrackUriRequested()` (answered by `AudioEngineManager` from its cached follower URI) and the EOF-time load retries once on ERROR. Playback must never end silently while the playlist still has a follower. |
 | `BitPerfectTransportBuffers` | Reusable, grow-only PCM/DSD scratch buffers (direct `ByteBuffer` for the JNI boundary) |
 | `BitPerfectWakeLockController` | `PARTIAL_WAKE_LOCK` lifecycle across play/pause/stop/error |
