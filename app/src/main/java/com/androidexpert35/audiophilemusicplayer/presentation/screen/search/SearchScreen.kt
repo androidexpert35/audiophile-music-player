@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -104,6 +106,13 @@ private fun SearchContent(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     val shellBottomPadding = LocalShellBottomPadding.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun dismissSearchInput() {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     val hasResults = model.artistResults.isNotEmpty() ||
         model.albumResults.isNotEmpty() ||
@@ -195,7 +204,10 @@ private fun SearchContent(
                         onImageRequest = {
                             onEvent(SearchUiEvent.LoadArtistImage(artist))
                         },
-                        onClick = { onEvent(SearchUiEvent.OpenArtistDescription(artist)) }
+                        onClick = {
+                            dismissSearchInput()
+                            onEvent(SearchUiEvent.OpenArtistDescription(artist))
+                        }
                     )
                 }
             }
@@ -214,7 +226,10 @@ private fun SearchContent(
                 ) { album ->
                     LibraryAlbumRow(
                         album = album,
-                        onClick = { onEvent(SearchUiEvent.OpenAlbumOverview(album)) }
+                        onClick = {
+                            dismissSearchInput()
+                            onEvent(SearchUiEvent.OpenAlbumOverview(album))
+                        }
                     )
                 }
             }
@@ -233,7 +248,10 @@ private fun SearchContent(
                 ) { track ->
                     LibraryTrackRow(
                         track = track,
-                        onClick = { onEvent(SearchUiEvent.PlayTrack(track)) }
+                        onClick = {
+                            dismissSearchInput()
+                            onEvent(SearchUiEvent.PlayTrack(track))
+                        }
                     )
                 }
             }
