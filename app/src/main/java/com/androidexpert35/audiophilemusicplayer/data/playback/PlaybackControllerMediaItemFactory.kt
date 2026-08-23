@@ -1,8 +1,10 @@
 package com.androidexpert35.audiophilemusicplayer.data.playback
 
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Size
@@ -36,7 +38,7 @@ internal object PlaybackControllerMediaItemFactory {
     fun createMediaItem(track: Track, artworkBytes: ByteArray?): MediaItem {
         val metadata = buildTrackMetadata(
             track = track,
-            artworkUri = albumArtUri(track.albumId),
+            artworkUri = artworkUri(track),
             artworkBytes = artworkBytes,
         )
         return MediaItem.fromUri(track.uri.toUri())
@@ -47,23 +49,44 @@ internal object PlaybackControllerMediaItemFactory {
     }
 
     /**
-     * Loads album artwork as a compressed JPEG byte array.
+     * Loads track artwork as a notification-safe compressed JPEG byte array.
      *
-     * @param context Application context used to read MediaStore thumbnails.
-     * @param albumId MediaStore album identifier.
+     * Uses the pre-computed [Track.artUri] when available, including the cached
+     * `file://` artwork extracted from DSF tags, then falls back to MediaStore for
+     * regular tracks. File-backed images are sampled before decoding to avoid
+     * retaining a full-resolution embedded cover in memory.
+     *
+     * @param context Application context used to read artwork.
+     * @param track Track whose artwork should be loaded.
      * @return JPEG bytes, or `null` when artwork is unavailable.
      */
-    fun loadAlbumArtBytes(context: Context, albumId: Long): ByteArray? = runCatching {
-        val bitmap: Bitmap = context.contentResolver.loadThumbnail(
-            albumArtUri(albumId),
-            Size(ARTWORK_THUMB_SIZE, ARTWORK_THUMB_SIZE),
-            null,
-        )
+    fun loadArtworkBytes(context: Context, track: Track): ByteArray? = runCatching {
+        val artworkUri = artworkUri(track) ?: return@runCatching null
+        val bitmap = if (artworkUri.scheme == ContentResolver.SCHEME_FILE) {
+            loadSampledFileBitmap(artworkUri)
+        } else {
+            context.contentResolver.loadThumbnail(
+                artworkUri,
+                Size(ARTWORK_THUMB_SIZE, ARTWORK_THUMB_SIZE),
+                null,
+            )
+        } ?: return@runCatching null
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, ARTWORK_JPEG_QUALITY, stream)
         bitmap.recycle()
         stream.toByteArray()
     }.getOrNull()
+
+    /**
+     * Resolves the artwork URI carried into Media3 metadata for [track].
+     *
+     * @param track Track whose local artwork source should be exposed.
+     * @return Cached or MediaStore artwork URI, or `null` for an untagged DSD track.
+     */
+    fun artworkUri(track: Track): Uri? = track.artUri
+        ?.takeIf(String::isNotBlank)
+        ?.toUri()
+        ?: track.albumId.takeIf { it > 0L }?.let(::albumArtUri)
 
     /**
      * Returns the MediaStore album-art URI for [albumId].
@@ -78,19 +101,51 @@ internal object PlaybackControllerMediaItemFactory {
 
     private fun buildTrackMetadata(
         track: Track,
-        artworkUri: Uri,
+        artworkUri: Uri?,
         artworkBytes: ByteArray?,
     ): MediaMetadata {
         val builder = MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artistName)
             .setAlbumTitle(track.albumTitle)
-            .setArtworkUri(artworkUri)
+        if (artworkUri != null) builder.setArtworkUri(artworkUri)
         if (track.durationMs > 0L) builder.setDurationMs(track.durationMs)
         if (artworkBytes != null) {
             builder.setArtworkData(artworkBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
         }
         return builder.build()
+    }
+
+    private fun loadSampledFileBitmap(artworkUri: Uri): Bitmap? {
+        val path = artworkUri.path ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sampleSize = 1
+        while (
+            bounds.outWidth / sampleSize > ARTWORK_THUMB_SIZE * 2 ||
+            bounds.outHeight / sampleSize > ARTWORK_THUMB_SIZE * 2
+        ) {
+            sampleSize *= 2
+        }
+        val decoded = BitmapFactory.decodeFile(
+            path,
+            BitmapFactory.Options().apply { inSampleSize = sampleSize },
+        ) ?: return null
+        if (decoded.width <= ARTWORK_THUMB_SIZE && decoded.height <= ARTWORK_THUMB_SIZE) {
+            return decoded
+        }
+
+        val scale = ARTWORK_THUMB_SIZE.toFloat() / maxOf(decoded.width, decoded.height)
+        val thumbnail = Bitmap.createScaledBitmap(
+            decoded,
+            (decoded.width * scale).toInt().coerceAtLeast(1),
+            (decoded.height * scale).toInt().coerceAtLeast(1),
+            true,
+        )
+        decoded.recycle()
+        return thumbnail
     }
 }
 

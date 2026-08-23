@@ -219,9 +219,9 @@ class PlaybackController @Inject constructor(
         // set so the system notification can attempt lazy loading when each item becomes current.
         val currentItemWithArt = withContext(ioDispatcher) {
             queue[startIndex].toPlaybackMediaItem(
-                artworkBytes = PlaybackControllerMediaItemFactory.loadAlbumArtBytes(
+                artworkBytes = PlaybackControllerMediaItemFactory.loadArtworkBytes(
                     context = context,
-                    albumId = queue[startIndex].albumId,
+                    track = queue[startIndex],
                 )
             )
         }

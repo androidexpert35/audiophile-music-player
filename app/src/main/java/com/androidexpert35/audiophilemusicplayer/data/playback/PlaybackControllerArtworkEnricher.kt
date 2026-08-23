@@ -30,7 +30,7 @@ import kotlinx.coroutines.withContext
  * - The track cannot be resolved from [trackMap] (stale or unknown media ID).
  * - The item already carries embedded [MediaMetadata.artworkData] (avoids redundant IO).
  * - The item changes again while artwork is loading (stale capture guard).
- * - No artwork is available from the content resolver for the given album.
+ * - No artwork is available from the track's cached or MediaStore artwork URI.
  *
  * Uses [MediaController.replaceMediaItem] with the same URI so ExoPlayer detects no
  * source change, performs a metadata-only update, and does not rebuffer the current track.
@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
  * @param trackMap Reverse-lookup map of media ID → domain track.
  * @param mainScope Application-scoped main-thread coroutine scope.
  * @param ioDispatcher Dispatcher used for the blocking artwork content-resolver read.
- * @param context Application context for [PlaybackControllerMediaItemFactory.loadAlbumArtBytes].
+ * @param context Application context for [PlaybackControllerMediaItemFactory.loadArtworkBytes].
  */
 @OptIn(UnstableApi::class)
 internal fun enrichCurrentMediaItemArtwork(
@@ -58,7 +58,7 @@ internal fun enrichCurrentMediaItemArtwork(
 
     mainScope.launch {
         val artworkBytes = withContext(ioDispatcher) {
-            PlaybackControllerMediaItemFactory.loadAlbumArtBytes(context, track.albumId)
+            PlaybackControllerMediaItemFactory.loadArtworkBytes(context, track)
         }
             ?: return@launch // No artwork available — leave the existing item unchanged
 
