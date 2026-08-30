@@ -53,8 +53,8 @@ original document via the SAF permission already granted on its parent tree (`Co
 `AudiophileDatabase` (file `audiophile_music.db`) is the local cache and the source of
 truth for indexed library, session state, liked songs, playback history/counts, and lyrics.
 
-- **Entities** (`entity/`): `TrackEntity` (including source year, genre, and composer
-  metadata), `AlbumEntity`, `ArtistEntity`,
+- **Entities** (`entity/`): `TrackEntity` (including source year, genre, composer
+  metadata, and the `audioKey` content key), `AlbumEntity`, `ArtistEntity`,
   `LibraryIndexStateEntity`, `PlaybackStateEntity`, `LikedSongEntity`,
   `RecentlyPlayedEntity`, `LyricsCacheEntity`, `ImportedPlaylistEntity`.
 - **DAOs** (`dao/`): `LibraryIndexDao`, `PlaybackStateDao`, `LikedSongDao`,
@@ -63,8 +63,8 @@ truth for indexed library, session state, liked songs, playback history/counts, 
   `StringListTypeConverter` (imported-playlist track URIs).
 
 ### Migrations are mandatory
-Current schema **version is 12** with explicit migrations `MIGRATION_1_2` …
-`MIGRATION_11_12`, registered in both `AudiophileDatabase` and `AppModule`'s
+Current schema **version is 14** with explicit migrations `MIGRATION_1_2` …
+`MIGRATION_13_14`, registered in both `AudiophileDatabase` and `AppModule`'s
 `databaseBuilder`. When you change any entity:
 
 1. Bump `@Database(version = N)`.
@@ -74,6 +74,30 @@ Current schema **version is 12** with explicit migrations `MIGRATION_1_2` …
 
 ❌ Never rely on destructive/`fallbackToDestructiveMigration` — the user's cached
 catalogue and playback session must survive upgrades.
+
+### `TrackEntity.audioKey` identifies the audio, not the row
+Schema 14 adds `audioKey TEXT NOT NULL DEFAULT ''` to `tracks` and clears
+`library_index_state` so the next launch re-indexes the already-granted folders and fills
+it in. It exists because `TrackEntity.id` answers the wrong question for anything cached
+per track (a measured analysis, above all): a MediaStore delete + re-add mints a **new id
+for byte-identical audio**, and a file overwritten in place **keeps its id**.
+
+`AudioContentKey.derive()` builds it from the file size plus two 16 KiB payload windows
+read at **25% and 75%** of the file, digested with SHA-256 (128-bit hex prefix, format-
+versioned as `1:<sizeHex>:<digest>`).
+
+- ✅ Sample at fractional offsets. The first kilobytes hold ID3v2 / Vorbis comment blocks,
+  so digesting them would make "fix a spelling in the artist tag" invalidate an analysis of
+  audio that never changed. An in-place tag rewrite — the usual case, because taggers
+  rewrite inside the existing padding — leaves size and payload untouched and keys the same.
+- ⚠️ A tag edit that **changes the file length** (adding embedded artwork) shifts every
+  payload byte and does produce a new key. No offset scheme hides that short of decoding
+  the stream, and over-invalidating is the safe direction.
+- ✅ An empty key means **"not analysable"**, never an error: `AudioContentKeyReader`
+  returns it for a revoked grant, an unmounted volume or a provider that will not open the
+  document, and the scanners keep the track — an unanalysable track is still playable.
+- ❌ Do not reuse the 31-bit URI hash `DsdFileScanner` mints for `id` as a content key; it
+  identifies a location, not a payload.
 
 ---
 
@@ -156,6 +180,12 @@ index complete without stamping its signature.
   path, then suffix, then unambiguous-filename fallback; unresolved entries are skipped).
   Results are cached in `ImportedPlaylistDao`, not the track/album/artist tables, and
   merged into `PlaylistRepositoryImpl.observePlaylists()` as `PlaylistKind.IMPORTED`.
+- `AudioContentKeyReader` samples every scanned file — MediaStore row or granted-tree DSD
+  document, both opened through the resolver's file descriptor — for the
+  `TrackEntity.audioKey` content key described above. `MediaStoreScanner` reads it inside
+  the same per-file pass that runs the ID3v2.2 fallback (so scan progress stays accurate);
+  `DsdFileScanner` reads it after the 30-second duration filter, so rejected documents
+  never pay for it. The read is blocking and both scanners already run it on `@IoDispatcher`.
 - `MetadataFallbackReader` fills gaps when MediaStore metadata is missing. The track
   cache retains best-effort year, genre, and composer tags so the local Library can
   build those sections without a network request or an additional scan.

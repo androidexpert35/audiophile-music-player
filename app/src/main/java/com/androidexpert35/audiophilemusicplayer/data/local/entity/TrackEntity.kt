@@ -36,6 +36,12 @@ import androidx.room.PrimaryKey
  * @property year Best-effort release year, or `0` when it is absent from the source.
  * @property genre Best-effort genre tag, or `null` when unavailable.
  * @property composer Best-effort composer tag, or `null` when unavailable.
+ * @property audioKey Stable identifier for the audio *content* of the file, derived by
+ *   [com.androidexpert35.audiophilemusicplayer.data.scanner.AudioContentKey] from the file
+ *   size plus payload samples taken at 25% and 75% of the file. It survives a re-index and
+ *   a MediaStore delete + re-add of the same file, and changes when the audio is replaced,
+ *   which [id] can express in neither direction. Empty when the file could not be sampled,
+ *   meaning "not analysable" rather than signalling an error.
  */
 @Entity(
     tableName = "tracks",
@@ -73,5 +79,6 @@ data class TrackEntity(
     val year: Int = 0,
     val genre: String? = null,
     val composer: String? = null,
+    val audioKey: String = "",
 )
 

@@ -31,12 +31,15 @@ import javax.inject.Singleton
  *
  * @property contentResolver System content resolver for MediaStore queries.
  * @property fallbackReader Secondary metadata reader used for ID3v2.2 / mixed-tag files.
+ * @property audioContentKeyReader Samples each file's audio payload to produce the stable
+ *   content key an analysis result is cached against.
  * @property ioDispatcher Background dispatcher for blocking cursor operations.
  */
 @Singleton
 class MediaStoreScanner @Inject constructor(
     private val contentResolver: ContentResolver,
     private val fallbackReader: MetadataFallbackReader,
+    private val audioContentKeyReader: AudioContentKeyReader,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
 
@@ -53,6 +56,8 @@ class MediaStoreScanner @Inject constructor(
      * 3. If the album-art URI is still absent after the text-metadata pass, embedded
      *    picture bytes are extracted from the file and written to the app's cache dir,
      *    producing a `file://` URI that Coil can load normally.
+     * 4. Every file — not only the ones needing a fallback — is sampled by
+     *    [AudioContentKeyReader] for its stable audio-content key.
      *
      * The fallback is deliberately surgical — it runs only for affected files, so
      * the total I/O overhead scales with the number of problematic tracks, not the
@@ -162,23 +167,30 @@ class MediaStoreScanner @Inject constructor(
             }
         }
 
-        // Second pass — repair incomplete MediaStore metadata, including FLAC DATE
-        // tags exposed as a missing YEAR value. The overhead is proportional to the
-        // affected tracks, not the whole library.
-        applyMetadataFallback(files, onProgress)
+        // Second pass — derive the audio-content key and repair incomplete MediaStore
+        // metadata, including FLAC DATE tags exposed as a missing YEAR value. The
+        // metadata-repair overhead is proportional to the affected tracks, not the whole
+        // library.
+        enrichScanResults(files, onProgress)
     }
 
     /**
-     * Iterates the scan results and enriches any entry flagged by [MetadataFallbackReader]
-     * with metadata read directly via [MediaMetadataRetriever], then resolves embedded
-     * album art into a cache-backed `file://` URI when the MediaStore art cache is absent.
+     * Iterates the scan results, derives every entry's audio-content key, and enriches any
+     * entry flagged by [MetadataFallbackReader] with metadata read directly via
+     * [MediaMetadataRetriever], then resolves embedded album art into a cache-backed
+     * `file://` URI when the MediaStore art cache is absent.
+     *
+     * The content key is read for every file because it is what a later per-track analysis
+     * is cached against; a file that cannot be opened keeps an empty key and stays in the
+     * results, since an unanalysable track is still a playable one.
      *
      * @param files Mutable list produced by the MediaStore cursor pass.
      * @param onProgress Invoked after each file is visited (whether or not it needed the
      *   fallback read) so callers can render step-by-step scan progress.
-     * @return The same list with ID3v2.2-affected entries replaced by enriched copies.
+     * @return The same list with every entry carrying its content key and ID3v2.2-affected
+     *   entries replaced by enriched copies.
      */
-    private fun applyMetadataFallback(
+    private fun enrichScanResults(
         files: MutableList<ScannedAudioFile>,
         onProgress: (processed: Int, total: Int, filePath: String) -> Unit
     ): List<ScannedAudioFile> {
@@ -189,7 +201,10 @@ class MediaStoreScanner @Inject constructor(
 
         for (i in files.indices) {
             val file = files[i]
+            val audioKey = audioContentKeyReader.read(file.contentUri.toUri(), file.fileSizeBytes)
+
             if (!fallbackReader.needsFallback(file)) {
+                files[i] = file.copy(audioKey = audioKey)
                 onProgress(i + 1, total, file.filePath)
                 continue
             }
@@ -208,7 +223,7 @@ class MediaStoreScanner @Inject constructor(
             }
 
             // Replace the original entry with the enriched copy.
-            files[i] = if (artUri != enriched.artUri) enriched.copy(artUri = artUri) else enriched
+            files[i] = enriched.copy(artUri = artUri, audioKey = audioKey)
             onProgress(i + 1, total, file.filePath)
         }
 

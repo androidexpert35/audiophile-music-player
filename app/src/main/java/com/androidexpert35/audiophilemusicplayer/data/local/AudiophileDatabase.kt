@@ -8,6 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_10_11
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_11_12
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_12_13
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_13_14
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_1_2
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_2_3
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_3_4
@@ -60,6 +61,9 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  *   [MIGRATION_11_12] for the corresponding library sections.
  * - Version 13: cleared the poisoned lyrics "not found" sentinels via
  *   [MIGRATION_12_13].
+ * - Version 14: added the stable `audioKey` content key to `tracks` via
+ *   [MIGRATION_13_14], so a cached per-track analysis can be invalidated when the audio
+ *   changes and kept when only its tags do.
  */
 @Database(
     entities = [
@@ -73,7 +77,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         LyricsCacheEntity::class,
         ImportedPlaylistEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @TypeConverters(LongListTypeConverter::class, StringListTypeConverter::class)
@@ -345,6 +349,21 @@ abstract class AudiophileDatabase : RoomDatabase() {
         val MIGRATION_12_13: Migration = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DELETE FROM lyrics_cache WHERE notFound = 1")
+            }
+        }
+
+        /**
+         * Migration from schema version 13 to 14.
+         *
+         * Adds the stable audio-content key each track is analysed against, then
+         * invalidates the completion marker so the next launch re-indexes the folders the
+         * user already granted and fills the column in. Existing rows keep an empty key
+         * until then, which reads as "not analysable" and is harmless.
+         */
+        val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN audioKey TEXT NOT NULL DEFAULT ''")
+                db.execSQL("DELETE FROM library_index_state")
             }
         }
     }

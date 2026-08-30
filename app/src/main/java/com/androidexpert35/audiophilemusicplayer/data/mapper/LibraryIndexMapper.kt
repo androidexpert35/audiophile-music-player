@@ -41,6 +41,7 @@ fun ScannedAudioFile.toTrackEntity(): TrackEntity {
         year = year,
         genre = genre,
         composer = composer,
+        audioKey = audioKey,
     )
 }
 

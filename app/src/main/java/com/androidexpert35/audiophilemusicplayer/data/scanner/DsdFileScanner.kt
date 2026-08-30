@@ -55,12 +55,15 @@ import kotlin.coroutines.coroutineContext
  * @property context Application context used for metadata retrieval and for writing
  *   cached artwork to [Context.getCacheDir].
  * @property contentResolver Resolver used to walk granted trees and open documents.
+ * @property audioContentKeyReader Samples each document's audio payload to produce the
+ *   stable content key an analysis result is cached against.
  * @property ioDispatcher Background dispatcher for all blocking I/O operations.
  */
 @Singleton
 class DsdFileScanner @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val contentResolver: ContentResolver,
+    private val audioContentKeyReader: AudioContentKeyReader,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
 
@@ -191,6 +194,9 @@ class DsdFileScanner @Inject constructor(
      * @param displayPath Path of the document relative to its storage volume.
      * @param fileSizeBytes Document size reported by the provider.
      * @param lastModifiedMs Document modification time in epoch milliseconds.
+     * The stable audio-content key is derived last, from a second positioned read of the
+     * payload, so only documents that survive the duration filter pay for it.
+     *
      * @return Populated [ScannedAudioFile], or `null` if the document is unreadable or has
      *   a duration below the 30-second threshold used for MediaStore tracks.
      */
@@ -303,6 +309,11 @@ class DsdFileScanner @Inject constructor(
         // on the next indexing pass if Android reclaims the cache.
         val artUri = embeddedPicture?.let { saveEmbeddedArtToCache(it) }
 
+        // ── Phase 4: Stable audio-content key ────────────────────────────────
+        // Read after the duration filter so unplayably short documents never pay for it.
+        // A document that cannot be reopened yields an empty key and is still indexed.
+        val audioKey = audioContentKeyReader.read(documentUri, fileSizeBytes)
+
         ScannedAudioFile(
             id = stableId,
             title = title,
@@ -326,6 +337,7 @@ class DsdFileScanner @Inject constructor(
             bitDepth = 1, // DSD is inherently 1-bit; mark explicitly for display purposes.
             genre = genre,
             composer = composer,
+            audioKey = audioKey,
         )
     }.getOrNull()
 

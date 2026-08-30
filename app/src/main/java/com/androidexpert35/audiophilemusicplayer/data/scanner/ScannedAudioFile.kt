@@ -26,6 +26,8 @@ package com.androidexpert35.audiophilemusicplayer.data.scanner
  * @property artUri Content URI for album artwork, when derivable.
  * @property sampleRateHz Sample rate in Hertz read from MediaStore (API 31+), or `0` when unavailable.
  * @property bitDepth Bits per sample read from MediaStore (API 31+), or `0` when unavailable.
+ * @property audioKey Content key produced by [AudioContentKeyReader], empty when the file
+ *   could not be sampled.
  */
 data class ScannedAudioFile(
     val id: Long,
@@ -48,5 +50,6 @@ data class ScannedAudioFile(
     val bitDepth: Int = 0,
     val genre: String? = null,
     val composer: String? = null,
+    val audioKey: String = "",
 )
 
