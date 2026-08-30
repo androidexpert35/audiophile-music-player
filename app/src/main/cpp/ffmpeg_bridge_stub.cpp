@@ -168,3 +168,35 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_androidexpert35_audiophilemusicplayer_data_playback_engine_audiophile_SueBridge_nativeDestroy(
     JNIEnv *, jclass, jlong) {}
 
+
+
+// -- AudioAnalysisBridge stubs -----------------------------------------------
+// libavfilter is not available in the stub build, so the Class S measurement
+// graph cannot be built.  nativeOpen returns the 0L failure sentinel; the
+// Kotlin layer logs the reason from nativeConsumeLastInitError and records the
+// track as not analysable.  Nothing crashes and no measurement is invented.
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeOpen(
+    JNIEnv *, jclass, jint, jint, jint) {
+    ALOGW("AudioAnalysisBridge.nativeOpen: FFmpeg not provisioned - analysis unavailable");
+    return 0L;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeConsumeLastInitError(
+    JNIEnv *env, jclass) {
+    return env->NewStringUTF("FFmpeg/libavfilter is not provisioned in this build.");
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeFeed(
+    JNIEnv *, jclass, jlong, jobject, jint) { return -1; }
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeReadFeatures(
+    JNIEnv *, jclass, jlong, jdoubleArray) { return -1; }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeClose(
+    JNIEnv *, jclass, jlong) {}

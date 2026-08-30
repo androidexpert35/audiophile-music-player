@@ -115,6 +115,16 @@ Key source files:
   intensity matrix lives both here (`PROFILE_MATRIX`) and in `SueProfileResolver.kt` —
   keep them in sync. Kotlin counterpart is `SueBridge`/`SueStage` — see
   [`playback.md`](playback.md).
+- `audio_analysis_bridge.cpp` — JNI implementation of the **measurement-only**
+  Class S signal analysis. Builds `abuffer → aformat=sample_fmts=flt →
+  aspectralstats → astats → abuffersink` and reads the results out of the output
+  frame metadata dictionary. It is not on the playback data path: it applies no
+  gain, no resampling and no dithering, and nothing it produces reaches a sink.
+  Kotlin counterpart is `data/playback/analysis/AudioAnalysisBridge`.
+- `audio_analysis_aggregator.{h,cpp}` — the pure aggregation and parsing logic
+  behind that bridge (window/channel averaging, `-inf`/`nan` rejection, and the
+  mid/side and inter-channel-correlation sums). JNI-, Android- and FFmpeg-free
+  so it is covered by the host tests in `cpp/tests/`.
 
 The Kotlin counterparts live in `data/playback/native_/` (`FFmpegDecoder`,
 `AudioTrackSink`, `DsdPipelineInfo`, `PipelinePathReport`, …) and
@@ -216,6 +226,52 @@ it; Cirrus-based dongles (Snowsky Tiny B) reproduce it as a loud tick at the sta
 of every DSD track. It is at full analogue scale whatever the volume setting says,
 because `DecoderToRingBridge` deliberately never applies the volume multiply to a
 1-bit stream.
+
+
+### Measurement bridge (Class S) — reads the signal, never changes it
+
+`audio_analysis_bridge.cpp` exists so a DSP stage can eventually be driven by
+what a track actually contains instead of by its codec and bitrate. It is a
+separate lavfi graph, opened by the analysis caller on `@IoDispatcher` with its
+own `FFmpegDecoder` session — **never** on `BitPerfectPlaybackEngine`'s audio
+HandlerThread, which has no slack for a filter graph.
+
+JNI entry points (`data.playback.analysis.AudioAnalysisBridge`, one session per
+handle, all calls on a single thread):
+
+| Entry point | Contract |
+|-------------|----------|
+| `nativeOpen(sampleRateHz, channelCount, inputEncoding)` | Builds the graph; returns the handle or `0L` on failure (stub build included). |
+| `nativeConsumeLastInitError()` | Drains the reason a `nativeOpen` returned `0L`. |
+| `nativeFeed(handle, directBuffer, frames)` | Pushes one window; returns frames accepted, or a negative sentinel. |
+| `nativeReadFeatures(handle, doubleArray)` | Flushes the graph and writes the 12-slot feature vector; `NaN` marks a value that was never measured. |
+| `nativeClose(handle)` | Frees the session; safe with `0L`. |
+
+The feature-vector slot order is the wire contract between
+`AudioAnalysisFeatureIndex` in `audio_analysis_aggregator.h` and the index
+constants in `AudioAnalysisBridge.kt` — change one and you must change the other.
+
+**Filter and metadata names are verified against the shipped build, not
+remembered.** `aspectralstats` (`win_size`, `overlap`, `measure=centroid+
+rolloff+slope`), `astats` (`metadata`, `reset`, `measure_perchannel`,
+`measure_overall`, and the `DC_offset` / `Noise_floor` / `RMS_level` constants)
+and the key formats `lavfi.aspectralstats.%d.%s` (1-based channel) and
+`lavfi.astats.%s` were all read out of the string table of the FFmpeg 7.1.4
+`libavfilter.so` in `jniLibs/arm64-v8a/`. Re-check them against the binary
+before adding a statistic; do not port option syntax from another FFmpeg
+version.
+
+Mid/side energy and inter-channel correlation are **not** taken from lavfi: no
+filter in this build publishes them as metadata (`astats` measures channels in
+isolation, and `aphasemeter` — the only filter reporting a correlation at all —
+publishes a sign-correlation meter value and opens a second, video output pad).
+They are accumulated exactly from the float samples the graph already forwards,
+in `audio_analysis_aggregator`. Peak, loudness and clipping counts are integral
+measures and are deliberately absent from this bridge.
+
+In the stub build (no FFmpeg provisioned) `ffmpeg_bridge_stub.cpp` answers the
+same five symbols with the failure sentinel, so the APK assembles and the caller
+records the track as not analysable instead of crashing.
 
 ---
 

@@ -6,6 +6,7 @@
 // libusb, and runs under ASan+UBSan (see tests/CMakeLists.txt).
 // ─────────────────────────────────────────────────────────────────────────────
 
+#include "audio_analysis_aggregator.h"
 #include "audio_gain.h"
 #include "cpu_affinity_policy.h"
 #include "dop_formatter.h"
@@ -331,6 +332,213 @@ void test_classify_decode_load()
     assert(classify_decode_load(false, 384'000) == DecodeLoad::HEAVY);
 }
 
+// -- Class S analysis aggregation --------------------------------------------
+
+bool analysis_close(double actual, double expected, double tolerance)
+{
+    return std::fabs(actual - expected) <= tolerance;
+}
+
+void test_parse_measured_double_rejects_non_numbers()
+{
+    double value = 0.0;
+
+    assert(parse_measured_double("12.5", &value));
+    assert(analysis_close(value, 12.5, 1e-12));
+
+    // astats prints a silent level as "-inf" and aspectralstats can emit "nan";
+    // neither is a measurement, so both must be rejected rather than averaged.
+    assert(!parse_measured_double("-inf", &value));
+    assert(!parse_measured_double("inf", &value));
+    assert(!parse_measured_double("nan", &value));
+
+    assert(!parse_measured_double(nullptr, &value));
+    assert(!parse_measured_double("", &value));
+    assert(!parse_measured_double("abc", &value));
+    assert(!parse_measured_double("1.5x", &value));
+
+    // Trailing whitespace is tolerated; the value survives untouched.
+    value = 0.0;
+    assert(parse_measured_double("3.25\n", &value));
+    assert(analysis_close(value, 3.25, 1e-12));
+
+    // A rejected parse must not clobber the value the caller already held.
+    assert(!parse_measured_double("nan", &value));
+    assert(analysis_close(value, 3.25, 1e-12));
+}
+
+void test_running_mean_ignores_non_finite()
+{
+    RunningMean mean;
+    assert(!mean.has_value());
+    assert(std::isnan(mean.value()));
+
+    mean.add(10.0);
+    mean.add(std::numeric_limits<double>::quiet_NaN());
+    mean.add(-std::numeric_limits<double>::infinity());
+    mean.add(20.0);
+
+    assert(mean.has_value());
+    assert(mean.count() == 2);
+    assert(analysis_close(mean.value(), 15.0, 1e-12));
+}
+
+void test_stereo_energy_identical_channels_have_no_side()
+{
+    const std::array<float, 8> stereo{
+        0.5F, 0.5F,
+        0.5F, 0.5F,
+        0.5F, 0.5F,
+        0.5F, 0.5F,
+    };
+    StereoEnergyAccumulator accumulator(2);
+    accumulator.add_interleaved(stereo.data(), 4);
+
+    assert(accumulator.frame_count() == 4);
+    // Half scale is -6.0206 dBFS in both channels and in mid; side is silent.
+    assert(analysis_close(accumulator.left_rms_dbfs(), -6.0206, 1e-3));
+    assert(analysis_close(accumulator.right_rms_dbfs(), -6.0206, 1e-3));
+    assert(analysis_close(accumulator.mid_rms_dbfs(), -6.0206, 1e-3));
+    assert(analysis_close(accumulator.side_rms_dbfs(), kAudioAnalysisSilenceDbfs, 1e-9));
+    assert(analysis_close(accumulator.correlation(), 1.0, 1e-12));
+}
+
+void test_stereo_energy_out_of_phase_is_all_side()
+{
+    const std::array<float, 8> stereo{
+         0.5F, -0.5F,
+         0.5F, -0.5F,
+         0.5F, -0.5F,
+         0.5F, -0.5F,
+    };
+    StereoEnergyAccumulator accumulator(2);
+    accumulator.add_interleaved(stereo.data(), 4);
+
+    assert(analysis_close(accumulator.mid_rms_dbfs(), kAudioAnalysisSilenceDbfs, 1e-9));
+    assert(analysis_close(accumulator.side_rms_dbfs(), -6.0206, 1e-3));
+    assert(analysis_close(accumulator.correlation(), -1.0, 1e-12));
+}
+
+void test_stereo_energy_uncorrelated_channels_split_evenly()
+{
+    const std::array<float, 8> stereo{
+         1.0F,  1.0F,
+         1.0F, -1.0F,
+        -1.0F,  1.0F,
+        -1.0F, -1.0F,
+    };
+    StereoEnergyAccumulator accumulator(2);
+    accumulator.add_interleaved(stereo.data(), 4);
+
+    assert(analysis_close(accumulator.correlation(), 0.0, 1e-12));
+    // Half the energy in mid, half in side.
+    assert(analysis_close(accumulator.mid_rms_dbfs(), -3.0103, 1e-3));
+    assert(analysis_close(accumulator.side_rms_dbfs(), -3.0103, 1e-3));
+}
+
+void test_stereo_energy_mono_source_is_perfectly_correlated()
+{
+    const std::array<float, 4> mono{0.25F, 0.25F, 0.25F, 0.25F};
+    StereoEnergyAccumulator accumulator(1);
+    accumulator.add_interleaved(mono.data(), 4);
+
+    assert(accumulator.frame_count() == 4);
+    assert(analysis_close(accumulator.left_rms_dbfs(), accumulator.right_rms_dbfs(), 1e-12));
+    assert(analysis_close(accumulator.side_rms_dbfs(), kAudioAnalysisSilenceDbfs, 1e-9));
+    assert(analysis_close(accumulator.correlation(), 1.0, 1e-12));
+}
+
+void test_stereo_energy_silent_channel_has_no_correlation()
+{
+    const std::array<float, 4> stereo{
+        0.0F, 0.5F,
+        0.0F, 0.5F,
+    };
+    StereoEnergyAccumulator accumulator(2);
+    accumulator.add_interleaved(stereo.data(), 2);
+
+    assert(analysis_close(accumulator.left_rms_dbfs(), kAudioAnalysisSilenceDbfs, 1e-9));
+    assert(std::isnan(accumulator.correlation()));
+
+    // Nothing accumulated at all is "not measured", not silence.
+    const StereoEnergyAccumulator empty(2);
+    assert(std::isnan(empty.left_rms_dbfs()));
+    assert(std::isnan(empty.correlation()));
+}
+
+void test_stereo_energy_skips_non_finite_frames()
+{
+    const float bad = std::numeric_limits<float>::quiet_NaN();
+    const std::array<float, 6> stereo{
+        0.5F, 0.5F,
+        bad,  0.5F,
+        0.5F, 0.5F,
+    };
+    StereoEnergyAccumulator accumulator(2);
+    accumulator.add_interleaved(stereo.data(), 3);
+
+    assert(accumulator.frame_count() == 2);
+    assert(analysis_close(accumulator.left_rms_dbfs(), -6.0206, 1e-3));
+}
+
+void test_analysis_aggregator_averages_windows_and_keeps_last_levels()
+{
+    const double nan_value = std::numeric_limits<double>::quiet_NaN();
+
+    AudioAnalysisAggregator aggregator(2);
+    aggregator.note_window();
+    aggregator.add_spectral_channel(1000.0, 15000.0, -0.5);
+    aggregator.add_spectral_channel(2000.0, 17000.0, -0.3);
+    aggregator.set_level_snapshot(-90.0, 0.001);
+
+    aggregator.note_window();
+    // A window where one statistic was missing must not poison the others.
+    aggregator.add_spectral_channel(nan_value, 18000.0, nan_value);
+    // astats is cumulative, so the newest snapshot replaces the previous one...
+    aggregator.set_level_snapshot(-92.0, 0.002);
+    // ...but a missing snapshot must never clear what was already measured.
+    aggregator.set_level_snapshot(nan_value, nan_value);
+
+    const std::array<float, 4> stereo{0.5F, 0.5F, 0.5F, 0.5F};
+    aggregator.add_samples(stereo.data(), 2);
+
+    std::array<double, kAudioAnalysisFeatureCount> features{};
+    assert(aggregator.write_features(features.data(), features.size()) ==
+           kAudioAnalysisFeatureCount);
+
+    assert(analysis_close(features[kFeatureSpectralCentroidHz], 1500.0, 1e-9));
+    assert(analysis_close(features[kFeatureSpectralRolloffHz], 50000.0 / 3.0, 1e-9));
+    assert(analysis_close(features[kFeatureSpectralSlope], -0.4, 1e-9));
+    assert(analysis_close(features[kFeatureNoiseFloorDbfs], -92.0, 1e-12));
+    assert(analysis_close(features[kFeatureDcOffset], 0.002, 1e-12));
+    assert(analysis_close(features[kFeatureInterChannelCorrelation], 1.0, 1e-12));
+    assert(analysis_close(features[kFeatureWindowCount], 2.0, 1e-12));
+    assert(analysis_close(features[kFeatureFrameCount], 2.0, 1e-12));
+}
+
+void test_analysis_aggregator_reports_unmeasured_as_nan()
+{
+    const AudioAnalysisAggregator aggregator(2);
+    std::array<double, kAudioAnalysisFeatureCount> features{};
+    assert(aggregator.write_features(features.data(), features.size()) ==
+           kAudioAnalysisFeatureCount);
+
+    assert(std::isnan(features[kFeatureSpectralRolloffHz]));
+    assert(std::isnan(features[kFeatureSpectralCentroidHz]));
+    assert(std::isnan(features[kFeatureSpectralSlope]));
+    assert(std::isnan(features[kFeatureNoiseFloorDbfs]));
+    assert(std::isnan(features[kFeatureDcOffset]));
+    assert(std::isnan(features[kFeatureLeftRmsDbfs]));
+    assert(std::isnan(features[kFeatureInterChannelCorrelation]));
+    assert(analysis_close(features[kFeatureWindowCount], 0.0, 1e-12));
+    assert(analysis_close(features[kFeatureFrameCount], 0.0, 1e-12));
+
+    // A short output array is refused atomically rather than partially filled.
+    std::array<double, kAudioAnalysisFeatureCount - 1> too_small{};
+    assert(aggregator.write_features(too_small.data(), too_small.size()) == 0);
+    assert(aggregator.write_features(nullptr, kAudioAnalysisFeatureCount) == 0);
+}
+
 } // namespace
 
 int main()
@@ -352,6 +560,16 @@ int main()
     test_ui_position_to_gain_quadratic_taper();
     test_native_handle_validation();
     test_classify_decode_load();
+    test_parse_measured_double_rejects_non_numbers();
+    test_running_mean_ignores_non_finite();
+    test_stereo_energy_identical_channels_have_no_side();
+    test_stereo_energy_out_of_phase_is_all_side();
+    test_stereo_energy_uncorrelated_channels_split_evenly();
+    test_stereo_energy_mono_source_is_perfectly_correlated();
+    test_stereo_energy_silent_channel_has_no_correlation();
+    test_stereo_energy_skips_non_finite_frames();
+    test_analysis_aggregator_averages_windows_and_keeps_last_levels();
+    test_analysis_aggregator_reports_unmeasured_as_nan();
     std::cout << "audiophile_native_core_tests: all tests passed\n";
     return 0;
 }
