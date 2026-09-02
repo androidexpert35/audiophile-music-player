@@ -27,7 +27,7 @@ Current impls: `MusicRepositoryImpl`, `MediaIndexRepositoryImpl`,
 `PlaybackRepositoryImpl`, `PlaybackPersistenceRepositoryImpl`,
 `AudioTelemetryRepositoryImpl`,
 `RecentlyPlayedRepositoryImpl`, `LyricsRepositoryImpl`, `RemoteImageRepositoryImpl`,
-`SettingsRepositoryImpl`, `PlaylistRepositoryImpl`.
+`SettingsRepositoryImpl`, `PlaylistRepositoryImpl`, `TrackAnalysisRepositoryImpl`.
 
 `PlaybackRepositoryImpl.releaseUsbAudio()` crosses the Media3 boundary through the
 shared `RELEASE_USB_AUDIO` session command. `PlaybackController` awaits its
@@ -61,15 +61,17 @@ truth for indexed library, session state, liked songs, playback history/counts, 
 - **Entities** (`entity/`): `TrackEntity` (including source year, genre, composer
   metadata, and the `audioKey` content key), `AlbumEntity`, `ArtistEntity`,
   `LibraryIndexStateEntity`, `PlaybackStateEntity`, `LikedSongEntity`,
-  `RecentlyPlayedEntity`, `LyricsCacheEntity`, `ImportedPlaylistEntity`.
+  `RecentlyPlayedEntity`, `LyricsCacheEntity`, `ImportedPlaylistEntity`,
+  `TrackAnalysisEntity`.
 - **DAOs** (`dao/`): `LibraryIndexDao`, `PlaybackStateDao`, `LikedSongDao`,
-  `RecentlyPlayedDao`, `LyricsCacheDao`, `ImportedPlaylistDao`. Provided in `AppModule`.
+  `RecentlyPlayedDao`, `LyricsCacheDao`, `ImportedPlaylistDao`, `TrackAnalysisDao`.
+  Provided in `AppModule`.
 - **Converters** (`converter/`): `LongListTypeConverter` (queue ID lists),
   `StringListTypeConverter` (imported-playlist track URIs).
 
 ### Migrations are mandatory
-Current schema **version is 14** with explicit migrations `MIGRATION_1_2` …
-`MIGRATION_13_14`, registered in both `AudiophileDatabase` and `AppModule`'s
+Current schema **version is 15** with explicit migrations `MIGRATION_1_2` …
+`MIGRATION_14_15`, registered in both `AudiophileDatabase` and `AppModule`'s
 `databaseBuilder`. When you change any entity:
 
 1. Bump `@Database(version = N)`.
@@ -103,6 +105,42 @@ versioned as `1:<sizeHex>:<digest>`).
   document, and the scanners keep the track — an unanalysable track is still playable.
 - ❌ Do not reuse the 31-bit URI hash `DsdFileScanner` mints for `id` as a content key; it
   identifies a location, not a payload.
+
+### `track_analysis` caches measured signal properties per audio, not per track
+
+Schema 15 adds `track_analysis`, keyed by that same `audioKey` rather than by a track id, so a
+measurement follows the samples it describes: it survives a re-index and a MediaStore delete +
+re-add, and is orphaned the moment the audio itself is replaced. A blank key is never stored —
+it means "not analysable", so there is nothing to cache.
+
+The row is deliberately half-populatable. Measurements come in two classes produced by
+different passes at different times:
+
+- **Class S (stationary)** — spectral rolloff, centroid, slope, noise floor, DC offset,
+  per-channel and mid/side RMS, inter-channel correlation, plus the window and frame counts
+  behind them. Properties of the source that do not depend on where they were measured, so a
+  short sampling decode is legitimate.
+- **Class I (integral)** — sample peak, integrated LUFS, PLR, clipping ratio. Properties of the
+  *whole* stream that sampling would bias; only a pass that saw every sample may write them.
+
+Rules that hold this together:
+
+- ✅ Every measured column is nullable, and a `null` means **not measured**, never `0.0`. A
+  successful pass can legitimately leave an individual feature unset (a digitally silent channel
+  has no correlation), which is why each class carries its own
+  `*AnalysedAtEpochSeconds` marker: no single measured column can stand in for "did this run?".
+  Row-level `analysedAtEpochSeconds` is the last write of either class.
+- ✅ `TrackAnalysis.SCHEMA_VERSION` is a plain code constant, stored on every row and filtered
+  on by every read. Bump it whenever the *meaning* of a measured value changes — different
+  filter graph, different unit, corrected aggregation — and every stored row silently reads as
+  absent and is recomputed. That is **not** a Room migration: the schema did not change, only
+  what the numbers mean. Adding a column still is one.
+- ✅ Writing one class merges over the other through `TrackAnalysisMapper`, which keeps the
+  other class's columns only when the stored row carries the current schema version and
+  otherwise discards the whole row. `TrackAnalysisRepositoryImpl` serialises that
+  read-modify-write behind a `Mutex` and is bound `@Singleton` for exactly that reason.
+- ❌ Never treat a stale-version row as partial data to be topped up; half of one interpretation
+  merged into another is worse than recomputing.
 
 ---
 

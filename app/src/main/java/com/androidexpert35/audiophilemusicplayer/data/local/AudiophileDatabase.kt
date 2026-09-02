@@ -9,6 +9,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.C
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_11_12
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_12_13
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_13_14
+import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_14_15
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_1_2
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_2_3
 import com.androidexpert35.audiophilemusicplayer.data.local.AudiophileDatabase.Companion.MIGRATION_3_4
@@ -26,6 +27,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.dao.LikedSongDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.LyricsCacheDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.PlaybackStateDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.RecentlyPlayedDao
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.TrackAnalysisDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.AlbumEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.ArtistEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.ImportedPlaylistEntity
@@ -34,6 +36,7 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.LikedSongEnti
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.LyricsCacheEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.PlaybackStateEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.RecentlyPlayedEntity
+import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackAnalysisEntity
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
 
 /**
@@ -64,6 +67,8 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
  * - Version 14: added the stable `audioKey` content key to `tracks` via
  *   [MIGRATION_13_14], so a cached per-track analysis can be invalidated when the audio
  *   changes and kept when only its tags do.
+ * - Version 15: added the `track_analysis` table via [MIGRATION_14_15], caching the
+ *   measured signal properties of each piece of audio against that content key.
  */
 @Database(
     entities = [
@@ -76,8 +81,9 @@ import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackEntity
         RecentlyPlayedEntity::class,
         LyricsCacheEntity::class,
         ImportedPlaylistEntity::class,
+        TrackAnalysisEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @TypeConverters(LongListTypeConverter::class, StringListTypeConverter::class)
@@ -100,6 +106,9 @@ abstract class AudiophileDatabase : RoomDatabase() {
 
     /** @return DAO for reading and writing the lyrics cache. */
     abstract fun lyricsCacheDao(): LyricsCacheDao
+
+    /** @return DAO for reading and writing the per-audio measured-analysis cache. */
+    abstract fun trackAnalysisDao(): TrackAnalysisDao
 
     companion object {
         /** File name used for the Room database on disk. */
@@ -364,6 +373,57 @@ abstract class AudiophileDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN audioKey TEXT NOT NULL DEFAULT ''")
                 db.execSQL("DELETE FROM library_index_state")
+            }
+        }
+
+        /**
+         * Migration from schema version 14 to 15.
+         *
+         * Creates `track_analysis`, the cache of measured signal properties keyed by the
+         * `tracks.audioKey` content key added in schema 14 rather than by a track id, so a
+         * result follows the samples it describes across a re-index.
+         *
+         * Every measured column is nullable and the table starts empty: the stationary and
+         * integral measurement passes run at different times, so a half-populated row is the
+         * normal state. `schemaVersion` records which interpretation produced the numbers,
+         * letting a change in meaning retire every row in code instead of through another
+         * migration. No existing table is touched — the library index and the user's data
+         * are untouched by this upgrade.
+         */
+        val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `track_analysis` (
+                        `audioKey`                          TEXT    NOT NULL,
+                        `schemaVersion`                     INTEGER NOT NULL,
+                        `analysedAtEpochSeconds`            INTEGER NOT NULL,
+                        `stationaryAnalysedAtEpochSeconds`  INTEGER,
+                        `spectralRolloffHz`                 REAL,
+                        `spectralCentroidHz`                REAL,
+                        `spectralSlope`                     REAL,
+                        `noiseFloorDbfs`                    REAL,
+                        `dcOffset`                          REAL,
+                        `leftRmsDbfs`                       REAL,
+                        `rightRmsDbfs`                      REAL,
+                        `midRmsDbfs`                        REAL,
+                        `sideRmsDbfs`                       REAL,
+                        `interChannelCorrelation`           REAL,
+                        `windowCount`                       INTEGER,
+                        `frameCount`                        INTEGER,
+                        `integralAnalysedAtEpochSeconds`    INTEGER,
+                        `peakDbfs`                          REAL,
+                        `integratedLufs`                    REAL,
+                        `plr`                               REAL,
+                        `clippingRatio`                     REAL,
+                        PRIMARY KEY(`audioKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_track_analysis_schemaVersion " +
+                        "ON track_analysis(schemaVersion)"
+                )
             }
         }
     }

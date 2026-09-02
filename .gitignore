@@ -45,6 +45,8 @@ google-services.json
 *.apk
 *.aab
 *.apks
+# Release assemble output (bundle, APK, baseline profiles, output-metadata.json)
+/app/release/
 
 # Local Play Store artwork and publishing material
 /play-store/

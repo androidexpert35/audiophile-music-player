@@ -11,6 +11,7 @@ import com.androidexpert35.audiophilemusicplayer.data.repository.PlaylistReposit
 import com.androidexpert35.audiophilemusicplayer.data.repository.RecentlyPlayedRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.RemoteImageRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.data.repository.SettingsRepositoryImpl
+import com.androidexpert35.audiophilemusicplayer.data.repository.TrackAnalysisRepositoryImpl
 import com.androidexpert35.audiophilemusicplayer.domain.repository.AudioTelemetryRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.LikedSongsRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.LyricsRepository
@@ -23,6 +24,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaylistRepos
 import com.androidexpert35.audiophilemusicplayer.domain.repository.RecentlyPlayedRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.RemoteImageRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.SettingsRepository
+import com.androidexpert35.audiophilemusicplayer.domain.repository.TrackAnalysisRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -152,4 +154,17 @@ abstract class RepositoryModule {
     abstract fun bindLyricsRepository(
         impl: LyricsRepositoryImpl
     ): LyricsRepository
+
+    /**
+     * Binds [TrackAnalysisRepositoryImpl] as the singleton [TrackAnalysisRepository] provider.
+     *
+     * Scoped as a singleton because it serialises the read-modify-write cycle the two
+     * measurement passes share; a second instance would hold a second lock and the
+     * guarantee would be gone.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTrackAnalysisRepository(
+        impl: TrackAnalysisRepositoryImpl
+    ): TrackAnalysisRepository
 }
