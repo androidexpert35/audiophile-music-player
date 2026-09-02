@@ -63,6 +63,7 @@
     <string name="cd_toggle_favorite">Attiva o disattiva preferito</string>
     <string name="cd_share_track">Condividi brano</string>
     <string name="cd_more_options">Altre opzioni</string>
+    <string name="cd_player_output_menu">Azioni uscita di riproduzione</string>
     <string name="cd_shuffle">Riproduzione casuale</string>
     <string name="cd_skip_previous">Vai al brano precedente</string>
     <string name="cd_play">Riproduci</string>
@@ -501,6 +502,10 @@
 
     <!-- Notification -->
     <string name="notification_channel_playback">Riproduzione Audiophile</string>
+    <string name="action_release_dac">Rilascia DAC</string>
+    <string name="action_exit_and_release_dac">Esci e rilascia DAC</string>
+    <string name="player_dac_released">Sessione audio USB esclusiva rilasciata.</string>
+    <string name="player_dac_release_failed">Impossibile rilasciare il DAC. Riprova.</string>
 
     <!-- Lyrics -->
     <string name="player_lyrics_action">Testo</string>

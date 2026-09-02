@@ -58,6 +58,29 @@ class PlaybackRepositoryImplTest {
     }
 
     @Test
+    fun `given exclusive USB playback when release invoked then repository waits for controller`() = runTest {
+        coEvery { playbackController.releaseUsbAudio() } returns Unit
+
+        val result = repository.releaseUsbAudio()
+
+        assertTrue(result is Resource.Success)
+        coVerify(exactly = 1) { playbackController.releaseUsbAudio() }
+    }
+
+    @Test
+    fun `given USB release failure when release invoked then repository returns playback error`() = runTest {
+        coEvery { playbackController.releaseUsbAudio() } throws IllegalStateException("Release timed out")
+
+        val result = repository.releaseUsbAudio()
+
+        assertTrue(result is Resource.Error)
+        assertEquals(
+            PlaybackResourceError("Release timed out"),
+            (result as Resource.Error).data,
+        )
+    }
+
+    @Test
     fun `given track when play next invoked then repository delegates queue insertion`() = runTest {
         val track = sampleTrack(id = 3L)
         coEvery { playbackController.playNext(track) } returns Unit

@@ -15,8 +15,9 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.audio.DsdRate
  * @property areSupportedProfilesEstimated `true` when [supportedProfiles] come
  *   from the fallback negotiation ladder rather than the DAC's exact USB
  *   descriptor table.
- * @property isDirectUsbTransportSupported `true` when Android can initialize at
- *   least one queued USB streaming endpoint for the selected DAC.
+ * @property isDirectUsbTransportSupported `true` when the permitted device
+ *   advertises a UAC2 streaming interface eligible for direct negotiation.
+ *   The real interface claim is deferred until playback starts.
  * @property isUac2Protocol `true` when [connectedDevice] exposes at least one
  *   UAC 2.0 AudioStreaming interface (`bInterfaceProtocol = 0x20`). UAC1
  *   full-speed devices (Bluetooth/USB combo DACs and dongles in their UAC1

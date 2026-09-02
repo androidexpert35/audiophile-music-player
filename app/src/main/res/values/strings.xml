@@ -63,6 +63,7 @@
     <string name="cd_toggle_favorite">Toggle favorite</string>
     <string name="cd_share_track">Share track</string>
     <string name="cd_more_options">More options</string>
+    <string name="cd_player_output_menu">Playback output actions</string>
     <string name="cd_shuffle">Shuffle</string>
     <string name="cd_skip_previous">Skip to previous track</string>
     <string name="cd_play">Play</string>
@@ -528,6 +529,10 @@
 
     <!-- Notification -->
     <string name="notification_channel_playback">Audiophile Playback</string>
+    <string name="action_release_dac">Release DAC</string>
+    <string name="action_exit_and_release_dac">Exit and release DAC</string>
+    <string name="player_dac_released">Exclusive USB audio session released.</string>
+    <string name="player_dac_release_failed">The DAC could not be released. Try again.</string>
 
     <!-- Lyrics -->
     <string name="player_lyrics_action">Lyrics</string>

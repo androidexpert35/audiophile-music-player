@@ -1,10 +1,14 @@
 package com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile
 
 import com.androidexpert35.audiophilemusicplayer.data.playback.engine.EnginePlaybackState
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -20,27 +24,25 @@ class AudiophileEngineTest {
         every { currentFormat } returns MutableStateFlow(null)
         every { pathReport } returns MutableStateFlow(null)
         every { pause() } returns true
-        every { releaseUsbSinkNow() } returns true
+        coEvery { pauseAndReleaseOutput() } returns true
     }
 
     private val engine = AudiophileEngine(core)
 
     @Test
-    fun `given audiophile output when paused then USB claim is kept for the idle scheduler`() {
-        // A pause must NOT tear down the USB sink immediately: releasing the
-        // claim makes the DAC re-enumerate on every pause/resume (system volume
-        // panel flashes, slow resume). The core engine's idle-sink scheduler
-        // owns the deferred release instead.
+    fun `given audiophile output when paused then core owns the immediate release boundary`() {
+        // The core performs pause and sink release in one audio-thread command;
+        // the wrapper must not post a second, separately ordered release.
         engine.pause()
 
         verify(exactly = 1) { core.pause() }
-        verify(exactly = 0) { core.releaseUsbSinkNow() }
     }
 
     @Test
-    fun `given focus-loss hook when invoked then USB sink is released immediately`() {
-        engine.releaseUsbSinkNow()
+    fun `given awaited release when invoked then core completes the pause boundary`() = runTest {
+        val released = engine.pauseAndReleaseOutput()
 
-        verify(exactly = 1) { core.releaseUsbSinkNow() }
+        coVerify(exactly = 1) { core.pauseAndReleaseOutput() }
+        assertTrue(released)
     }
 }

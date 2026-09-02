@@ -144,7 +144,7 @@ internal class LibusbPcmAudioSink(
         val initialVolume = volumeController.volumePct.value / 100f
 
         // Apply any seek that was requested while the pump was detached (e.g. a
-        // seek right after loading a track, or a resume after an idle-sink
+        // seek right after loading a track, or a resume after a pause-time sink
         // release) BEFORE attaching the engine. nativeAttachUsbEngine pre-fills
         // the ring from the decoder's current position and the ring is never
         // cleared afterwards; a seek applied only after the attach leaves
@@ -297,4 +297,3 @@ internal class LibusbPcmAudioSink(
         const val TAG = "LibusbPcmSink"
     }
 }
-

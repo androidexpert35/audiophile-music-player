@@ -194,6 +194,11 @@ telemetry dialog (`telemetrydialog/`), and a full **lyrics sheet** (synced + pla
 driven by `LyricsState` and the `Lyrics`/`LyricLine` domain models). Keep new player UI
 in this folder and stateless.
 
+`PlayerOutputMenu` is the explicit ownership escape hatch. **Release DAC** preserves
+the current queue/playhead and confirms completion through a snackbar; **Exit and
+release DAC** emits `PlayerUiEffect.ExitApplication` only after the same release use
+case succeeds, then the screen removes the activity task.
+
 The telemetry dialog calls the last app-owned PCM stage **Engine Output**. When the
 active route is Bluetooth, the output card uses the neutral **System managed** state
 and never guesses the codec's final sample rate or bit depth. Keep that Bluetooth

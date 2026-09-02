@@ -35,7 +35,7 @@ FFmpegDecoder → SUE / Hi-Res / explicit SoXR (Kotlin-owned loop, float32)
 ```
 
 A seek that exists before the pump attaches (track reload from a settings
-toggle, resume after idle-sink release) must be applied with
+toggle, resume after pause-time sink release) must be applied with
 `nativeSeekUsbDecoder` **before** `nativeAttachUsbEngine`: the attach pre-fills
 the ring from the decoder's current position and the ring is never cleared, so
 a post-attach seek audibly replays the start of the track before jumping to the

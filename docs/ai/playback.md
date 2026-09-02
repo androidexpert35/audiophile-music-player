@@ -23,10 +23,12 @@ manager, telemetry, and factories.
 - ❌ Never run MediaStore scans on the main thread from the service.
 - ❌ Never leak `Player`/`MediaSession` into Domain or Presentation.
 
-`BecomingNoisyReceiver` pauses on a physical output disconnect. Audio focus is
-deliberately not requested or observed: OEM focus transitions, screen lock/unlock,
-notifications, and competing apps never mutate playback state. Session restore is
-handled by `PlaybackControllerSessionRestorer` + `PlaybackPersistenceRepository`.
+`BecomingNoisyReceiver` pauses on a physical output disconnect. While playback is
+actively producing audio, `AudioFocusController` owns one callbackFlow-scoped media
+focus request. Any denied, transient, duck, or permanent loss pauses playback and
+waits for the same output-release operation used by explicit user controls. Focus gain
+never auto-resumes or silently reclaims the DAC. Session restore is handled by
+`PlaybackControllerSessionRestorer` + `PlaybackPersistenceRepository`.
 The listener may disable that restore through the **Clear queue when closing the app**
 setting: task removal from Recents removes every Media3 item except the current one and
 persists that one-track session before the service releases the audio path. The Queue
@@ -86,8 +88,7 @@ coordinator only — each concern is delegated to a dedicated helper in the same
 | — auto-advance resilience | Every `doEnqueueNext` failure path downgrades to a URI-only entry (load deferred to EOF) instead of returning empty-handed; at EOF an empty queue re-asks `Listener.onNextTrackUriRequested()` (answered by `AudioEngineManager` from its cached follower URI) and the EOF-time load retries once on ERROR. Playback must never end silently while the playlist still has a follower. |
 | `BitPerfectTransportBuffers` | Reusable, grow-only PCM/DSD scratch buffers (direct `ByteBuffer` for the JNI boundary) |
 | `BitPerfectWakeLockController` | `PARTIAL_WAKE_LOCK` lifecycle across play/pause/stop/error |
-| `BitPerfectIdleSinkReleaseScheduler` | Releases the sink after 2 min paused so the OS reclaims USB-DAC bandwidth; decoder/position survive for a transparent resume |
-| — pause-time output release | Every explicit audiophile-engine pause closes the USB sink plus Android 14+ bit-perfect mixer routing. Play transparently rebuilds output; audio-focus and app lifecycle changes do not alter playback |
+| — pause-time output release | Every audiophile-engine pause closes the USB sink immediately plus any platform mixer preference. Decoder metadata and the exact playhead survive; Play transparently rebuilds output at that position. `pauseAndReleaseOutput()` is the awaited boundary used by focus loss and explicit release commands. |
 | `BitPerfectDsdSupport` (`DsdPlaybackContext`) | Immutable DSD transport context (source/effective rate, output mode, DoP encoder) |
 | `BitPerfectUriResolver` | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg |
 | `BitPerfectPlaybackMath` | Pure sink-playhead → playback-position-ms conversion |
@@ -168,16 +169,13 @@ isochronous transfer happens in native code ([`native-audio.md`](native-audio.md
 
 - `UsbDeviceScanner` + `UsbAudioBridge` — discover/attach DACs, request
   `UsbManager` permission, observe hot-plug.
-  **Never scan from the main thread.** Every scan opens the device and issues
-  `claimInterface` / `setInterface` `ioctl`s; `SET_INTERFACE` alone blocks in the
-  kernel for up to 5 s (`USB_CTRL_SET_TIMEOUT`) and the probe walks several
-  candidate endpoints. All scans go through the scanner's private
-  `rescanAndPublish()` (hops to `@IoDispatcher`, serialised by a `Mutex`), the
-  USB broadcasts are delivered on a private `HandlerThread`, and
-  `refreshDeviceState()` is `suspend` for the same reason. The destructive
-  force-claim probe is cached per plug session (`vendor:product:deviceId`), so it
-  detaches the kernel UAC driver at most once per attach instead of on every
-  broadcast.
+  **Never scan from the main thread.** Descriptor reads still block in USB
+  `ioctl`s, so all scans go through `rescanAndPublish()` (`@IoDispatcher`,
+  serialised by a `Mutex`), broadcasts use a private `HandlerThread`, and
+  `refreshDeviceState()` is `suspend`. Discovery must never call
+  `claimInterface(force=true)` or switch alt-settings: the first destructive
+  claim is deferred until actual playback so a scan cannot steal the DAC from
+  Android or reacquire it after pause.
 - `UsbAudioDescriptorParser` / `UsbAudioDeviceDescriptor` — parse UAC2 descriptors to
   learn supported formats, alt-settings, and DSD capability.
 - `UsbBitPerfectRouter` — applies `AudioManager.setPreferredMixerAttributes(BIT_PERFECT)`
@@ -215,6 +213,19 @@ Rules:
   route rather than sending incompatible bytes to a differently packed endpoint.
 - ❌ Don't add implicit resampling or mixing in the USB/DSD path. Explicit user-enabled
   enhancement stages are allowed only when telemetry clearly reports processed output.
+
+### USB ownership controls
+
+- Pausing always returns the active exclusive USB interface immediately.
+- The Media3 notification exposes a persistent **Release DAC** custom command.
+- The player overflow menu exposes both **Release DAC** and **Exit and release DAC**;
+  both wait for native teardown before reporting success, and Exit removes the app
+  task only afterward.
+- Removing the task from Recents also waits for the bounded release operation before
+  stopping the service. `session.player.release()` remains final cleanup, not the
+  ownership guarantee.
+- Playback can claim USB again only after an explicit Play/load command; focus gain,
+  scanning, and lifecycle callbacks never reacquire it.
 
 ---
 

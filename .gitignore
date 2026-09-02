@@ -46,6 +46,9 @@ google-services.json
 *.aab
 *.apks
 
+# Local Play Store artwork and publishing material
+/play-store/
+
 # Operating-system metadata
 .DS_Store
 Thumbs.db

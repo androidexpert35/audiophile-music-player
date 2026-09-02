@@ -1,5 +1,8 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.screen.player
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -28,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -49,6 +53,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.comp
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.components.PlayerControlsCard
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.components.PlayerDragHandle
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.components.PlayerEmptyState
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.components.PlayerOutputMenu
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.MotionTokens
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.paddingMedium
@@ -87,6 +92,7 @@ fun PlayerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val activity = LocalContext.current.findActivity()
 
     val positionState: State<Pair<Long, Long>> =
         viewModel.positionFlow.collectAsStateWithLifecycle()
@@ -103,6 +109,8 @@ fun PlayerScreen(
         viewModel.uiEffect.collect { effect ->
             when (effect) {
                 is PlayerUiEffect.PlaybackError -> snackbarHostState.showSnackbar(effect.message)
+                is PlayerUiEffect.UsbAudioReleased -> snackbarHostState.showSnackbar(effect.message)
+                PlayerUiEffect.ExitApplication -> activity?.finishAndRemoveTask()
                 is PlayerUiEffect.TrackChanged -> Unit // Could trigger haptic feedback
             }
         }
@@ -213,7 +221,20 @@ private fun PlayerContent(
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    PlayerDragHandle()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                    ) {
+                        PlayerDragHandle(modifier = Modifier.align(Alignment.TopCenter))
+                        PlayerOutputMenu(
+                            onReleaseDac = { onEvent(PlayerUiEvent.ReleaseUsbAudio) },
+                            onExitAndRelease = {
+                                onEvent(PlayerUiEvent.ExitAndReleaseUsbAudio)
+                            },
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(paddingMedium))
 
@@ -397,3 +418,10 @@ private fun previewTrack(): Track = Track(
     fileSizeBytes = 226_000_000L,
     dateAdded = 0L
 )
+
+/** Finds the host activity through any Compose theme wrappers. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}

@@ -10,8 +10,9 @@ package com.androidexpert35.audiophilemusicplayer.domain.model.audio
  *   for the selected DAC.
  * @property isDirectOutputReady `true` when a connected DAC is both present and
  *   permitted, allowing the audiophile engine to claim it.
- * @property isDirectUsbTransportSupported `true` when Android can initialize a
- *   direct USB streaming endpoint for the connected DAC on the current device.
+ * @property isDirectUsbTransportSupported `true` when the permitted DAC
+ *   advertises a direct-compatible UAC2 streaming interface. The real claim is
+ *   attempted only when playback starts.
  * @property activeDeviceName Human-readable name of the currently selected USB
  *   DAC, or `null` when no compatible device is connected.
  * @property supportedFormats USB output formats reported for the selected DAC.
@@ -31,4 +32,3 @@ data class UsbAudioStatus(
     val areSupportedFormatsEstimated: Boolean = false,
     val dsdOutputMode: DsdOutputMode = DsdOutputMode.Unsupported,
 )
-

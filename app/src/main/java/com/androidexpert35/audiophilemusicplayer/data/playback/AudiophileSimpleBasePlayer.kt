@@ -115,7 +115,8 @@ class AudiophileSimpleBasePlayer @Inject constructor(
                     // "playing" intent, which turned the app's resume() into a
                     // no-op after every background auto-advance failure.
                     val engineState = engine.state.value
-                    if (engineState == EnginePlaybackState.ENDED ||
+                    if (engineState == EnginePlaybackState.PAUSED ||
+                        engineState == EnginePlaybackState.ENDED ||
                         engineState == EnginePlaybackState.ERROR
                     ) {
                         playWhenReady = false
