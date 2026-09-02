@@ -53,6 +53,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTracksNextUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RecordRecentlyPlayedUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RefreshUsbAudioDevicesUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReleaseUsbAudioUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.RemoveMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReorderPlaylistTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReplacePlaylistTracksUseCase
@@ -330,6 +331,12 @@ object UseCaseModule {
     fun providePausePlaybackUseCase(
         playbackRepository: PlaybackRepository
     ): PausePlaybackUseCase = PausePlaybackUseCase(playbackRepository)
+
+    /** Provides the explicit command that returns an exclusive USB DAC to Android. */
+    @Provides
+    fun provideReleaseUsbAudioUseCase(
+        playbackRepository: PlaybackRepository
+    ): ReleaseUsbAudioUseCase = ReleaseUsbAudioUseCase(playbackRepository)
 
     /**
      * Provides [ResumePlaybackUseCase] backed by [PlaybackRepository].

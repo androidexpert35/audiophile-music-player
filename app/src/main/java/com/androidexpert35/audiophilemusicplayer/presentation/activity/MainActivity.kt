@@ -62,8 +62,8 @@ import kotlin.math.roundToInt
  * which covers two practical scenarios:
  * - **Cold-start session restore** — the engine loads the track asynchronously;
  *   the rebuild closes the window where the UI would otherwise show idle telemetry.
- * - **Post idle-sink release** — after a long pause the engine's output sink is
- *   released internally without emitting a new flow event; the rebuild re-derives
+ * - **Post-pause sink release** — every pause releases the engine's output sink
+ *   without clearing the negotiated path report; the rebuild re-derives
  *   the correct bit-perfect / path status from the preserved path report.
  *
  * When launched via an [Intent.ACTION_VIEW] intent (e.g. opening an audio

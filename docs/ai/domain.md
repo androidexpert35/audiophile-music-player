@@ -82,7 +82,11 @@ Rules:
   operation.
 
 Naming follows intent: `Get*`, `Observe*`, `Set*`, `Play/Pause/Resume*`, `Skip*`,
-`Scan*`, `Record*`, `Toggle*`, `Request*`, `Refresh*`, `Restore/Save*`.
+`Release*`, `Scan*`, `Record*`, `Toggle*`, `Request*`, `Refresh*`, `Restore/Save*`.
+
+`ReleaseUsbAudioUseCase` is the framework-free explicit ownership control: it pauses
+playback and completes only after the service reports that the exclusive USB output
+has been torn down, while retaining queue and playhead for resume.
 
 ---
 

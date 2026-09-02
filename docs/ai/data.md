@@ -29,6 +29,11 @@ Current impls: `MusicRepositoryImpl`, `MediaIndexRepositoryImpl`,
 `RecentlyPlayedRepositoryImpl`, `LyricsRepositoryImpl`, `RemoteImageRepositoryImpl`,
 `SettingsRepositoryImpl`, `PlaylistRepositoryImpl`.
 
+`PlaybackRepositoryImpl.releaseUsbAudio()` crosses the Media3 boundary through the
+shared `RELEASE_USB_AUDIO` session command. `PlaybackController` awaits its
+`SessionResult`; a successful domain result therefore means native output teardown
+has completed, not merely that a pause IPC was queued.
+
 `PlaylistRepositoryImpl` stores playlists as UTF-8 extended M3U files in the app-private
 `files/playlists/` directory and implements both `PlaylistRepository` and
 `LikedSongsRepository`. It reserves `favorites.m3u` for the liked-songs collection, keeps that

@@ -15,10 +15,19 @@ sealed interface PlayerUiEffect {
     data class PlaybackError(val message: String) : PlayerUiEffect
 
     /**
+     * Confirms that exclusive USB ownership has been released.
+     *
+     * @property message Localized confirmation shown in the player snackbar.
+     */
+    data class UsbAudioReleased(val message: String) : PlayerUiEffect
+
+    /** Requests removal of the application task after USB teardown succeeds. */
+    data object ExitApplication : PlayerUiEffect
+
+    /**
      * Indicates that the current track has changed (e.g., for scroll-to-now-playing).
      *
      * @property track The newly active track.
      */
     data class TrackChanged(val track: Track) : PlayerUiEffect
 }
-

@@ -336,10 +336,9 @@ class AudioTelemetryCollector @Inject constructor(
      *    format and path-report values but the [combine] has not yet emitted a
      *    new snapshot to this ViewModel. A direct rebuild closes that window.
      *
-     * 2. **Post idle-sink release** — the bit-perfect engine releases its
+     * 2. **Post-pause sink release** — the bit-perfect engine releases its
      *    [com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile.AudiophileOutputSink]
-     *    after [com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile.BitPerfectPlaybackEngine.PAUSED_IDLE_SINK_RELEASE_MS]
-     *    of inactivity. The path report is intentionally retained (the routing
+     *    immediately at the pause boundary. The path report is intentionally retained (the routing
      *    configuration is still valid while paused), but no new flow emission is
      *    triggered because the StateFlow values did not change. Calling this on
      *    `onResume` refreshes the UI immediately when the user returns to a long-

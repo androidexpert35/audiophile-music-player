@@ -300,16 +300,32 @@ class AudioEngineManager @Inject constructor(
     override fun pause() {
         withCommandLock {
             playWhenReadyIntent = false
-            // The audiophile engine keeps the exclusive USB claim across a pause
-            // and defers the release to its idle-sink scheduler (2 min). Closing
-            // the sink immediately on every pause made the DAC disappear from
-            // the platform audio stack and re-appear on resume, so Android
-            // re-enumerated it and flashed the system volume panel on every
-            // pause/play; it also made quick resumes rebuild the whole USB
-            // session. Other apps can still reach the DAC after the idle
-            // timeout, or immediately via releaseUsbSinkNow() when a focus-loss
-            // hook needs it.
+            // AudiophileEngine closes its exclusive libusb sink at every pause
+            // boundary. Decoder metadata and position remain loaded so play()
+            // can rebuild the USB session without losing the current track.
             active.pause()
+        }
+    }
+
+    /**
+     * Pauses the active engine and waits until an exclusive USB sink has been
+     * released.
+     *
+     * Audio-focus loss, notification actions, and explicit UI release commands
+     * use this stronger form so success is never reported while libusb still
+     * owns the DAC interface.
+     */
+    suspend fun pauseAndReleaseOutput(): Boolean {
+        val engine = withCommandLock {
+            playWhenReadyIntent = false
+            active
+        }
+        return when (engine) {
+            is AudiophileEngine -> engine.pauseAndReleaseOutput()
+            else -> {
+                engine.pause()
+                true
+            }
         }
     }
 

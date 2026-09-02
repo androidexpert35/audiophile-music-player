@@ -87,6 +87,15 @@ interface PlaybackRepository {
     suspend fun pause(): Resource<Unit>
 
     /**
+     * Pauses playback and releases exclusive USB audio ownership while keeping
+     * the current queue and playhead available for a later resume.
+     *
+     * @return [Resource.Success] only after the playback service completes the
+     *   output teardown, or [Resource.Error] when release fails.
+     */
+    suspend fun releaseUsbAudio(): Resource<Unit>
+
+    /**
      * Resumes playback from the paused position.
      *
      * @return [Resource.Success] on success, [Resource.Error] if no media is loaded.

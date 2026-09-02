@@ -59,18 +59,10 @@ class AudiophileEngine @Inject internal constructor(
     }
 
     /**
-     * Immediately releases the USB output sink when audio focus is permanently
-     * lost, so other apps can use the DAC without waiting for the idle timeout.
-     *
-     * The decoder and playhead state are preserved; [play] transparently
-     * rebuilds the sink when the user returns.
-     *
-     * @see BitPerfectPlaybackEngine.releaseUsbSinkNow
+     * Pauses the current track and completes after the exclusive output sink
+     * has released the USB DAC while preserving the playhead for resume.
      */
-    fun releaseUsbSinkNow() {
-        core.releaseUsbSinkNow()
-    }
-
+    suspend fun pauseAndReleaseOutput(): Boolean = core.pauseAndReleaseOutput()
 
     /**
      * Reloads the current track from the current playhead position so that

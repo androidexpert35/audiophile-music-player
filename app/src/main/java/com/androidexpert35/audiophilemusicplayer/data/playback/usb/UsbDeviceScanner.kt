@@ -36,7 +36,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,16 +49,11 @@ import javax.inject.Singleton
  *
  * ### Threading contract
  *
- * Every method on this class that touches a `UsbDeviceConnection` — descriptor
- * reads, `claimInterface`, `setInterface` — issues a **blocking `ioctl`** on
- * `/dev/bus/usb/...`. `SET_INTERFACE` is a USB control transfer that the kernel
- * waits on for up to `USB_CTRL_SET_TIMEOUT` (5 s) per call, and the probe walks
- * several candidate endpoints, so a single scan can stall its caller for tens of
- * seconds. Android's USB host guide is explicit that this work must not run on
- * the UI thread. Everything here therefore funnels through [rescanAndPublish],
- * which hops to [ioDispatcher] and serialises scans under [scanMutex]; the
- * broadcast receiver is likewise delivered on a private [HandlerThread] instead
- * of the main looper.
+ * Raw-descriptor reads issue blocking USB `ioctl`s and therefore never run on
+ * the UI thread. Discovery deliberately does not claim or switch an audio
+ * interface: doing so would detach Android's kernel UAC driver merely because a
+ * DAC was scanned, potentially reacquiring it immediately after playback paused.
+ * Actual interface negotiation happens only when the user starts playback.
  *
  * @property context Application context used to register the broadcast receiver.
  * @property usbManager System USB host manager.
@@ -78,22 +72,8 @@ class UsbDeviceScanner @Inject constructor(
     @param:ApplicationScope private val appScope: CoroutineScope,
 ) {
 
-    /** Serialises scans so two probes never force-claim the same interface at once. */
+    /** Serialises descriptor scans for a stable selected-device snapshot. */
     private val scanMutex = Mutex()
-
-    /**
-     * Direct-transport probe verdicts, keyed by [UsbDevice.probeCacheKey].
-     *
-     * The probe behind [UsbAudioSink.supportsQueuedStreaming] is *destructive*:
-     * it force-claims the streaming interface and issues a `SET_INTERFACE`,
-     * which detaches the kernel UAC driver for the rest of the plug session.
-     * Re-running it on every attach/permission broadcast therefore both costs
-     * seconds of blocking `ioctl` time and repeatedly knocks the DAC off the
-     * platform audio route. One verdict per plugged-in device is enough —
-     * Android hands out a fresh `deviceId` on re-plug, so the cache key changes
-     * exactly when a new probe is genuinely warranted.
-     */
-    private val directTransportProbeCache = ConcurrentHashMap<String, Boolean>()
 
     /**
      * Backing state, seeded empty on purpose.
@@ -191,9 +171,8 @@ class UsbDeviceScanner @Inject constructor(
     /**
      * Runs one serialised USB scan on [ioDispatcher] and publishes the result.
      *
-     * [scanMutex] guarantees a single in-flight scan: concurrent probes would
-     * otherwise race to force-claim the same streaming interface, and the loser
-     * would record a spurious "direct transport unsupported" verdict.
+     * [scanMutex] guarantees a single in-flight scan so attach and permission
+     * broadcasts cannot publish out-of-order descriptor snapshots.
      *
      * @return The freshly published [UsbAudioDeviceState].
      */
@@ -305,7 +284,6 @@ class UsbDeviceScanner @Inject constructor(
     }
 
     private fun scanCurrentDeviceState(): UsbAudioDeviceState {
-        pruneProbeCacheForDetachedDevices()
         val preferredDevice = resolvePreferredAudioDevice(permittedOnly = false)
         if (preferredDevice == null) {
             Log.d(TAG, "scanCurrentDeviceState: no USB audio device connected")
@@ -345,38 +323,11 @@ class UsbDeviceScanner @Inject constructor(
                     "Direct USB transports disabled; platform AudioTrack path will be used."
             )
         }
-        val isDirectUsbTransportSupported = if (hasPermission && isUac2Protocol) {
-            // The probe below force-claims the streaming interface and issues a
-            // SET_INTERFACE, which detaches the kernel audio driver — the Java
-            // USB API never re-attaches it, so the system audio route to the DAC
-            // stays dead until re-plug. It must therefore never run for devices
-            // that can only be served by that kernel driver (non-UAC2 above),
-            // and never more than once per plug session (cache below).
-            val supported = directTransportProbeCache.getOrPut(preferredDevice.probeCacheKey()) {
-                UsbAudioSink.supportsQueuedStreaming(
-                    device = preferredDevice,
-                    usbManager = usbManager,
-                )
-            }
-            if (!supported) {
-                // Permission is granted but we still cannot claim the USB interface.
-                // Likely cause: the OEM kernel UAC2 class driver (OPPO/ColorOS,
-                // Xiaomi MIUI, Samsung One UI, etc.) owns the USB audio device
-                // exclusively and rejects the app's claimInterface(force=true) call.
-                // This is an OEM limitation — native DSD / direct PCM via the custom
-                // USB host path are not possible on this device/ROM.
-                Log.w(
-                    TAG,
-                    "USB DAC (${preferredDevice.logLabel()}) permission granted but direct " +
-                        "transport probing failed — OEM kernel UAC driver likely has exclusive " +
-                        "access to the USB audio interface. Native DSD and direct USB playback " +
-                        "are unavailable; falling back to the platform AudioTrack path."
-                )
-            }
-            supported
-        } else {
-            false
-        }
+        // Readiness is descriptor-based here. A real claim is intentionally
+        // deferred to sink creation so opening Settings, receiving a broadcast,
+        // or pausing playback can never detach/reacquire the kernel audio driver.
+        // Runtime claim failures still fail closed in UsbAudioSinkFactory.
+        val isDirectUsbTransportSupported = hasPermission && isUac2Protocol
         val state = UsbAudioDeviceState(
             connectedDevice = preferredDevice.toDescriptor(),
             isPermissionGranted = hasPermission,
@@ -467,23 +418,6 @@ class UsbDeviceScanner @Inject constructor(
         serialNumber = runCatching { serialNumber }.getOrNull(),
     )
 
-    /**
-     * Identity of one *plug session* of a DAC, used to key [directTransportProbeCache].
-     *
-     * `deviceId` is reassigned by the platform on every attach, so the key
-     * changes precisely when the kernel driver has been re-bound and a fresh
-     * probe is meaningful again. Vendor/product are included so a verdict can
-     * never leak across two different DACs that reuse an id.
-     */
-    private fun UsbDevice.probeCacheKey(): String = "$vendorId:$productId:$deviceId"
-
-    /** Drops cached probe verdicts for DACs that are no longer attached. */
-    private fun pruneProbeCacheForDetachedDevices() {
-        if (directTransportProbeCache.isEmpty()) return
-        val attachedKeys = usbManager.deviceList.values.mapTo(mutableSetOf()) { it.probeCacheKey() }
-        directTransportProbeCache.keys.retainAll(attachedKeys)
-    }
-
     private fun UsbDevice.logLabel(): String =
         "id=$deviceId vendor=$vendorId product=$productId name=${productName ?: manufacturerName ?: deviceName}"
 
@@ -514,4 +448,3 @@ class UsbDeviceScanner @Inject constructor(
         private const val RECEIVER_THREAD_NAME = "UsbDeviceScanner-Broadcast"
     }
 }
-

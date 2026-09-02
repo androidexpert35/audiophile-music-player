@@ -74,6 +74,15 @@ class PlaybackRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun releaseUsbAudio(): Resource<Unit> = runCatching {
+        playbackController.releaseUsbAudio()
+        Resource.Success(Unit)
+    }.getOrElse { throwable ->
+        Resource.Error(
+            PlaybackResourceError(throwable.message ?: "Failed to release USB audio")
+        )
+    }
+
     override suspend fun resume(): Resource<Unit> = runCatching {
         playbackController.resume()
         Resource.Success(Unit)

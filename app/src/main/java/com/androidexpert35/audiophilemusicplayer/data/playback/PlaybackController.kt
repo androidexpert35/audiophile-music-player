@@ -3,15 +3,18 @@ package com.androidexpert35.audiophilemusicplayer.data.playback
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.androidexpert35.audiophilemusicplayer.data.playback.PlaybackController.Companion.POSITION_UPDATE_INTERVAL_MS
 import com.androidexpert35.audiophilemusicplayer.data.playback.service.AudioPlaybackService
+import com.androidexpert35.audiophilemusicplayer.data.playback.service.PlaybackSessionCommands
 import com.androidexpert35.audiophilemusicplayer.di.ApplicationScope
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
 import com.androidexpert35.audiophilemusicplayer.domain.model.playback.PlaybackState
@@ -28,6 +31,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -434,6 +438,28 @@ class PlaybackController @Inject constructor(
             ctrl.playWhenReady = false
             updatePlaybackState()
         }
+    }
+
+    /**
+     * Sends the awaited session command that releases exclusive USB ownership.
+     *
+     * The future is created under [commandMutex] but awaited after leaving the
+     * critical section, so a slow native teardown cannot block other controller
+     * state updates behind the mutex.
+     */
+    suspend fun releaseUsbAudio() {
+        val ctrl = getController()
+        val resultFuture = commandMutex.withLock {
+            ctrl.sendCustomCommand(
+                PlaybackSessionCommands.releaseUsbAudio,
+                Bundle.EMPTY,
+            )
+        }
+        val result = resultFuture.await()
+        check(result.resultCode == SessionResult.RESULT_SUCCESS) {
+            "Playback service could not release the USB audio output."
+        }
+        updatePlaybackState()
     }
 
     /**

@@ -12,7 +12,6 @@ import com.androidexpert35.audiophilemusicplayer.data.playback.PathType
 import com.androidexpert35.audiophilemusicplayer.data.playback.cancelAndClear
 import com.androidexpert35.audiophilemusicplayer.data.playback.engine.AudioPlayerEngine
 import com.androidexpert35.audiophilemusicplayer.data.playback.engine.EnginePlaybackState
-import com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile.BitPerfectPlaybackEngine.Companion.PAUSED_IDLE_SINK_RELEASE_MS
 import com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile.BitPerfectPlaybackEngine.Companion.RECOVERABLE_ERROR_RETRY_DELAY_MS
 import com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile.BitPerfectPlaybackEngine.Companion.ROUTING_HEARTBEAT_TICKS
 import com.androidexpert35.audiophilemusicplayer.data.playback.native_.AudioFormatInfo
@@ -50,7 +49,6 @@ import kotlin.coroutines.resume
  * This class acts as the main coordinator. Each sub-concern is delegated to a
  * dedicated helper:
  * - **[BitPerfectWakeLockController]** — partial wake-lock lifecycle.
- * - **[BitPerfectIdleSinkReleaseScheduler]** — idle-sink-release countdown.
  * - **[BitPerfectTransportBuffers]** — PCM and DSD scratch-buffer management.
  * - **[BitPerfectGaplessQueue]** — next-track preload state for gapless transitions.
  * - **[BitPerfectSessionLoader]** — tiered decoder + sink session building (T1–T3).
@@ -67,15 +65,13 @@ import kotlin.coroutines.resume
  * blocked in its Looper's kernel `epoll_wait`. There is **zero CPU spin
  * during pause** — no `while(isPaused)` loop, no `Thread.sleep` polling.
  *
- * ### Idle-sink release
+ * ### Pause-time output release
  *
- * When the engine enters [EnginePlaybackState.PAUSED] it arms a
- * [Handler.postDelayed] countdown of [PAUSED_IDLE_SINK_RELEASE_MS]
- * (2 minutes). If the player remains paused for the full duration,
- * `releaseIdleSinkInternal()` closes the [AudiophileOutputSink] so the OS
- * can reclaim audio focus and USB-DAC resources. The [FFmpegDecoder] and all
- * position state are preserved so the next [play] call transparently rebuilds
- * the sink and seeks back to the exact pause point.
+ * Every transition to [EnginePlaybackState.PAUSED] closes the
+ * [AudiophileOutputSink] immediately so libusb releases the claimed USB
+ * interface before another application tries to open the DAC. The
+ * [FFmpegDecoder] metadata and exact position are preserved; the next [play]
+ * call transparently rebuilds the complete sink session at that position.
  *
  * ### Gapless strategy
  *
@@ -114,12 +110,6 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     // ── Sub-concern helpers ──────────────────────────────────────────────────
 
     private val wakeLockController = BitPerfectWakeLockController(context, "$TAG:Playback")
-
-    private val idleSinkScheduler = BitPerfectIdleSinkReleaseScheduler(
-        handler = handler,
-        delayMs = PAUSED_IDLE_SINK_RELEASE_MS,
-        onRelease = ::releaseIdleSinkInternal,
-    )
 
     private val transportBuffers = BitPerfectTransportBuffers()
 
@@ -228,23 +218,19 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     /**
      * Loads and prepares [uri] at [startPositionMs]. Does **not** auto-play.
      *
-     * Cancels any pending idle-sink-release timer before replacing the current
-     * session so the countdown from a prior pause can never fire against stale
-     * resources.
+     * Replaces the current session while preserving the single audio-thread
+     * ownership contract.
      */
     fun loadTrack(uri: String, startPositionMs: Long = 0L) = handler.post {
-        idleSinkScheduler.cancel()
         doLoadTrack(uri, startPositionMs, autoPlay = false)
     }
 
     /**
      * Loads and immediately starts playing [uri] at [startPositionMs].
      *
-     * Cancels any pending idle-sink-release timer so the countdown from a prior
-     * pause can never fire against the new session.
+     * Replaces the current session and starts it on the audio thread.
      */
     fun loadAndPlay(uri: String, startPositionMs: Long = 0L) = handler.post {
-        idleSinkScheduler.cancel()
         doLoadTrack(uri, startPositionMs, autoPlay = true)
     }
 
@@ -265,12 +251,8 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             return@post
         }
 
-        // Cancel any pending idle-sink-release timeout so a long pause followed
-        // immediately by a resume does not tear down the sink we are about to use.
-        idleSinkScheduler.cancel()
-
-        // The output sink was released after the idle timeout fired while the
-        // player was paused. Rebuilding it by hand here (as this used to do)
+        // The output sink is released whenever the player is paused. Rebuilding
+        // it by hand here (as this used to do)
         // bypassed the tiered session loader, which is the only place that
         // resolves the on-disk `sourcePath` the libusb route requires — so a
         // manual rebuild always fell through to the platform AudioTrack sink,
@@ -281,7 +263,7 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         if (sink == null) {
             val uri = _currentUri.value ?: return@post
             val resumePosition = _positionMs.value
-            Log.i(TAG, "Reloading track to rebuild sink after idle release; resuming at ${resumePosition}ms")
+            Log.i(TAG, "Reloading track to rebuild sink after pause; resuming at ${resumePosition}ms")
             doLoadTrack(uri, resumePosition, autoPlay = true)
             return@post
         }
@@ -314,9 +296,29 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         }
     }
 
-    fun pause() = handler.post {
+    fun pause() = handler.post { pauseAndReleaseOutputInternal() }
+
+    /**
+     * Pauses playback and completes only after the output sink has released its
+     * USB interface.
+     *
+     * Used by audio-focus and explicit user actions that must not report success
+     * while libusb still owns the DAC.
+     */
+    suspend fun pauseAndReleaseOutput(): Boolean {
+        return suspendCancellableCoroutine { continuation ->
+            handler.post {
+                val released = pauseAndReleaseOutputInternal()
+                if (continuation.isActive) {
+                    continuation.resume(released)
+                }
+            }
+        }
+    }
+
+    private fun pauseAndReleaseOutputInternal(): Boolean {
         playWhenReady = false
-        try {
+        return try {
             sink?.pause()
             val pausedPositionMs = snapshotCurrentPlaybackPositionMs()
             // Re-anchor to the exact sink head captured at the pause boundary.
@@ -328,7 +330,12 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             _state.value = EnginePlaybackState.PAUSED
             notifyEngineStateChanged()
             stopPositionTicker()
-            idleSinkScheduler.schedule()
+            releaseOutputSinkInternal()
+            // The platform preference is a no-op for the direct libusb route,
+            // but clearing it here prevents a fallback AudioTrack session from
+            // retaining an obsolete routing constraint.
+            usbAudioSinkFactory.releasePlatformBitPerfectRouting()
+            true
         } catch (throwable: Throwable) {
             stopPositionTicker()
             reportPlaybackError(
@@ -336,19 +343,17 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
                 userMessage = "Audio playback could not be paused: ${throwable.message}",
                 throwable = throwable,
             )
+            false
         } finally {
             wakeLockController.release()
         }
     }
 
     fun stop() = handler.post {
-        idleSinkScheduler.cancel()
         doStopInternal(clearState = true)
     }
 
     fun seekTo(positionMs: Long) = handler.post {
-        idleSinkScheduler.cancel()
-
         val decoder = currentDecoder ?: return@post
         val currentSink = sink
         val seekSucceeded = if (currentSink is LibusbOutputSink) {
@@ -394,7 +399,6 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     }
 
     fun release() = handler.post {
-        idleSinkScheduler.cancel()
         doStopInternal(clearState = true)
         // Clear the bit-perfect AudioMixerAttributes preference so AudioFlinger
         // is not left holding a stale routing constraint after the engine closes.
@@ -416,7 +420,6 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         val position = snapshotCurrentPlaybackPositionMs()
         // Preserve play-when-ready so toggling a setting mid-playback resumes seamlessly.
         val wasPlaying = playWhenReady || _state.value == EnginePlaybackState.PLAYING
-        idleSinkScheduler.cancel()
         Log.i(TAG, "Reloading track with updated settings: uri=$uri pos=${position}ms play=$wasPlaying")
         doLoadTrack(uri, position, autoPlay = wasPlaying)
     }
@@ -438,25 +441,6 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     }
 
     /**
-     * Immediately releases the USB output sink when audio focus is permanently
-     * lost to another app.
-     *
-     * The [currentDecoder], [_currentFormat], and [_positionMs] are preserved so
-     * the next [play] transparently rebuilds the sink at the exact pause point.
-     *
-     * Must only be called after the engine has already been paused.
-     */
-    fun releaseUsbSinkNow() = handler.post {
-        idleSinkScheduler.cancel()
-        releaseIdleSinkInternal()
-        // Closing either a direct libusb sink or an AudioTrack is not enough on
-        // Android 14+: a preferred BIT_PERFECT mixer profile can outlive the
-        // stream. Clear it on every immediate release so other applications can
-        // reopen the same DAC through AudioFlinger without a cable re-plug.
-        usbAudioSinkFactory.releasePlatformBitPerfectRouting()
-    }
-
-    /**
      * Synchronously stops playback and releases the claimed USB DAC interface.
      *
      * Clears the bit-perfect [android.media.AudioMixerAttributes] preference so
@@ -466,7 +450,6 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     suspend fun stopAndReleaseOutput() {
         suspendCancellableCoroutine { continuation ->
             handler.post {
-                idleSinkScheduler.cancel()
                 doStopInternal(clearState = true)
                 usbAudioSinkFactory.releasePlatformBitPerfectRouting()
                 if (continuation.isActive) {
@@ -1028,26 +1011,32 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         }
     }
 
-    // ── Idle-sink release ────────────────────────────────────────────────────
+    // ── Pause-time output release ────────────────────────────────────────────
 
     /**
-     * Releases the output sink after an extended pause, allowing the OS to
-     * reclaim audio hardware and audio focus.
+     * Releases the output sink while paused, allowing another application to
+     * claim the DAC immediately.
      *
      * The [currentDecoder], [_currentFormat], and [_positionMs] are preserved so
      * [play] can transparently rebuild the sink and seek back to the exact pause
      * point without requiring a full track reload.
      *
-     * Invoked on the audio thread via [BitPerfectIdleSinkReleaseScheduler].
+     * Invoked only on the dedicated audio thread.
      */
-    private fun releaseIdleSinkInternal() {
+    private fun releaseOutputSinkInternal() {
         if (playWhenReady || _state.value != EnginePlaybackState.PAUSED) return
-        if (sink == null) return
+        val activeSink = sink ?: return
 
-        Log.i(TAG, "Releasing idle audio sink after ${PAUSED_IDLE_SINK_RELEASE_MS / 60_000L}min pause")
-        runCatching { sink?.stop() }
-        runCatching { sink?.close() }
-        sink = null
+        Log.i(TAG, "Releasing audio sink at pause boundary")
+        runCatching { activeSink.stop() }
+            .onFailure { throwable ->
+                Log.w(TAG, "Output sink stop failed during pause-time release", throwable)
+            }
+        try {
+            activeSink.close()
+        } finally {
+            sink = null
+        }
         // Intentionally do NOT clear _pathReport here. The path report describes
         // the routing configuration negotiated for this track. That configuration
         // remains valid while paused — the same DAC is still connected. Nulling
@@ -1354,7 +1343,6 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     ) {
         try {
             if (throwable == null) Log.e(TAG, logMessage) else Log.e(TAG, logMessage, throwable)
-            idleSinkScheduler.cancel()
             writeLoopRunning = false
             playWhenReady = false
             stopPositionTicker()
@@ -1397,13 +1385,5 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
          */
         const val ROUTING_HEARTBEAT_TICKS = 50
 
-        /**
-         * Duration the player must remain in [EnginePlaybackState.PAUSED] before
-         * the output sink is proactively released to free audio hardware resources.
-         *
-         * Two minutes is a conservative threshold: long enough to avoid spurious
-         * releases during a brief track-change or UI-navigation pause.
-         */
-        const val PAUSED_IDLE_SINK_RELEASE_MS = 2L * 60L * 1_000L
     }
 }
