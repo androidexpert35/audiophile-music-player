@@ -159,6 +159,14 @@ consumed by `ObserveAudioTelemetryUseCase` and the player telemetry UI.
   post-quantisation depth (for example 24-in-32 or 32-in-32), while unprocessed
   S16 widened only for transport continues to report 16-bit source precision.
 
+Offline **signal measurement** is deliberately not part of this pipeline.
+`data/playback/analysis/AudioAnalysisBridge` opens its own native lavfi graph over
+its own decoder session on `@IoDispatcher` and returns numbers; it touches no
+engine, no sink and no telemetry, and nothing currently consumes its output. Never
+call it from `doLoadTrack` / `doEnqueueNext` or anywhere else on
+`BitPerfectPlaybackEngine`'s audio HandlerThread — see
+[`native-audio.md`](native-audio.md) for its contract.
+
 ---
 
 ## USB DAC routing (Kotlin side — `data/playback/usb/`)
