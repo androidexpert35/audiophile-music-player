@@ -1,10 +1,19 @@
-package com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile
+package com.androidexpert35.audiophilemusicplayer.data.playback
 
 import android.content.Context
 import androidx.core.net.toUri
 
 /**
  * Resolves a raw URI string to a file-system path that FFmpeg can open.
+ *
+ * Shared by every component that hands a library URI to a native FFmpeg
+ * session: the bit-perfect playback engine
+ * ([com.androidexpert35.audiophilemusicplayer.data.playback.engine.audiophile.BitPerfectPlaybackEngine])
+ * and the offline measurement pass
+ * ([com.androidexpert35.audiophilemusicplayer.data.playback.analysis.TrackSignalAnalyser]).
+ * It lives one level above `engine/` precisely so the second of those does not
+ * have to reach into engine-private code or keep a second copy of the rules —
+ * a copy that would drift the first time an OEM quirk forces a change here.
  *
  * Supports three URI schemes:
  * - `null` / `"file"` — returns the path component directly.
@@ -17,6 +26,10 @@ import androidx.core.net.toUri
  * closed here. It is handed directly to FFmpeg and must remain open for the
  * decoder's lifetime. The OS reclaims it when FFmpeg releases the format
  * context via `avformat_close_input`.
+ *
+ * `content://` resolution performs a binder round-trip and can touch storage,
+ * so callers must invoke this off the main thread and off the engine's audio
+ * thread.
  *
  * @param context Application context used for [android.content.ContentResolver]
  *   resolution.
@@ -42,4 +55,3 @@ internal fun resolveUriToPath(context: Context, raw: String): String {
         else -> raw
     }
 }
-

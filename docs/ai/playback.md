@@ -90,7 +90,7 @@ coordinator only — each concern is delegated to a dedicated helper in the same
 | `BitPerfectWakeLockController` | `PARTIAL_WAKE_LOCK` lifecycle across play/pause/stop/error |
 | — pause-time output release | Every audiophile-engine pause closes the USB sink immediately plus any platform mixer preference. Decoder metadata and the exact playhead survive; Play transparently rebuilds output at that position. `pauseAndReleaseOutput()` is the awaited boundary used by focus loss and explicit release commands. |
 | `BitPerfectDsdSupport` (`DsdPlaybackContext`) | Immutable DSD transport context (source/effective rate, output mode, DoP encoder) |
-| `BitPerfectUriResolver` | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg |
+| `resolveUriToPath` (`data/playback/AudioSourceUriResolver`) | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg. **Shared, not engine-private** — the offline analysis pass opens FFmpeg on the same URIs and must not carry a second copy of these rules |
 | `BitPerfectPlaybackMath` | Pure sink-playhead → playback-position-ms conversion |
 | — seek/reload anchoring | Libusb sinks expose an absolute post-seek playhead; the engine captures that value as `sinkStartFrames` and snapshots the live head before pause/DSP/routing reloads so the target is never added twice or rounded back to the last UI tick |
 | `BitPerfectDiagnosticsLogger` | Structured `[BP]` failure-mode logging (`adb logcat -s AudiophileDiag`) |
@@ -126,6 +126,10 @@ consumed by both `AudioPathValidator` (diagnostics, below) and
 - **`PlaybackRuntimeExt`** — small cross-engine utilities (`AUDIPHILE_PATH_TAG`,
   `USB_CLASS_AUDIO_SENTINEL`, the position-ticker interval, `Handler.runOrPost`,
   `CoroutineScope.restartTicker`).
+- **`AudioSourceUriResolver`** (`resolveUriToPath`) — the one place a library URI becomes
+  a path FFmpeg can open. Lives here rather than in `engine/audiophile/` because the
+  offline analysis pass needs it too; the `content://` branch does a binder round-trip, so
+  call it on `@IoDispatcher` and never on the engine's audio thread.
 
 **Rule:** if you add a new `PathType` or change the 44.1/48 kHz rule, update
 `PathClassifier`/`StaticOutputRateResolver` **and** this section together — this is
@@ -161,12 +165,21 @@ consumed by `ObserveAudioTelemetryUseCase` and the player telemetry UI.
   S16 widened only for transport continues to report 16-bit source precision.
 
 Offline **signal measurement** is deliberately not part of this pipeline.
-`data/playback/analysis/AudioAnalysisBridge` opens its own native lavfi graph over
-its own decoder session on `@IoDispatcher` and returns numbers; it touches no
-engine, no sink and no telemetry, and nothing currently consumes its output. Never
-call it from `doLoadTrack` / `doEnqueueNext` or anywhere else on
-`BitPerfectPlaybackEngine`'s audio HandlerThread — see
-[`native-audio.md`](native-audio.md) for its contract.
+`data/playback/analysis/` runs entirely on `@IoDispatcher` over its own decoder
+sessions; it touches no engine, no sink and no telemetry, and nothing currently
+consumes its output. Never call any of it from `doLoadTrack` / `doEnqueueNext` or
+anywhere else on `BitPerfectPlaybackEngine`'s audio HandlerThread — see
+[`native-audio.md`](native-audio.md) for the native contract.
+
+| Component | Responsibility |
+|-----------|-----------------|
+| `AudioAnalysisBridge` | Native lavfi measurement graph; one session per instance, single-owner threading |
+| `StationarySampler` / `FFmpegStationarySampler` | One complete Class S pass: own `FFmpegDecoder` (`forcePcm = true`), 4 × 500 ms windows spread across the track clear of both ends, fed to the bridge. Returns `StationarySamplingResult` — never throws for a bad source |
+| `TrackSignalAnalyser` | Policy and caching. `analyseIfNeeded(AnalysableTrack)` skips DSD sources, tracks under 3 s, tracks with no `audioKey`, and tracks already measured at the current `TrackAnalysis.SCHEMA_VERSION`; persists through `TrackAnalysisRepository`. Idempotent, and serialised on one lock so a second caller finds the first caller's row instead of decoding the same file twice |
+
+The sampler is bound behind an interface (`di/AnalysisModule`) for one reason: the
+orchestrator's skip policy has to be testable on the JVM, where `audiophile_native`
+cannot load. Keep new measurement work behind that seam.
 
 ---
 

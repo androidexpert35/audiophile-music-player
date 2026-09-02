@@ -19,6 +19,7 @@ except where Android forces it (e.g. `@AndroidEntryPoint` services). Modules liv
 | `NetworkModule` | Shared `OkHttpClient`, Deezer + LRCLIB `Retrofit`/services |
 | `CoilModule` | Coil `ImageLoader` (reuses the shared `OkHttpClient`) |
 | `NavigationModule` | `NavigationManager` binding (singleton shared coordinator) |
+| `AnalysisModule` (`abstract`, `@Binds`) | `StationarySampler` → `FFmpegStationarySampler` — the offline signal-measurement pass, bound behind an interface so the orchestrator's policy is testable without `audiophile_native` |
 
 All installed in `SingletonComponent`.
 

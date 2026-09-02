@@ -1,6 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.data.mapper
 
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackAnalysisEntity
+import com.androidexpert35.audiophilemusicplayer.data.playback.analysis.AudioAnalysisFeatures
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.IntegralAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.TrackAnalysis
@@ -121,6 +122,32 @@ fun mergeIntegralAnalysis(
         clippingRatio = integral.clippingRatio,
     )
 }
+
+/**
+ * Carries a fresh measurement out of the native bridge and into the domain.
+ *
+ * The two types hold the same numbers on purpose and are kept apart on purpose: one is
+ * the wire shape of the native feature vector, the other is what the rest of the app is
+ * allowed to see. This is the single seam between them, so a change to the vector layout
+ * shows up here rather than everywhere a measurement is read.
+ *
+ * @receiver Aggregate produced by one sampling pass.
+ * @return The same measurements as the framework-free domain model.
+ */
+fun AudioAnalysisFeatures.toStationaryAnalysis(): StationaryAnalysis = StationaryAnalysis(
+    spectralRolloffHz = spectralRolloffHz,
+    spectralCentroidHz = spectralCentroidHz,
+    spectralSlope = spectralSlope,
+    noiseFloorDbfs = noiseFloorDbfs,
+    dcOffset = dcOffset,
+    leftRmsDbfs = leftRmsDbfs,
+    rightRmsDbfs = rightRmsDbfs,
+    midRmsDbfs = midRmsDbfs,
+    sideRmsDbfs = sideRmsDbfs,
+    interChannelCorrelation = interChannelCorrelation,
+    windowCount = windowCount,
+    frameCount = frameCount,
+)
 
 /**
  * Reconstructs the Class S half of a row.
