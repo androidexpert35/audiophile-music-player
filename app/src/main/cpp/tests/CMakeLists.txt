@@ -11,6 +11,7 @@ add_executable(audiophile_native_core_tests
     ../dop_formatter.cpp
     ../native_dsd_formatter.cpp
     ../audio_analysis_aggregator.cpp
+    ../audio_integral_aggregator.cpp
 )
 
 target_include_directories(audiophile_native_core_tests PRIVATE ..)

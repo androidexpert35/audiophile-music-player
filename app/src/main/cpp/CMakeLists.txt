@@ -16,10 +16,14 @@
 #   engine_swap_bridge.cpp      — JNI for ACTION_USB_DEVICE_ATTACHED hot-plug
 #
 # Measurement-only sources (never on the playback data path):
-#   audio_analysis_bridge.cpp     — JNI lavfi graph reporting stationary
-#                                   (Class S) signal features for a PCM window
-#   audio_analysis_aggregator.cpp — its pure aggregation/parsing logic,
+#   audio_analysis_bridge.cpp     — JNI lavfi graphs reporting stationary
+#                                   (Class S) features for a PCM window and
+#                                   integral (Class I) loudness/peak/clipping
+#                                   figures for a whole decoded stream
+#   audio_analysis_aggregator.cpp — Class S aggregation/parsing logic,
 #                                   host-testable (see tests/CMakeLists.txt)
+#   audio_integral_aggregator.cpp — Class I aggregation logic, likewise
+#                                   host-testable
 #
 # Two-mode build:
 #  - If app/src/main/jniLibs/<ABI>/libavformat.so exists, the full bridge
@@ -115,6 +119,7 @@ if(FFMPEG_AVAILABLE)
         sue_bridge.cpp
         audio_analysis_bridge.cpp
         audio_analysis_aggregator.cpp
+        audio_integral_aggregator.cpp
         ${AUDIPHILE_TRANSPORT_SOURCES}
     )
 

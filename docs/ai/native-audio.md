@@ -116,15 +116,23 @@ Key source files:
   keep them in sync. Kotlin counterpart is `SueBridge`/`SueStage` — see
   [`playback.md`](playback.md).
 - `audio_analysis_bridge.cpp` — JNI implementation of the **measurement-only**
-  Class S signal analysis. Builds `abuffer → aformat=sample_fmts=flt →
-  aspectralstats → astats → abuffersink` and reads the results out of the output
-  frame metadata dictionary. It is not on the playback data path: it applies no
-  gain, no resampling and no dithering, and nothing it produces reaches a sink.
-  Kotlin counterpart is `data/playback/analysis/AudioAnalysisBridge`.
+  signal analysis, in two modes that share one session type. Class S builds
+  `abuffer → aformat=sample_fmts=flt → aspectralstats → astats → abuffersink`
+  over a few sampled windows; Class I builds `abuffer → aformat=sample_fmts=dbl
+  → astats → ebur128 → abuffersink` over a whole decoded stream. Both read their
+  results out of the output frame metadata dictionary. Neither is on the
+  playback data path: they apply no gain, no resampling and no dithering, and
+  nothing they produce reaches a sink. Kotlin counterparts are
+  `data/playback/analysis/AudioAnalysisBridge` and
+  `data/playback/analysis/AudioIntegralAnalysisBridge`.
 - `audio_analysis_aggregator.{h,cpp}` — the pure aggregation and parsing logic
-  behind that bridge (window/channel averaging, `-inf`/`nan` rejection, and the
-  mid/side and inter-channel-correlation sums). JNI-, Android- and FFmpeg-free
-  so it is covered by the host tests in `cpp/tests/`.
+  behind the Class S mode (window/channel averaging, `-inf`/`nan` rejection, and
+  the mid/side and inter-channel-correlation sums). JNI-, Android- and
+  FFmpeg-free so it is covered by the host tests in `cpp/tests/`.
+- `audio_integral_aggregator.{h,cpp}` — the same for the Class I mode: the
+  sample peak, the clipping ratio and the flat-top run-length statistics counted
+  straight from decoded samples, plus the cumulative loudness snapshots and the
+  derived PLR. Likewise host-tested.
 
 The Kotlin counterparts live in `data/playback/native_/` (`FFmpegDecoder`,
 `AudioTrackSink`, `DsdPipelineInfo`, `PipelinePathReport`, …) and
@@ -267,11 +275,81 @@ isolation, and `aphasemeter` — the only filter reporting a correlation at all 
 publishes a sign-correlation meter value and opens a second, video output pad).
 They are accumulated exactly from the float samples the graph already forwards,
 in `audio_analysis_aggregator`. Peak, loudness and clipping counts are integral
-measures and are deliberately absent from this bridge.
+measures and are deliberately absent from **this mode** — they belong to the
+Class I mode below, because sampling them biases them.
 
 In the stub build (no FFmpeg provisioned) `ffmpeg_bridge_stub.cpp` answers the
 same five symbols with the failure sentinel, so the APK assembles and the caller
 records the track as not analysable instead of crashing.
+
+
+### Measurement bridge (Class I) — the whole stream, once
+
+The integral measures — sample peak, true peak, integrated loudness, PLR,
+clipping — cannot be sampled. A peak seen in three windows is not the peak of
+the track, and an underestimated peak is worse than no peak because a gain stage
+will trust it. They therefore only ever come from a pass that saw every sample.
+
+Where the Kotlin write loop already sees the audio those figures accumulate for
+free while a track plays. On the pure bit-perfect libusb transport it does not:
+the native pump owns the data and `LibusbPcmAudioSink.write()` /
+`LibusbDsdAudioSink.write()` are no-ops. That path, and any track the user has
+never played, is what this offline pass covers.
+
+It shares `AnalysisCtx`, the graph builder, the feed path and the drain loop
+with the Class S mode; only the chain, the sink sample format and the aggregate
+differ. JNI entry points
+(`data.playback.analysis.AudioIntegralAnalysisBridge`, one session per handle,
+all calls on a single thread, **never** the audio HandlerThread):
+
+| Entry point | Contract |
+|-------------|----------|
+| `nativeOpen(sampleRateHz, channelCount, inputEncoding)` | Builds the integral graph; returns the handle or `0L` on failure (stub build included). |
+| `nativeConsumeLastInitError()` | Drains the reason a `nativeOpen` returned `0L`. |
+| `nativeFeed(handle, directBuffer, frames)` | Pushes one block **in stream order**; returns frames accepted, or a negative sentinel. |
+| `nativeReadFeatures(handle, doubleArray)` | Flushes the graph, closes any open flat-top run and writes the 10-slot feature vector; `NaN` marks a value that was never measured. |
+| `nativeClose(handle)` | Frees the session; safe with `0L`. |
+
+A handle carries the mode it was opened with, and `nativeReadFeatures` on the
+wrong bridge is rejected rather than reinterpreting one aggregate as the other.
+
+The slot order is the wire contract between `AudioIntegralFeatureIndex` in
+`audio_integral_aggregator.h` and the index constants in
+`AudioIntegralAnalysisBridge.kt` — change one and you must change the other.
+
+**Filter and metadata names are verified against the shipped build, not
+remembered.** `ebur128` and its `metadata`, `peak` (constants `none` / `sample`
+/ `true`) and `framelog` (constant `quiet`) options, the `astats` constants
+`Peak_level` and `Flat_factor`, and the keys `lavfi.r128.I`,
+`lavfi.r128.true_peak`, `lavfi.r128.sample_peak`,
+`lavfi.astats.Overall.Peak_level` and `lavfi.astats.Overall.Flat_factor` were
+all read out of the string table of the FFmpeg 7.1.4 `libavfilter.so` in
+`jniLibs/arm64-v8a/`. `ebur128` republishes that dictionary on every completed
+100 ms block with running values, so the last snapshot before EOF is the
+whole-stream figure — the same "cumulative, keep the newest" rule as `astats` at
+`reset=0`. Its peak keys carry a **linear amplitude**, not dB; the filter's own
+end-of-stream log is what applies 20·log10 to them.
+
+The sample peak, the clipping ratio and the flat-top run lengths are **not**
+taken from lavfi. `astats` reports `Abs_Peak_count` as the number of samples at
+the *observed* maximum rather than at full scale — on a quiet track that is a
+count of its own loudest samples, which would read as a catastrophic clipping
+ratio — and `Flat_factor` is a single scalar, not a run-length distribution.
+They are counted exactly in `audio_integral_aggregator`, against a full-scale
+threshold of 0.9999 (FFmpeg normalises integer PCM by the negative full-scale
+value, so a 16-bit source's largest positive sample is 32767/32768 and a
+threshold of exactly 1.0 would report a clipped 16-bit master as clean). `astats`
+stays in the chain and its overall peak is logged beside the counted one, so a
+disagreement between the graph and the sample pass is visible rather than silent.
+
+Cost is the open question this pass raises: it decodes the whole file, so
+`FFmpegIntegralSampler` reports the wall-clock time and the frames covered for
+every pass, both in its result and in a log line tagged `TrackIntegralAnalysis`.
+Whatever schedules a library sweep must read that number from a real device
+rather than assume one.
+
+The stub build answers the five integral symbols with the same failure sentinel:
+no crash, and above all no invented loudness figure.
 
 ---
 

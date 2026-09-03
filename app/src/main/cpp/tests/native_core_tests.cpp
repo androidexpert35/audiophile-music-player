@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "audio_analysis_aggregator.h"
+#include "audio_integral_aggregator.h"
 #include "audio_gain.h"
 #include "cpu_affinity_policy.h"
 #include "dop_formatter.h"
@@ -539,6 +540,183 @@ void test_analysis_aggregator_reports_unmeasured_as_nan()
     assert(aggregator.write_features(nullptr, kAudioAnalysisFeatureCount) == 0);
 }
 
+// ── AudioIntegralAggregator (Class I) ────────────────────────────────────────
+
+void test_integral_peak_and_clipping_are_counted_exactly()
+{
+    IntegralSampleAccumulator accumulator(2);
+    // Four stereo frames; two samples sit at full scale, six do not.
+    const std::array<double, 8> frames{
+        0.5, -0.25,
+        1.0, 0.125,
+        -1.0, 0.0,
+        0.5, 0.5,
+    };
+    accumulator.add_interleaved(frames.data(), 4);
+    accumulator.finish();
+
+    assert(accumulator.frame_count() == 4);
+    assert(analysis_close(accumulator.sample_peak_dbfs(), 0.0, 1e-12));
+    assert(analysis_close(accumulator.clipping_ratio(), 2.0 / 8.0, 1e-12));
+    // Two isolated full-scale samples on different channels are not a plateau.
+    assert(accumulator.flat_run_count() == 0);
+    assert(std::isnan(accumulator.flat_run_longest()));
+    assert(analysis_close(accumulator.flat_run_sample_ratio(), 0.0, 1e-12));
+}
+
+void test_integral_flat_runs_are_per_channel_and_length_gated()
+{
+    IntegralSampleAccumulator accumulator(2);
+    // Left channel: a 4-sample plateau, then a 2-sample one that is too short
+    // to count. Right channel: never reaches full scale at all.
+    const std::array<double, 16> frames{
+        1.0, 0.1,
+        1.0, 0.1,
+        1.0, 0.1,
+        1.0, 0.1,
+        0.2, 0.1,
+        -1.0, 0.1,
+        -1.0, 0.1,
+        0.2, 0.1,
+    };
+    accumulator.add_interleaved(frames.data(), 8);
+    accumulator.finish();
+
+    assert(accumulator.flat_run_count() == 1);
+    assert(analysis_close(accumulator.flat_run_longest(), 4.0, 1e-12));
+    assert(analysis_close(accumulator.flat_run_mean(), 4.0, 1e-12));
+    // Only the counted run's samples are inside a run: 4 of 16 samples.
+    assert(analysis_close(accumulator.flat_run_sample_ratio(), 4.0 / 16.0, 1e-12));
+    // Both plateaus still count as clipped samples: 4 + 2 of 16.
+    assert(analysis_close(accumulator.clipping_ratio(), 6.0 / 16.0, 1e-12));
+}
+
+void test_integral_run_open_at_end_of_stream_is_closed_by_finish()
+{
+    IntegralSampleAccumulator accumulator(1);
+    const std::array<double, 3> frames{1.0, 1.0, 1.0};
+    accumulator.add_interleaved(frames.data(), 3);
+
+    // Before finish() the run is still open and therefore not yet counted.
+    assert(accumulator.flat_run_count() == 0);
+    accumulator.finish();
+    assert(accumulator.flat_run_count() == 1);
+    assert(analysis_close(accumulator.flat_run_longest(), 3.0, 1e-12));
+    // finish() is idempotent: a second read reports the same aggregate.
+    accumulator.finish();
+    assert(accumulator.flat_run_count() == 1);
+}
+
+void test_integral_16_bit_full_scale_counts_as_clipped()
+{
+    // FFmpeg normalises integer PCM by the negative full-scale value, so the
+    // largest positive sample a 16-bit source can carry is 32767/32768. A
+    // threshold of exactly 1.0 would report a clipped 16-bit master as clean.
+    IntegralSampleAccumulator accumulator(1);
+    const std::array<double, 3> frames{
+        32767.0 / 32768.0,
+        32767.0 / 32768.0,
+        32767.0 / 32768.0,
+    };
+    accumulator.add_interleaved(frames.data(), 3);
+    accumulator.finish();
+
+    assert(analysis_close(accumulator.clipping_ratio(), 1.0, 1e-12));
+    assert(accumulator.flat_run_count() == 1);
+}
+
+void test_integral_non_finite_frame_breaks_the_run()
+{
+    const double nan_value = std::numeric_limits<double>::quiet_NaN();
+    IntegralSampleAccumulator accumulator(1);
+
+    const std::array<double, 2> before{1.0, 1.0};
+    const std::array<double, 1> glitch{nan_value};
+    const std::array<double, 2> after{1.0, 1.0};
+    accumulator.add_interleaved(before.data(), 2);
+    accumulator.add_interleaved(glitch.data(), 1);
+    accumulator.add_interleaved(after.data(), 2);
+    accumulator.finish();
+
+    // Two runs of two samples each: neither reaches the three-sample minimum,
+    // and the glitch frame itself was not accumulated.
+    assert(accumulator.frame_count() == 4);
+    assert(accumulator.flat_run_count() == 0);
+}
+
+void test_integral_silence_reports_the_floor_not_nan()
+{
+    IntegralSampleAccumulator accumulator(2);
+    const std::array<double, 4> silence{0.0, 0.0, 0.0, 0.0};
+    accumulator.add_interleaved(silence.data(), 2);
+    accumulator.finish();
+
+    assert(analysis_close(accumulator.sample_peak_dbfs(), kAudioIntegralSilenceDbfs, 1e-12));
+    assert(analysis_close(accumulator.clipping_ratio(), 0.0, 1e-12));
+}
+
+void test_integral_aggregator_keeps_last_loudness_and_derives_plr()
+{
+    const double nan_value = std::numeric_limits<double>::quiet_NaN();
+
+    AudioIntegralAggregator aggregator(1);
+    aggregator.note_window();
+    aggregator.set_loudness_snapshot(-14.0, 0.5);
+    aggregator.set_level_snapshot(-6.0, 1.5);
+
+    aggregator.note_window();
+    // ebur128 is cumulative, so the newest snapshot replaces the previous one...
+    aggregator.set_loudness_snapshot(-12.5, 1.0);
+    // ...but a block that reported nothing must not clear what was measured.
+    aggregator.set_loudness_snapshot(nan_value, nan_value);
+
+    const std::array<double, 2> samples{0.5, -0.5};
+    aggregator.add_samples(samples.data(), 2);
+    aggregator.finish();
+
+    std::array<double, kAudioIntegralFeatureCount> features{};
+    assert(aggregator.write_features(features.data(), features.size()) ==
+           kAudioIntegralFeatureCount);
+
+    assert(analysis_close(features[kIntegralIntegratedLufs], -12.5, 1e-12));
+    // true_peak arrives as a linear amplitude and is reported in dBFS.
+    assert(analysis_close(features[kIntegralTruePeakDbfs], 0.0, 1e-12));
+    assert(analysis_close(features[kIntegralSamplePeakDbfs], -6.0206, 1e-3));
+    // PLR is the counted sample peak minus the integrated loudness.
+    assert(analysis_close(features[kIntegralPlrDb],
+                          features[kIntegralSamplePeakDbfs] + 12.5, 1e-12));
+    assert(analysis_close(features[kIntegralFrameCount], 2.0, 1e-12));
+    // astats is corroboration only and never becomes a reported feature.
+    assert(analysis_close(aggregator.astats_peak_level_dbfs(), -6.0, 1e-12));
+    assert(analysis_close(aggregator.astats_flat_factor(), 1.5, 1e-12));
+}
+
+void test_integral_aggregator_reports_unmeasured_as_nan()
+{
+    AudioIntegralAggregator aggregator(2);
+    aggregator.finish();
+
+    std::array<double, kAudioIntegralFeatureCount> features{};
+    assert(aggregator.write_features(features.data(), features.size()) ==
+           kAudioIntegralFeatureCount);
+
+    assert(std::isnan(features[kIntegralSamplePeakDbfs]));
+    assert(std::isnan(features[kIntegralTruePeakDbfs]));
+    assert(std::isnan(features[kIntegralIntegratedLufs]));
+    assert(std::isnan(features[kIntegralPlrDb]));
+    assert(std::isnan(features[kIntegralClippingRatio]));
+    assert(std::isnan(features[kIntegralFlatRunLongest]));
+    assert(std::isnan(features[kIntegralFlatRunMean]));
+    assert(std::isnan(features[kIntegralFlatRunSampleRatio]));
+    assert(analysis_close(features[kIntegralFlatRunCount], 0.0, 1e-12));
+    assert(analysis_close(features[kIntegralFrameCount], 0.0, 1e-12));
+
+    // A short output array is refused atomically rather than partially filled.
+    std::array<double, kAudioIntegralFeatureCount - 1> too_small{};
+    assert(aggregator.write_features(too_small.data(), too_small.size()) == 0);
+    assert(aggregator.write_features(nullptr, kAudioIntegralFeatureCount) == 0);
+}
+
 } // namespace
 
 int main()
@@ -570,6 +748,14 @@ int main()
     test_stereo_energy_skips_non_finite_frames();
     test_analysis_aggregator_averages_windows_and_keeps_last_levels();
     test_analysis_aggregator_reports_unmeasured_as_nan();
+    test_integral_peak_and_clipping_are_counted_exactly();
+    test_integral_flat_runs_are_per_channel_and_length_gated();
+    test_integral_run_open_at_end_of_stream_is_closed_by_finish();
+    test_integral_16_bit_full_scale_counts_as_clipped();
+    test_integral_non_finite_frame_breaks_the_run();
+    test_integral_silence_reports_the_floor_not_nan();
+    test_integral_aggregator_keeps_last_loudness_and_derives_plr();
+    test_integral_aggregator_reports_unmeasured_as_nan();
     std::cout << "audiophile_native_core_tests: all tests passed\n";
     return 0;
 }

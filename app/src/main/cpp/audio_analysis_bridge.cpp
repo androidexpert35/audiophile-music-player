@@ -1,16 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // audio_analysis_bridge.cpp
 //
-// JNI implementation for AudioAnalysisBridge.kt — a measurement-only lavfi
-// bridge that reports stationary ("Class S") signal features for a window of
-// decoded PCM.
+// JNI implementation for AudioAnalysisBridge.kt and
+// AudioIntegralAnalysisBridge.kt — a measurement-only lavfi bridge that reports
+// signal features for decoded PCM.
 //
 // This bridge NEVER touches the playback data path. It builds its own graph,
 // consumes PCM the caller has already decoded on @IoDispatcher, and returns
 // numbers. It applies no gain, no resampling, no dithering, and nothing it
 // produces is fed back into any sink.
 //
-// Graph:
+// Two measurement modes share the whole session machinery and differ only in
+// the filter chain and the aggregate they build.
+//
+// Stationary ("Class S") mode — a few sampled windows per track:
 //
 //   abuffer
 //     -> aformat=sample_fmts=flt
@@ -18,10 +21,24 @@
 //     -> astats(metadata=1, cumulative)
 //     -> abuffersink
 //
-// Both stats filters are pass-through: they publish their measurements in the
-// output frame's AVDictionary and forward the samples untouched, so a single
-// drain loop can read the metadata AND accumulate the raw energies from the
-// same frame.
+// Integral ("Class I") mode — every sample of the stream, once:
+//
+//   abuffer
+//     -> aformat=sample_fmts=dbl
+//     -> astats(metadata=1, cumulative)
+//     -> ebur128(metadata=1, peak=sample+true)
+//     -> abuffersink
+//
+// Every stats filter in both chains is pass-through: they publish their
+// measurements in the output frame's AVDictionary and forward the samples
+// untouched, so a single drain loop can read the metadata AND accumulate the
+// raw sample statistics from the same frame.
+//
+// Integral mode works in float64 because that is the only format ebur128
+// accepts; putting the conversion at the head of the chain rather than letting
+// the graph insert one mid-chain keeps the sink format known and lets the
+// sample pass read one width. Neither mode's format choice has any bearing on
+// playback: nothing measured here is ever written to a sink.
 //
 // ### Filter and metadata names — verified, not assumed
 //
@@ -37,9 +54,23 @@
 //                      kurtosis, entropy, flatness, crest, flux, decrease)
 //   astats           : "metadata", "reset", "measure_perchannel",
 //                      "measure_overall"; measure constants "DC_offset",
-//                      "Noise_floor", "RMS_level"
+//                      "Noise_floor", "RMS_level", "Peak_level", "Flat_factor"
+//   ebur128          : "metadata" ("inject metadata in the filtergraph"),
+//                      "peak" ("set peak mode") with constants "none",
+//                      "sample" ("enable peak-sample mode") and "true"
+//                      ("enable true-peak mode"), "framelog" ("force frame
+//                      logging level") with constant "quiet"
 //   metadata key fmt : "lavfi.aspectralstats.%d.%s"  (channels are 1-based)
 //                      "lavfi.astats.%s"             (overall, "Overall." prefix)
+//                      "lavfi.r128.I", "lavfi.r128.M", "lavfi.r128.S",
+//                      "lavfi.r128.LRA", "lavfi.r128.sample_peak",
+//                      "lavfi.r128.true_peak", "lavfi.r128.true_peaks_ch%d"
+//
+// ebur128 publishes that dictionary once per completed 100 ms block with the
+// running values, so — exactly like astats at reset=0 — the last snapshot seen
+// before end of stream is the whole-stream figure. Its peak keys carry a linear
+// amplitude, not dB: the filter's own end-of-stream log is what applies
+// 20·log10 to the same fields.
 //
 // ### Statistics deliberately NOT taken from lavfi
 //
@@ -51,8 +82,13 @@
 // exactly from the float samples this graph already hands us; see
 // audio_analysis_aggregator.h.
 //
-// Peak, loudness and clipping counts are integral measures and are out of
-// scope here by design.
+// The sample peak, the clipping ratio and the flat-top run lengths of the
+// integral mode are counted from samples for the reasons set out in
+// audio_integral_aggregator.h — chiefly that `astats`' `Abs_Peak_count` counts
+// samples at the *observed* maximum rather than at full scale. astats is still
+// in the integral chain, as the ticket specifies, and its `Overall.Peak_level`
+// and `Overall.Flat_factor` are logged beside the counted values so a drift
+// between the graph and the sample pass is visible rather than silent.
 //
 // ### Threading
 //
@@ -73,6 +109,7 @@
 #include <string>
 
 #include "audio_analysis_aggregator.h"
+#include "audio_integral_aggregator.h"
 
 extern "C" {
 #include <libavfilter/avfilter.h>
@@ -126,8 +163,19 @@ static void clear_last_init_error()
     g_last_init_error.clear();
 }
 
+// Which family of measurements a session was opened for. The two differ in the
+// filter chain, the sink sample format and the aggregate they fill; everything
+// else about a session — handle ownership, feeding, draining, teardown — is
+// shared.
+enum class AnalysisMode {
+    Stationary,   // Class S: sampled windows, spectral + stereo relationships
+    Integral,     // Class I: the whole stream, loudness + peak + clipping
+};
+
 // One measurement session: the graph plus the aggregate built from its output.
 struct AnalysisCtx {
+    AnalysisMode mode{AnalysisMode::Stationary};
+
     AVFilterGraph   *filter_graph{nullptr};
     AVFilterContext *src_ctx{nullptr};
     AVFilterContext *sink_ctx{nullptr};
@@ -142,7 +190,8 @@ struct AnalysisCtx {
     bool finalised{false};        // EOF pushed; no further feeding accepted
     bool warned_non_float{false}; // one-shot guard for an unexpected sink format
 
-    std::unique_ptr<AudioAnalysisAggregator> aggregator;
+    std::unique_ptr<AudioAnalysisAggregator>  aggregator;           // Stationary
+    std::unique_ptr<AudioIntegralAggregator>  integral_aggregator;  // Integral
 };
 
 // ─── Utility: sample format from the Android encoding constant ───────────────
@@ -184,6 +233,29 @@ static bool build_measurement_chain(char *out, size_t out_size)
             ":measure_overall=DC_offset+Noise_floor",
             kSpectralWindowSize,
             static_cast<double>(kSpectralWindowOverlap));
+
+    return written > 0 && static_cast<size_t>(written) < out_size;
+}
+
+// Writes the integral measurement chain.
+//
+// astats comes first so it measures the stream before ebur128's K-weighting is
+// anywhere near it, and ebur128 last so the sink receives the frames it forwards
+// untouched. `framelog=quiet` suppresses the filter's own per-block INFO logging,
+// which would otherwise print a line every 100 ms of every analysed track.
+//
+// `peak=sample+true` is what makes the r128 peak keys appear at all; true-peak
+// mode is the only way to obtain an inter-sample peak, which cannot be counted
+// from the samples themselves.
+static bool build_integral_chain(char *out, size_t out_size)
+{
+    const int written = snprintf(
+            out, out_size,
+            "aformat=sample_fmts=dbl,"
+            "astats=metadata=1:reset=0"
+            ":measure_perchannel=Peak_level+Flat_factor"
+            ":measure_overall=Peak_level+Flat_factor,"
+            "ebur128=metadata=1:peak=sample+true:framelog=quiet");
 
     return written > 0 && static_cast<size_t>(written) < out_size;
 }
@@ -312,9 +384,10 @@ static bool read_metadata_double(const AVDictionary *metadata, const char *key, 
     return parse_measured_double(entry->value, out);
 }
 
-// Folds one graph output frame into the aggregate: the spectral statistics of
-// every channel, the cumulative astats levels, and the raw sample energies.
-static void harvest_frame(AnalysisCtx *ctx, const AVFrame *frame)
+// Folds one graph output frame into the stationary aggregate: the spectral
+// statistics of every channel, the cumulative astats levels, and the raw sample
+// energies.
+static void harvest_stationary_frame(AnalysisCtx *ctx, const AVFrame *frame)
 {
     ctx->aggregator->note_window();
 
@@ -370,6 +443,59 @@ static void harvest_frame(AnalysisCtx *ctx, const AVFrame *frame)
     }
 }
 
+// Folds one graph output frame into the integral aggregate: the cumulative
+// ebur128 loudness snapshot, the corroborating astats levels, and the samples
+// the peak / clipping / flat-top counts are taken from.
+static void harvest_integral_frame(AnalysisCtx *ctx, const AVFrame *frame)
+{
+    ctx->integral_aggregator->note_window();
+
+    const AVDictionary *metadata = frame->metadata;
+
+    // ebur128 runs cumulatively and republishes on every 100 ms block, so the
+    // last finite snapshot before EOF is the whole-stream figure. A stream
+    // shorter than the 400 ms gating block never yields a finite integrated
+    // loudness, which is exactly how it should read: unmeasured.
+    double integrated_lufs = std::numeric_limits<double>::quiet_NaN();
+    double true_peak       = std::numeric_limits<double>::quiet_NaN();
+    read_metadata_double(metadata, "lavfi.r128.I", &integrated_lufs);
+    read_metadata_double(metadata, "lavfi.r128.true_peak", &true_peak);
+    ctx->integral_aggregator->set_loudness_snapshot(integrated_lufs, true_peak);
+
+    double peak_level  = std::numeric_limits<double>::quiet_NaN();
+    double flat_factor = std::numeric_limits<double>::quiet_NaN();
+    read_metadata_double(metadata, "lavfi.astats.Overall.Peak_level", &peak_level);
+    read_metadata_double(metadata, "lavfi.astats.Overall.Flat_factor", &flat_factor);
+    ctx->integral_aggregator->set_level_snapshot(peak_level, flat_factor);
+
+    // The chain pins the format to dbl at its head and ebur128, the only filter
+    // after it, works in dbl too — so the sink delivers packed interleaved
+    // float64.
+    if (frame->format != AV_SAMPLE_FMT_DBL) {
+        if (!ctx->warned_non_float) {
+            ctx->warned_non_float = true;
+            ALOGW("harvest_integral_frame: sink delivered format %d, expected DBL — "
+                  "peak and clipping counts skipped", frame->format);
+        }
+        return;
+    }
+    if (frame->nb_samples > 0 && frame->data[0] != nullptr) {
+        ctx->integral_aggregator->add_samples(
+                reinterpret_cast<const double *>(frame->data[0]),
+                static_cast<size_t>(frame->nb_samples));
+    }
+}
+
+// Routes one output frame to the aggregate the session was opened for.
+static void harvest_frame(AnalysisCtx *ctx, const AVFrame *frame)
+{
+    if (ctx->mode == AnalysisMode::Integral) {
+        harvest_integral_frame(ctx, frame);
+    } else {
+        harvest_stationary_frame(ctx, frame);
+    }
+}
+
 // Drains everything the sink currently holds. Returns false only on a real
 // filter error (EAGAIN and EOF are normal loop exits).
 static bool drain_sink(AnalysisCtx *ctx)
@@ -394,12 +520,13 @@ static bool drain_sink(AnalysisCtx *ctx)
     }
 }
 
-// ─── JNI entry points ────────────────────────────────────────────────────────
+// ─── Session operations shared by both measurement modes ─────────────────────
 
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeOpen(
-        JNIEnv *, jclass,
-        jint sampleRateHz, jint channelCount, jint inputEncoding)
+// Opens a session for `mode`. Returns the handle, or 0 with the reason recorded
+// in the thread-local init error — the failure contract both Kotlin bridges
+// document.
+static jlong analysis_open(
+        AnalysisMode mode, jint sampleRateHz, jint channelCount, jint inputEncoding)
 {
     clear_last_init_error();
 
@@ -424,19 +551,29 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnaly
         return 0L;
     }
 
+    ctx->mode           = mode;
     ctx->channels       = static_cast<int>(channelCount);
     ctx->sample_rate    = static_cast<int>(sampleRateHz);
     ctx->input_encoding = static_cast<int>(inputEncoding);
     ctx->input_av_fmt   = input_fmt;
-    ctx->aggregator.reset(new (std::nothrow) AudioAnalysisAggregator(ctx->channels));
-    if (!ctx->aggregator) {
+
+    if (mode == AnalysisMode::Integral) {
+        ctx->integral_aggregator.reset(
+                new (std::nothrow) AudioIntegralAggregator(ctx->channels));
+    } else {
+        ctx->aggregator.reset(new (std::nothrow) AudioAnalysisAggregator(ctx->channels));
+    }
+    if (!ctx->aggregator && !ctx->integral_aggregator) {
         set_last_init_error("out of memory allocating aggregator");
         ALOGE("nativeOpen: out of memory (aggregator)");
         return 0L;
     }
 
     char chain[512];
-    if (!build_measurement_chain(chain, sizeof(chain))) {
+    const bool chain_built = (mode == AnalysisMode::Integral)
+            ? build_integral_chain(chain, sizeof(chain))
+            : build_measurement_chain(chain, sizeof(chain));
+    if (!chain_built) {
         set_last_init_error("measurement chain string construction failed");
         ALOGE("nativeOpen: measurement chain construction failed");
         return 0L;
@@ -447,24 +584,23 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnaly
         return 0L;
     }
 
-    ALOGD("Analysis session open: rate=%dHz ch=%d enc=%d chain='%s'",
+    ALOGD("Analysis session open: mode=%s rate=%dHz ch=%d enc=%d chain='%s'",
+          (mode == AnalysisMode::Integral) ? "integral" : "stationary",
           ctx->sample_rate, ctx->channels, ctx->input_encoding, chain);
     return reinterpret_cast<jlong>(ctx.release());
 }
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeConsumeLastInitError(
-        JNIEnv *env, jclass)
+// Hands the thread-local init error to Kotlin and clears it.
+static jstring analysis_consume_last_init_error(JNIEnv *env)
 {
     const std::string message = g_last_init_error;
     g_last_init_error.clear();
     return env->NewStringUTF(message.c_str());
 }
 
-extern "C" JNIEXPORT jint JNICALL
-Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeFeed(
-        JNIEnv *env, jclass,
-        jlong handle, jobject inputBuffer, jint inputFrames)
+// Pushes one window through the graph and drains whatever it produced.
+static jint analysis_feed(
+        JNIEnv *env, jlong handle, jobject inputBuffer, jint inputFrames)
 {
     if (handle == 0L) return ANALYSIS_ERR_INVALID_HANDLE;
     auto *ctx = reinterpret_cast<AnalysisCtx *>(handle);
@@ -519,6 +655,64 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnaly
     return inputFrames;
 }
 
+// Pushes EOF through the graph exactly once so the stats filters flush their
+// last partial window. Feeding after this point is rejected, which is why the
+// documented order is open → feed → read → close.
+static bool analysis_finalise(AnalysisCtx *ctx)
+{
+    if (ctx->finalised) {
+        return true;
+    }
+    ctx->finalised = true;
+    const int ret = av_buffersrc_add_frame_flags(ctx->src_ctx, nullptr, 0);
+    if (ret < 0 && ret != AVERROR_EOF) {
+        char errbuf[128]; av_strerror(ret, errbuf, sizeof(errbuf));
+        ALOGW("nativeReadFeatures: EOF signal failed: %s", errbuf);
+    }
+    return drain_sink(ctx);
+}
+
+// Validates the destination array against the slot count the caller's mode
+// produces.
+static bool analysis_output_array_fits(JNIEnv *env, jdoubleArray out, size_t required)
+{
+    if (out == nullptr) {
+        return false;
+    }
+    const jsize capacity = env->GetArrayLength(out);
+    if (static_cast<size_t>(capacity) < required) {
+        ALOGE("nativeReadFeatures: output array holds %d of %zu required slots",
+              static_cast<int>(capacity), required);
+        return false;
+    }
+    return true;
+}
+
+// ─── JNI entry points: AudioAnalysisBridge (Class S) ─────────────────────────
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeOpen(
+        JNIEnv *, jclass,
+        jint sampleRateHz, jint channelCount, jint inputEncoding)
+{
+    return analysis_open(AnalysisMode::Stationary, sampleRateHz, channelCount, inputEncoding);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeConsumeLastInitError(
+        JNIEnv *env, jclass)
+{
+    return analysis_consume_last_init_error(env);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeFeed(
+        JNIEnv *env, jclass,
+        jlong handle, jobject inputBuffer, jint inputFrames)
+{
+    return analysis_feed(env, handle, inputBuffer, inputFrames);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeReadFeatures(
         JNIEnv *env, jclass,
@@ -527,29 +721,15 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnaly
     if (handle == 0L) return ANALYSIS_ERR_INVALID_HANDLE;
     auto *ctx = reinterpret_cast<AnalysisCtx *>(handle);
 
-    if (outValues == nullptr) {
+    if (ctx->mode != AnalysisMode::Stationary || !ctx->aggregator) {
+        ALOGE("nativeReadFeatures: handle was not opened for stationary analysis");
         return ANALYSIS_ERR_INVALID_ARGS;
     }
-    const jsize capacity = env->GetArrayLength(outValues);
-    if (static_cast<size_t>(capacity) < kAudioAnalysisFeatureCount) {
-        ALOGE("nativeReadFeatures: output array holds %d of %zu required slots",
-              static_cast<int>(capacity), kAudioAnalysisFeatureCount);
+    if (!analysis_output_array_fits(env, outValues, kAudioAnalysisFeatureCount)) {
         return ANALYSIS_ERR_INVALID_ARGS;
     }
-
-    // Finalise once: push EOF so the stats filters flush the last partial
-    // window, then drain whatever that produced. Feeding after this point is
-    // rejected, which is why the documented order is open → feed → read → close.
-    if (!ctx->finalised) {
-        ctx->finalised = true;
-        const int ret = av_buffersrc_add_frame_flags(ctx->src_ctx, nullptr, 0);
-        if (ret < 0 && ret != AVERROR_EOF) {
-            char errbuf[128]; av_strerror(ret, errbuf, sizeof(errbuf));
-            ALOGW("nativeReadFeatures: EOF signal failed: %s", errbuf);
-        }
-        if (!drain_sink(ctx)) {
-            return ANALYSIS_ERR_GRAPH_FAILED;
-        }
+    if (!analysis_finalise(ctx)) {
+        return ANALYSIS_ERR_GRAPH_FAILED;
     }
 
     double features[kAudioAnalysisFeatureCount];
@@ -570,6 +750,90 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnaly
     auto *ctx = reinterpret_cast<AnalysisCtx *>(handle);
     ALOGD("nativeClose: releasing analysis session (windows=%llu)",
           static_cast<unsigned long long>(ctx->aggregator ? ctx->aggregator->window_count() : 0));
+    teardown_filter_graph(ctx);
+    delete ctx;
+}
+
+// ─── JNI entry points: AudioIntegralAnalysisBridge (Class I) ─────────────────
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeOpen(
+        JNIEnv *, jclass,
+        jint sampleRateHz, jint channelCount, jint inputEncoding)
+{
+    return analysis_open(AnalysisMode::Integral, sampleRateHz, channelCount, inputEncoding);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeConsumeLastInitError(
+        JNIEnv *env, jclass)
+{
+    return analysis_consume_last_init_error(env);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeFeed(
+        JNIEnv *env, jclass,
+        jlong handle, jobject inputBuffer, jint inputFrames)
+{
+    return analysis_feed(env, handle, inputBuffer, inputFrames);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeReadFeatures(
+        JNIEnv *env, jclass,
+        jlong handle, jdoubleArray outValues)
+{
+    if (handle == 0L) return ANALYSIS_ERR_INVALID_HANDLE;
+    auto *ctx = reinterpret_cast<AnalysisCtx *>(handle);
+
+    if (ctx->mode != AnalysisMode::Integral || !ctx->integral_aggregator) {
+        ALOGE("nativeReadFeatures: handle was not opened for integral analysis");
+        return ANALYSIS_ERR_INVALID_ARGS;
+    }
+    if (!analysis_output_array_fits(env, outValues, kAudioIntegralFeatureCount)) {
+        return ANALYSIS_ERR_INVALID_ARGS;
+    }
+    if (!analysis_finalise(ctx)) {
+        return ANALYSIS_ERR_GRAPH_FAILED;
+    }
+
+    // Closes the flat-top runs that were still open when the last frame
+    // arrived; idempotent, so a second read reports the same aggregate.
+    ctx->integral_aggregator->finish();
+
+    double features[kAudioIntegralFeatureCount];
+    const size_t written =
+            ctx->integral_aggregator->write_features(features, kAudioIntegralFeatureCount);
+    if (written != kAudioIntegralFeatureCount) {
+        return ANALYSIS_ERR_GRAPH_FAILED;
+    }
+
+    // The counted peak and the filter's own are logged side by side: they
+    // measure the same thing by two independent routes, so a disagreement is a
+    // bug in one of them and must not stay invisible.
+    ALOGD("Integral aggregate: counted peak=%.3f dBFS astats peak=%.3f dBFS "
+          "flat_factor=%.3f LUFS=%.2f true_peak=%.3f dBFS frames=%.0f",
+          features[kIntegralSamplePeakDbfs],
+          ctx->integral_aggregator->astats_peak_level_dbfs(),
+          ctx->integral_aggregator->astats_flat_factor(),
+          features[kIntegralIntegratedLufs],
+          features[kIntegralTruePeakDbfs],
+          features[kIntegralFrameCount]);
+
+    env->SetDoubleArrayRegion(outValues, 0, static_cast<jsize>(written), features);
+    return static_cast<jint>(written);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeClose(
+        JNIEnv *, jclass, jlong handle)
+{
+    if (handle == 0L) return;
+    auto *ctx = reinterpret_cast<AnalysisCtx *>(handle);
+    ALOGD("nativeClose: releasing integral session (windows=%llu)",
+          static_cast<unsigned long long>(
+                  ctx->integral_aggregator ? ctx->integral_aggregator->window_count() : 0));
     teardown_filter_graph(ctx);
     delete ctx;
 }

@@ -200,3 +200,35 @@ Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnaly
 extern "C" JNIEXPORT void JNICALL
 Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioAnalysisBridge_nativeClose(
     JNIEnv *, jclass, jlong) {}
+
+// -- AudioIntegralAnalysisBridge stubs ----------------------------------------
+// Same contract as the Class S stubs above: without libavfilter there is no
+// ebur128 and no astats, so nativeOpen returns the 0L failure sentinel and the
+// Kotlin layer records the track as not analysable.  Nothing crashes and no
+// loudness figure is invented -- an invented peak is the one failure mode a
+// gain stage would actually act on.
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeOpen(
+    JNIEnv *, jclass, jint, jint, jint) {
+    ALOGW("AudioIntegralAnalysisBridge.nativeOpen: FFmpeg not provisioned - analysis unavailable");
+    return 0L;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeConsumeLastInitError(
+    JNIEnv *env, jclass) {
+    return env->NewStringUTF("FFmpeg/libavfilter is not provisioned in this build.");
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeFeed(
+    JNIEnv *, jclass, jlong, jobject, jint) { return -1; }
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeReadFeatures(
+    JNIEnv *, jclass, jlong, jdoubleArray) { return -1; }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_androidexpert35_audiophilemusicplayer_data_playback_analysis_AudioIntegralAnalysisBridge_nativeClose(
+    JNIEnv *, jclass, jlong) {}

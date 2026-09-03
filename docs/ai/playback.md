@@ -176,10 +176,28 @@ call any of it from `doLoadTrack` / `doEnqueueNext` or anywhere else on
 | `AudioAnalysisBridge` | Native lavfi measurement graph; one session per instance, single-owner threading |
 | `StationarySampler` / `FFmpegStationarySampler` | One complete Class S pass: own `FFmpegDecoder` (`forcePcm = true`), 4 × 500 ms windows spread across the track clear of both ends, fed to the bridge. Returns `StationarySamplingResult` — never throws for a bad source |
 | `TrackSignalAnalyser` | Policy and caching. `analyseIfNeeded(AnalysableTrack)` skips DSD sources, tracks under 3 s, tracks with no `audioKey`, and tracks already measured at the current `TrackAnalysis.SCHEMA_VERSION`; persists through `TrackAnalysisRepository`. Idempotent, and serialised on one lock so a second caller finds the first caller's row instead of decoding the same file twice |
+| `AudioIntegralAnalysisBridge` | Native lavfi graph for the Class I measures (`astats` + `ebur128`); same session machinery and same single-owner threading as the Class S bridge |
+| `IntegralSampler` / `FFmpegIntegralSampler` | One complete Class I pass: own `FFmpegDecoder` (`forcePcm = true`), the **whole** stream decoded in order in 500 ms blocks. Returns `IntegralSamplingResult` carrying the aggregate *and the wall-clock cost of producing it* — never throws for a bad source |
+| `TrackIntegralAnalyser` | Policy and caching for that pass. Same shape as `TrackSignalAnalyser`, plus the eligibility gate below; persists through `TrackAnalysisRepository.saveIntegralAnalysis`, which leaves any cached Class S values alone |
 
-The sampler is bound behind an interface (`di/AnalysisModule`) for one reason: the
-orchestrator's skip policy has to be testable on the JVM, where `audiophile_native`
+The samplers are bound behind interfaces (`di/AnalysisModule`) for one reason: the
+orchestrators' skip policy has to be testable on the JVM, where `audiophile_native`
 cannot load. Keep new measurement work behind that seam.
+
+**Why there is a second, expensive pass.** The Class I figures are integral: sampling
+windows biases them, so they only ever come from a pass that saw every sample. During
+playback the Kotlin write loop already sees the audio on `AudioTrackSink` and
+`LibusbPcmEnhancedSink` — but *not* on the pure bit-perfect libusb transport, where the
+native pump owns the data and `LibusbPcmAudioSink.write()` / `LibusbDsdAudioSink.write()`
+are no-ops. That path, and any track the user has never played, is what
+`TrackIntegralAnalyser` covers, by decoding the file offline.
+
+Because a full decode is expensive, `isEligibleForIntegralAnalysis` restricts it to
+audio a decision could act on: lossless sources that are not already native hi-res —
+the same set `shouldUseHiResRemasterStage` runs on, minus its user toggle (a cache
+gated on a runtime preference is missing exactly when the preference is switched on).
+The verdict needs the *decoded* format, so it is reached after the decoder opens and
+comes back as `IntegralSamplingResult.Ineligible`, not as a scan-time check.
 
 ### Reading measurements back (`Measured Signal` card)
 

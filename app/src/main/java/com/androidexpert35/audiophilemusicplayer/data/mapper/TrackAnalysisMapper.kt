@@ -2,6 +2,7 @@ package com.androidexpert35.audiophilemusicplayer.data.mapper
 
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackAnalysisEntity
 import com.androidexpert35.audiophilemusicplayer.data.playback.analysis.AudioAnalysisFeatures
+import com.androidexpert35.audiophilemusicplayer.data.playback.analysis.AudioIntegralFeatures
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.IntegralAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.TrackAnalysis
@@ -147,6 +148,29 @@ fun AudioAnalysisFeatures.toStationaryAnalysis(): StationaryAnalysis = Stationar
     interChannelCorrelation = interChannelCorrelation,
     windowCount = windowCount,
     frameCount = frameCount,
+)
+
+/**
+ * Carries a fresh full-file measurement out of the native bridge and into the domain.
+ *
+ * The counterpart of [AudioAnalysisFeatures.toStationaryAnalysis], and the single seam
+ * between the integral feature vector and what the rest of the app is allowed to see.
+ *
+ * The native vector is wider than the domain model: it also carries the true peak and the
+ * flat-top run-length statistics, which the cache has no columns for. They are dropped
+ * here rather than silently folded into a column that means something else — the pass
+ * still reports them to its caller and its log, and giving them a home is a schema
+ * change, not a mapping decision.
+ *
+ * @receiver Aggregate produced by one full-file pass.
+ * @return The measurements the analysis cache can hold, as the framework-free domain
+ *   model.
+ */
+fun AudioIntegralFeatures.toIntegralAnalysis(): IntegralAnalysis = IntegralAnalysis(
+    peakDbfs = samplePeakDbfs,
+    integratedLufs = integratedLufs,
+    plr = plrDb,
+    clippingRatio = clippingRatio,
 )
 
 /**
