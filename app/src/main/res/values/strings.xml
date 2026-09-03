@@ -63,7 +63,6 @@
     <string name="cd_toggle_favorite">Toggle favorite</string>
     <string name="cd_share_track">Share track</string>
     <string name="cd_more_options">More options</string>
-    <string name="cd_player_output_menu">Playback output actions</string>
     <string name="cd_shuffle">Shuffle</string>
     <string name="cd_skip_previous">Skip to previous track</string>
     <string name="cd_play">Play</string>
@@ -167,6 +166,14 @@
     <string name="telemetry_unavailable">—</string>
     <string name="telemetry_dop_carrier">DSD —> PCM</string>
     <string name="telemetry_resampled_dsd_note">DSD source was decoded to 88.2 kHz / 32-bit PCM because no bit-perfect DSD/DoP transport was available on the active output.</string>
+    <string name="telemetry_section_measured_signal">Measured Signal</string>
+    <string name="telemetry_measured_cutoff">Measured cutoff</string>
+    <string name="telemetry_measured_tilt">Spectral tilt</string>
+    <string name="telemetry_measured_correlation">Stereo correlation</string>
+    <string name="telemetry_measured_stereo_width">Mid − Side</string>
+    <string name="telemetry_measured_not_analysed">Not analysed</string>
+    <string name="telemetry_measured_not_analysed_explanation">This track has not been measured yet. Values appear once an analysis pass has read its audio.</string>
+    <string name="telemetry_measured_disclaimer">Measured offline from the source file. Diagnostic only — these values never change playback.</string>
     <string name="telemetry_advanced_title">Advanced diagnostics</string>
     <string name="telemetry_advanced_supporting">Inspect the checkpoints used to evaluate bit-perfect playback.</string>
     <string name="telemetry_advanced_summary_confirmed">Confirmed</string>
@@ -529,6 +536,7 @@
 
     <!-- Notification -->
     <string name="notification_channel_playback">Audiophile Playback</string>
+    <string name="cd_player_output_menu">Playback output actions</string>
     <string name="action_release_dac">Release DAC</string>
     <string name="action_exit_and_release_dac">Exit and release DAC</string>
     <string name="player_dac_released">Exclusive USB audio session released.</string>

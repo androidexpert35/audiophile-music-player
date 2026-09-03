@@ -36,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioCodec
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
@@ -100,6 +101,11 @@ fun PlayerScreen(
     val telemetryState: State<AudioTelemetry> =
         viewModel.telemetryFlow.collectAsStateWithLifecycle()
 
+    // Cached offline measurements of the playing track. Collected without `by` for the
+    // same reason as the streams above, and read only inside the open telemetry sheet.
+    val measuredSignalState: State<StationaryAnalysis?> =
+        viewModel.measuredSignalFlow.collectAsStateWithLifecycle()
+
     // Collected without `by` so PlayerScreen does not subscribe to lyrics ticks.
     // Only LyricsSheet reads lyricsState.value inside its body.
     val lyricsState: State<LyricsState> =
@@ -135,6 +141,7 @@ fun PlayerScreen(
                         model = model,
                         positionState = positionState,
                         telemetryState = telemetryState,
+                        measuredSignalState = measuredSignalState,
                         lyricsState = lyricsState,
                         snackbarHostState = snackbarHostState,
                         onEvent = viewModel::onEvent
@@ -164,6 +171,8 @@ fun PlayerScreen(
  * @param model Current immutable UI state (no telemetry — delivered separately).
  * @param positionState Live position + duration [State]. Read only inside `SeekBar`.
  * @param telemetryState Live telemetry [State]. Read only inside `AudioInfoRow`.
+ * @param measuredSignalState Cached measured-signal [State] for the current track.
+ *   Read only inside the open telemetry sheet.
  * @param lyricsState Live lyrics [State]. Read only inside `LyricsSheet`.
  * @param snackbarHostState Host for displaying transient error messages.
  * @param onEvent Callback emitting user intents to the ViewModel.
@@ -173,6 +182,7 @@ private fun PlayerContent(
     model: PlayerUiModel,
     positionState: State<Pair<Long, Long>>,
     telemetryState: State<AudioTelemetry>,
+    measuredSignalState: State<StationaryAnalysis?>,
     lyricsState: State<LyricsState>,
     snackbarHostState: SnackbarHostState,
     onEvent: (PlayerUiEvent) -> Unit
@@ -278,6 +288,7 @@ private fun PlayerContent(
                         repeatMode = model.queueState.repeatMode,
                         audioFormat = track.audioFormat,
                         telemetryState = telemetryState,
+                        measuredSignalState = measuredSignalState,
                         fallbackBitrateKbps = estimatedBitrateKbps,
                         albumId = track.albumId,
                         positionState = positionState,
@@ -319,6 +330,7 @@ private fun PlayerScreenPlayingPreview() {
     val telemetryState: State<AudioTelemetry> = remember {
         mutableStateOf(previewAudioTelemetry())
     }
+    val measuredSignalState: State<StationaryAnalysis?> = remember { mutableStateOf(null) }
     val lyricsState: State<LyricsState> = remember { mutableStateOf(LyricsState.Idle) }
 
     AudiophileMusicPlayerTheme {
@@ -330,6 +342,7 @@ private fun PlayerScreenPlayingPreview() {
                 model = previewModel,
                 positionState = positionState,
                 telemetryState = telemetryState,
+                measuredSignalState = measuredSignalState,
                 lyricsState = lyricsState,
                 snackbarHostState = snackbarHostState,
                 onEvent = {}
@@ -344,6 +357,7 @@ private fun PlayerScreenEmptyPreview() {
     val snackbarHostState = remember { SnackbarHostState() }
     val positionState: State<Pair<Long, Long>> = remember { mutableStateOf(0L to 0L) }
     val telemetryState: State<AudioTelemetry> = remember { mutableStateOf(AudioTelemetry.IDLE) }
+    val measuredSignalState: State<StationaryAnalysis?> = remember { mutableStateOf(null) }
     val lyricsState: State<LyricsState> = remember { mutableStateOf(LyricsState.Idle) }
 
     AudiophileMusicPlayerTheme {
@@ -355,6 +369,7 @@ private fun PlayerScreenEmptyPreview() {
                 model = PlayerUiModel(),
                 positionState = positionState,
                 telemetryState = telemetryState,
+                measuredSignalState = measuredSignalState,
                 lyricsState = lyricsState,
                 snackbarHostState = snackbarHostState,
                 onEvent = {}

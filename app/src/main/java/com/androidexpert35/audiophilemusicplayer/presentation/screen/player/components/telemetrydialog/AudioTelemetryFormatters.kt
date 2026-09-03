@@ -73,3 +73,54 @@ internal fun formatDopCarrier(bitDepth: Int, sampleRateHz: Int): String {
     return "${bitDepth}-bit / ${formatSampleRate(sampleRateHz)}"
 }
 
+/**
+ * Formats a measured frequency for the signal read-out, in kHz.
+ *
+ * A statistic the measurement graph never produced arrives as `null` and is shown as
+ * absent rather than as a plausible-looking zero — "the pass could not measure this"
+ * and "this source really has no energy up there" are different claims.
+ *
+ * @param hz Measured frequency in Hertz, or `null` when the value was not produced.
+ */
+internal fun formatMeasuredFrequency(hz: Double?): String {
+    if (hz == null || hz <= 0.0) return ABSENT_MEASUREMENT
+    return "${String.format(Locale.US, "%.1f", hz / 1000.0)} kHz"
+}
+
+/**
+ * Formats the measured spectral tilt.
+ *
+ * Kept as the raw signed slope rather than a "bright / dark" verdict: this ticket
+ * surfaces the numbers so they can be judged, and a label would quietly do the judging.
+ *
+ * @param slope Measured spectral slope, or `null` when the value was not produced.
+ */
+internal fun formatSpectralTilt(slope: Double?): String =
+    slope?.let { String.format(Locale.US, "%+.2f", it) } ?: ABSENT_MEASUREMENT
+
+/**
+ * Formats an inter-channel correlation in `[-1, 1]`.
+ *
+ * @param correlation Measured correlation, or `null` when a channel was digitally
+ *   silent and the ratio had no meaning.
+ */
+internal fun formatCorrelation(correlation: Double?): String =
+    correlation?.let { String.format(Locale.US, "%+.2f", it) } ?: ABSENT_MEASUREMENT
+
+/**
+ * Formats the measured stereo width as the mid-to-side energy distance in dB.
+ *
+ * The distance is the meaningful figure: a large one is a narrow, nearly mono image
+ * and a small one a wide image, whereas either RMS on its own only says how loud the
+ * measured windows were.
+ *
+ * @param midRmsDbfs Mid-signal RMS in dBFS, or `null` when not produced.
+ * @param sideRmsDbfs Side-signal RMS in dBFS, or `null` when not produced.
+ */
+internal fun formatStereoWidth(midRmsDbfs: Double?, sideRmsDbfs: Double?): String {
+    if (midRmsDbfs == null || sideRmsDbfs == null) return ABSENT_MEASUREMENT
+    return "${String.format(Locale.US, "%.1f", midRmsDbfs - sideRmsDbfs)} dB"
+}
+
+/** Shown in place of a measurement the analysis pass did not produce. */
+private const val ABSENT_MEASUREMENT = "—"

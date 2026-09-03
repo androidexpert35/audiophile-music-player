@@ -12,6 +12,7 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.playback.PlaybackStatus
@@ -42,6 +43,8 @@ import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.player.P
  * @param audioFormat File-level audio format metadata for the current track.
  * @param telemetryState Isolated telemetry [State] forwarded to [PlayerTelemetrySection]
  *   without being read in this composable.
+ * @param measuredSignalState Isolated [State] of the current track's cached offline
+ *   measurements, forwarded without being read here.
  * @param fallbackBitrateKbps Estimated encoded bitrate shown before runtime telemetry
  *   arrives.
  * @param albumId MediaStore album identifier forwarded to the telemetry sheet so its
@@ -59,6 +62,7 @@ internal fun PlayerControlsCard(
     repeatMode: RepeatMode,
     audioFormat: AudioFormat,
     telemetryState: State<AudioTelemetry>,
+    measuredSignalState: State<StationaryAnalysis?>,
     fallbackBitrateKbps: Int,
     albumId: Long = 0L,
     positionState: State<Pair<Long, Long>>,
@@ -98,6 +102,7 @@ internal fun PlayerControlsCard(
             PlayerTelemetrySection(
                 audioFormat = audioFormat,
                 telemetryState = telemetryState,
+                measuredSignalState = measuredSignalState,
                 fallbackBitrateKbps = fallbackBitrateKbps,
                 albumId = albumId,
                 modifier = Modifier.align(Alignment.CenterHorizontally)

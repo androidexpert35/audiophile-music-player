@@ -208,3 +208,10 @@ paths retain the gold bit-perfect treatment. For every non-Bluetooth route, the
 collapsed output card leads with one plain-language verdict (confirmed bit-perfect,
 direct, Android-managed, or checking); individual direct-path and bit-perfect flags
 belong under **Technical details** rather than in the primary summary.
+
+The sheet's last card, **Measured Signal**, is the one card that does not describe the
+live path: it reports what an offline analysis pass measured in the *source*, read from
+cache through `PlayerViewModel.measuredSignalFlow`. It is diagnostic only and says
+"not analysed" whenever no measurement exists — most of a library, most of the time.
+Keep it read-only; see the Telemetry section of
+[`playback.md`](playback.md) before wiring any measured value into playback.

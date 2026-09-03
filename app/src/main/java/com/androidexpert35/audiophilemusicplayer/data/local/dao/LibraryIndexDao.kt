@@ -58,6 +58,22 @@ interface LibraryIndexDao {
     suspend fun getTracksByIds(ids: List<Long>): List<TrackEntity>
 
     /**
+     * Reads the stable content key stored against one indexed track.
+     *
+     * The measured-analysis cache is addressed by audio content rather than by
+     * MediaStore id, so anything holding a track — the player telemetry read-out
+     * above all — has to translate the id into the key before it can look a
+     * measurement up. Projected to the single column because this runs on every
+     * track change and the rest of the row is not wanted.
+     *
+     * @param trackId MediaStore identifier of the track to resolve.
+     * @return The stored content key, empty for a track whose file could not be
+     *   sampled at scan time, or `null` when the id is not in the index at all.
+     */
+    @Query("SELECT audioKey FROM tracks WHERE id = :trackId LIMIT 1")
+    suspend fun getAudioKeyForTrack(trackId: Long): String?
+
+    /**
      * Searches cached tracks by title, artist, or album using a case-insensitive match.
      *
      * @param query Free-text query entered by the user.

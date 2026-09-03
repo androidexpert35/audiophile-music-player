@@ -3,10 +3,12 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.player
 import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessage
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ClearQueueUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLyricsUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTrackAnalysisUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.MoveQueueItemUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveAudioTelemetryUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveLikedSongIdsUseCase
@@ -28,6 +30,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.player.P
 import com.tony.coreui.data.strings.StringResolver
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.fold
+import com.tony.coreui.domain.resource.getOrNull
 import com.tony.coreui.domain.resource.onError
 import com.tony.coreui.presentation.error.UiErrorMapper
 import com.tony.coreui.presentation.navigation.NavigationManager
@@ -59,6 +62,12 @@ import javax.inject.Inject
  * reports what the hardware is *actually* processing (sample rate, bit depth,
  * codec, offload status) in real time.
  *
+ * [measuredSignalFlow] sits beside it and answers a different question: not what
+ * the hardware is doing to the signal, but what the signal itself measured as when
+ * it was last analysed offline. It is a read of an existing cache — never a
+ * measurement — so it costs one indexed row per track change and cannot reach the
+ * decoder or the playback engine's audio thread.
+ *
  * Lyrics are fetched lazily: only when the user taps the Lyrics button is
  * [GetLyricsUseCase] invoked. In-flight requests are cancelled and the
  * [lyricsFlow] is reset to [LyricsState.Idle] whenever the current track changes.
@@ -81,6 +90,8 @@ import javax.inject.Inject
  * @property observeLikedSongIdsUseCase Live stream of liked track IDs, used to
  *   keep the heart icon in the now-playing panel in sync with the library.
  * @property getLyricsUseCase Fetches synchronized or plain-text lyrics from LRCLIB.
+ * @property getTrackAnalysisUseCase Reads the cached signal measurements for the
+ *   current track so the telemetry sheet can report them.
  */
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -101,6 +112,7 @@ class PlayerViewModel @Inject constructor(
     private val toggleLikeSongUseCase: ToggleLikeSongUseCase,
     private val observeLikedSongIdsUseCase: ObserveLikedSongIdsUseCase,
     private val getLyricsUseCase: GetLyricsUseCase,
+    private val getTrackAnalysisUseCase: GetTrackAnalysisUseCase,
     navigationManager: NavigationManager,
     stringResolver: StringResolver,
     uiErrorMapper: UiErrorMapper
@@ -201,6 +213,33 @@ class PlayerViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = AudioTelemetry.IDLE
+        )
+
+    /**
+     * Cached stationary measurements of the track currently playing, or `null` when
+     * that audio has never been analysed.
+     *
+     * Read-only diagnostics: nothing here starts a measurement or feeds a DSP
+     * parameter, it only reports what an earlier offline pass stored. The lookup is
+     * keyed off the track id alone and re-runs solely when the track changes, so the
+     * 4 Hz position ticks never touch the database, and it runs in [viewModelScope]
+     * against an `@IoDispatcher`-backed repository — never on the playback engine's
+     * audio thread.
+     *
+     * A storage failure reads as `null` for the same reason an unmeasured track does:
+     * the sheet has one honest thing to say either way, which is that there are no
+     * measured values to show.
+     */
+    val measuredSignalFlow: StateFlow<StationaryAnalysis?> = sharedPlaybackFlow
+        .map { state -> state.currentTrack?.id }
+        .distinctUntilChanged()
+        .map { trackId ->
+            trackId?.let { id -> getTrackAnalysisUseCase(id).getOrNull()?.stationary }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null
         )
 
     init {

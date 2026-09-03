@@ -166,9 +166,9 @@ consumed by `ObserveAudioTelemetryUseCase` and the player telemetry UI.
 
 Offline **signal measurement** is deliberately not part of this pipeline.
 `data/playback/analysis/` runs entirely on `@IoDispatcher` over its own decoder
-sessions; it touches no engine, no sink and no telemetry, and nothing currently
-consumes its output. Never call any of it from `doLoadTrack` / `doEnqueueNext` or
-anywhere else on `BitPerfectPlaybackEngine`'s audio HandlerThread — see
+sessions; it touches no engine and no sink, and it never *produces* telemetry. Never
+call any of it from `doLoadTrack` / `doEnqueueNext` or anywhere else on
+`BitPerfectPlaybackEngine`'s audio HandlerThread — see
 [`native-audio.md`](native-audio.md) for the native contract.
 
 | Component | Responsibility |
@@ -180,6 +180,34 @@ anywhere else on `BitPerfectPlaybackEngine`'s audio HandlerThread — see
 The sampler is bound behind an interface (`di/AnalysisModule`) for one reason: the
 orchestrator's skip policy has to be testable on the JVM, where `audiophile_native`
 cannot load. Keep new measurement work behind that seam.
+
+### Reading measurements back (`Measured Signal` card)
+
+What that pass stored is *displayed* — read-only — beside the live telemetry, and that
+read is a plain cached lookup, never a measurement:
+
+```
+tracks.audioKey ─┐
+                 ├─ TrackAnalysisRepository.getAnalysisForTrack(trackId)
+track_analysis ──┘        │
+                          ├─ GetTrackAnalysisUseCase
+                          ├─ PlayerViewModel.measuredSignalFlow  (StateFlow, IO-backed)
+                          └─ MeasuredSignalCard  (telemetry sheet)
+```
+
+- The repository resolves `trackId → audioKey` itself through `LibraryIndexDao`, so no
+  content key and no Room type reaches Domain or the UI; the flow carries the domain
+  `StationaryAnalysis`.
+- `measuredSignalFlow` is keyed off the **track id alone** (`distinctUntilChanged`), so
+  the 4 Hz position ticks never reach the database — one row read per track change,
+  in `viewModelScope` against the `@IoDispatcher`-backed repository. Nothing on the
+  audio HandlerThread ever queries it.
+- Unmeasured audio, an unindexed track, a blank `audioKey` and a storage failure all
+  read as absent, and the card says **not analysed**. A statistic the graph never
+  produced is shown as `—`, never as `0.0`.
+- Strictly diagnostic: it reports the source, it does not describe the live path and it
+  feeds no DSP parameter. Wiring any measured value into a playback decision is a
+  separate, deliberate change (see `docs/tickets-audio-analysis.md`).
 
 ---
 

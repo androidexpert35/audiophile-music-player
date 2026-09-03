@@ -63,7 +63,6 @@
     <string name="cd_toggle_favorite">Attiva o disattiva preferito</string>
     <string name="cd_share_track">Condividi brano</string>
     <string name="cd_more_options">Altre opzioni</string>
-    <string name="cd_player_output_menu">Azioni uscita di riproduzione</string>
     <string name="cd_shuffle">Riproduzione casuale</string>
     <string name="cd_skip_previous">Vai al brano precedente</string>
     <string name="cd_play">Riproduci</string>
@@ -167,6 +166,14 @@
     <string name="telemetry_unavailable">—</string>
     <string name="telemetry_dop_carrier">DSD —> PCM</string>
     <string name="telemetry_resampled_dsd_note">La sorgente DSD è stata decodificata in PCM 88.2 kHz / 32-bit perché nessun trasporto DSD/DoP bit-perfect era disponibile sull\'uscita attiva.</string>
+    <string name="telemetry_section_measured_signal">Segnale misurato</string>
+    <string name="telemetry_measured_cutoff">Taglio misurato</string>
+    <string name="telemetry_measured_tilt">Inclinazione spettrale</string>
+    <string name="telemetry_measured_correlation">Correlazione stereo</string>
+    <string name="telemetry_measured_stereo_width">Mid − Side</string>
+    <string name="telemetry_measured_not_analysed">Non analizzato</string>
+    <string name="telemetry_measured_not_analysed_explanation">Questo brano non è ancora stato misurato. I valori compaiono dopo che un’analisi ne ha letto l’audio.</string>
+    <string name="telemetry_measured_disclaimer">Misurato offline dal file sorgente. Solo diagnostico: questi valori non modificano mai la riproduzione.</string>
     <string name="telemetry_advanced_title">Diagnostica avanzata</string>
     <string name="telemetry_advanced_supporting">Controlla i passaggi usati per valutare la riproduzione bit-perfect.</string>
     <string name="telemetry_advanced_summary_confirmed">Confermato</string>
@@ -502,6 +509,7 @@
 
     <!-- Notification -->
     <string name="notification_channel_playback">Riproduzione Audiophile</string>
+    <string name="cd_player_output_menu">Azioni uscita di riproduzione</string>
     <string name="action_release_dac">Rilascia DAC</string>
     <string name="action_exit_and_release_dac">Esci e rilascia DAC</string>
     <string name="player_dac_released">Sessione audio USB esclusiva rilasciata.</string>

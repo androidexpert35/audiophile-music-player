@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.OutputStreamInfo
@@ -53,6 +54,8 @@ import com.androidexpert35.audiophilemusicplayer.presentation.theme.paddingSSmal
  *
  * @param audioFormat File-level format metadata extracted from the current track.
  * @param telemetry Current real-time [AudioTelemetry] snapshot.
+ * @param measuredSignal Cached offline measurements of the current track's audio, or
+ *   `null` when it has not been analysed. Read-only diagnostics — see [MeasuredSignalCard].
  * @param fallbackBitrateKbps Encoded bitrate estimate retained for API compatibility
  *   with the player telemetry entry point.
  * @param albumId MediaStore album identifier used to resolve the blurred art background.
@@ -64,6 +67,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.theme.paddingSSmal
 internal fun AudioTelemetryDialog(
     audioFormat: AudioFormat,
     telemetry: AudioTelemetry,
+    measuredSignal: StationaryAnalysis?,
     fallbackBitrateKbps: Int,
     albumId: Long = 0L,
     onDismiss: () -> Unit,
@@ -81,6 +85,7 @@ internal fun AudioTelemetryDialog(
         TelemetrySheetContent(
             audioFormat = audioFormat,
             telemetry = telemetry,
+            measuredSignal = measuredSignal,
             albumId = albumId,
             onDismiss = onDismiss,
         )
@@ -92,6 +97,7 @@ internal fun AudioTelemetryDialog(
  *
  * @param audioFormat File-level format metadata used by [SourceSignalCard].
  * @param telemetry Runtime telemetry snapshot used by all telemetry cards.
+ * @param measuredSignal Cached offline measurements used by [MeasuredSignalCard].
  * @param albumId Album identifier for the blurred art background. `0L` = no art.
  * @param onDismiss Callback forwarded to the header close button.
  */
@@ -99,6 +105,7 @@ internal fun AudioTelemetryDialog(
 private fun TelemetrySheetContent(
     audioFormat: AudioFormat,
     telemetry: AudioTelemetry,
+    measuredSignal: StationaryAnalysis?,
     albumId: Long,
     onDismiss: () -> Unit,
 ) {
@@ -149,6 +156,9 @@ private fun TelemetrySheetContent(
             }
             Spacer(modifier = Modifier.height(paddingSMedium))
             OutputHardwareCard(telemetry = telemetry)
+
+            Spacer(modifier = Modifier.height(paddingSMedium))
+            MeasuredSignalCard(analysis = measuredSignal)
         }
     }
 }

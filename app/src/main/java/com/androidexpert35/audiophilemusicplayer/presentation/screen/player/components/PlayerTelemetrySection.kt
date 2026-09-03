@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.StationaryAnalysis
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioFormat
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.components.telemetrydialog.AudioTelemetryDialog
@@ -22,6 +23,9 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.comp
  * @param telemetryState Isolated telemetry [State] passed from [PlayerScreen] without
  *   being read in [PlayerContent]. [AudioInfoRow] reads [State.value] internally,
  *   scoping telemetry recompositions to just that row.
+ * @param measuredSignalState Isolated [State] carrying the cached offline measurements
+ *   of the current track. Read only when the sheet is open, so a track change never
+ *   recomposes the chip row over it.
  * @param fallbackBitrateKbps Estimated encoded bitrate displayed before runtime
  *   telemetry becomes available.
  * @param albumId MediaStore album identifier forwarded to the telemetry sheet's
@@ -32,6 +36,7 @@ import com.androidexpert35.audiophilemusicplayer.presentation.screen.player.comp
 internal fun PlayerTelemetrySection(
     audioFormat: AudioFormat,
     telemetryState: State<AudioTelemetry>,
+    measuredSignalState: State<StationaryAnalysis?>,
     fallbackBitrateKbps: Int,
     albumId: Long = 0L,
     modifier: Modifier = Modifier
@@ -53,6 +58,9 @@ internal fun PlayerTelemetrySection(
         AudioTelemetryDialog(
             audioFormat = audioFormat,
             telemetry = telemetryState.value,
+            // Read only inside the open sheet: while it is closed nothing subscribes
+            // to the measurement state, so a track change cannot recompose the row.
+            measuredSignal = measuredSignalState.value,
             fallbackBitrateKbps = fallbackBitrateKbps,
             albumId = albumId,
             onDismiss = { showDialog = false }

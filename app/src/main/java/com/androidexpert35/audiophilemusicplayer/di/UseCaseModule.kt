@@ -12,6 +12,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.repository.PlaylistRepos
 import com.androidexpert35.audiophilemusicplayer.domain.repository.RecentlyPlayedRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.RemoteImageRepository
 import com.androidexpert35.audiophilemusicplayer.domain.repository.SettingsRepository
+import com.androidexpert35.audiophilemusicplayer.domain.repository.TrackAnalysisRepository
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToPlaylistUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddTrackToQueueUseCase
@@ -27,6 +28,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistImageUs
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetArtistsUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLibraryDisplayPreferencesUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetLyricsUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTrackAnalysisUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.GetTracksUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
@@ -419,6 +421,18 @@ object UseCaseModule {
     fun provideObserveAudioTelemetryUseCase(
         audioTelemetryRepository: AudioTelemetryRepository
     ): ObserveAudioTelemetryUseCase = ObserveAudioTelemetryUseCase(audioTelemetryRepository)
+
+    /**
+     * Provides [GetTrackAnalysisUseCase] backed by [TrackAnalysisRepository].
+     *
+     * A read-only lookup into the measured-signal cache: it reports what a previous
+     * analysis pass stored for a track and never starts one, so the player telemetry
+     * can show measured values without touching the decoder or the audio thread.
+     */
+    @Provides
+    fun provideGetTrackAnalysisUseCase(
+        trackAnalysisRepository: TrackAnalysisRepository
+    ): GetTrackAnalysisUseCase = GetTrackAnalysisUseCase(trackAnalysisRepository)
 
     /**
      * Provides [ObserveQueueStateUseCase] backed by [PlaybackRepository].

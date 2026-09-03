@@ -32,6 +32,22 @@ interface TrackAnalysisRepository {
     suspend fun getAnalysis(audioKey: String): Resource<TrackAnalysis?>
 
     /**
+     * Reads the cached analysis for the audio a library track currently points at.
+     *
+     * Callers that follow playback hold a track, not a content key, and only the
+     * library index knows which audio a given track id resolves to today. Doing that
+     * translation here keeps it out of the domain, which has no content key of its own
+     * to resolve, and keeps a diagnostic read one call rather than two.
+     *
+     * @param trackId MediaStore identifier of the track being played or inspected.
+     * @return [Resource.Success] carrying the cached row, or `null` inside it when the
+     *   id is unknown to the index, the track carries no content key, or nothing was
+     *   measured for it at the current [TrackAnalysis.SCHEMA_VERSION]. [Resource.Error]
+     *   only on a genuine storage failure.
+     */
+    suspend fun getAnalysisForTrack(trackId: Long): Resource<TrackAnalysis?>
+
+    /**
      * Persists the stationary measurements for one piece of audio.
      *
      * Leaves any integral measurements already cached at the current schema

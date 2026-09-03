@@ -1,5 +1,6 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.TrackAnalysisDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackAnalysisEntity
 import com.androidexpert35.audiophilemusicplayer.domain.model.analysis.IntegralAnalysis
@@ -33,6 +34,12 @@ import org.junit.Test
 class TrackAnalysisRepositoryImplTest {
 
     private val dao = FakeTrackAnalysisDao()
+
+    /**
+     * Only the id-to-content-key projection is exercised, so the rest of the library
+     * DAO is left unstubbed — a call to any of it would be a genuine surprise here.
+     */
+    private val libraryIndexDao = mockk<LibraryIndexDao>()
 
     @Test
     fun `given a stationary pass when integral is stored then stationary values are kept`() =
@@ -163,8 +170,70 @@ class TrackAnalysisRepositoryImplTest {
         assertEquals(1, (repository.countMissingIntegralAnalysis() as Resource.Success).data)
     }
 
+    @Test
+    fun `given an analysed track when read by track id then its measurements are returned`() =
+        runTest {
+            coEvery { libraryIndexDao.getAudioKeyForTrack(TRACK_ID) } returns AUDIO_KEY
+            val repository = repository()
+            repository.saveStationaryAnalysis(AUDIO_KEY, stationary())
+
+            val analysis =
+                (repository.getAnalysisForTrack(TRACK_ID) as Resource.Success).data
+
+            assertEquals(stationary(), analysis?.stationary)
+        }
+
+    @Test
+    fun `given a track with no content key when read by track id then nothing is found`() =
+        runTest {
+            coEvery { libraryIndexDao.getAudioKeyForTrack(TRACK_ID) } returns ""
+            val repository = repository()
+
+            val result = repository.getAnalysisForTrack(TRACK_ID)
+
+            assertTrue(result is Resource.Success)
+            assertNull((result as Resource.Success).data)
+            assertEquals(0, dao.readCount)
+        }
+
+    @Test
+    fun `given a track absent from the index when read by track id then nothing is found`() =
+        runTest {
+            coEvery { libraryIndexDao.getAudioKeyForTrack(TRACK_ID) } returns null
+            val repository = repository()
+
+            val result = repository.getAnalysisForTrack(TRACK_ID)
+
+            assertTrue(result is Resource.Success)
+            assertNull((result as Resource.Success).data)
+            assertEquals(0, dao.readCount)
+        }
+
+    @Test
+    fun `given an unmeasured track when read by track id then nothing is found`() = runTest {
+        coEvery { libraryIndexDao.getAudioKeyForTrack(TRACK_ID) } returns AUDIO_KEY
+
+        val result = repository().getAnalysisForTrack(TRACK_ID)
+
+        assertTrue(result is Resource.Success)
+        assertNull((result as Resource.Success).data)
+    }
+
+    @Test
+    fun `given a failing index when read by track id then the failure becomes an error result`() =
+        runTest {
+            coEvery {
+                libraryIndexDao.getAudioKeyForTrack(TRACK_ID)
+            } throws IllegalStateException("database closed")
+
+            val result = repository().getAnalysisForTrack(TRACK_ID)
+
+            assertTrue(result is Resource.Error)
+        }
+
     private fun repository(dao: TrackAnalysisDao = this.dao) = TrackAnalysisRepositoryImpl(
         trackAnalysisDao = dao,
+        libraryIndexDao = libraryIndexDao,
         ioDispatcher = UnconfinedTestDispatcher()
     )
 
@@ -223,5 +292,6 @@ class TrackAnalysisRepositoryImplTest {
     private companion object {
         const val AUDIO_KEY = "1:0a3f:9c8b7a6d5e4f3a2b1c0d9e8f7a6b5c4d"
         const val OTHER_AUDIO_KEY = "1:1b4e:0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a"
+        const val TRACK_ID = 4_211L
     }
 }

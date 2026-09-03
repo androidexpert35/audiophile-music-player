@@ -312,6 +312,12 @@ private class FakeTrackAnalysisRepository : TrackAnalysisRepository {
     override suspend fun getAnalysis(audioKey: String): Resource<TrackAnalysis?> =
         Resource.Success(rows[audioKey]?.takeIf { it.schemaVersion == TrackAnalysis.SCHEMA_VERSION })
 
+    /**
+     * Unused here: the analyser addresses the cache by content key, never by track id.
+     */
+    override suspend fun getAnalysisForTrack(trackId: Long): Resource<TrackAnalysis?> =
+        Resource.Success(null)
+
     override suspend fun saveStationaryAnalysis(
         audioKey: String,
         stationary: StationaryAnalysis,

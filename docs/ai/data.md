@@ -141,6 +141,12 @@ Rules that hold this together:
   read-modify-write behind a `Mutex` and is bound `@Singleton` for exactly that reason.
 - ❌ Never treat a stale-version row as partial data to be topped up; half of one interpretation
   merged into another is worse than recomputing.
+- ✅ Reads addressed by track rather than by content key go through
+  `getAnalysisForTrack(trackId)`, which resolves the key with
+  `LibraryIndexDao.getAudioKeyForTrack` before looking the row up. Keeping that hop inside
+  Data is what lets the player telemetry read a measurement without the content key — a
+  cached-row detail — leaking into Domain or the UI. An unindexed track and a blank
+  `audioKey` both answer "not analysed", which is the same answer an unmeasured track gives.
 
 ---
 

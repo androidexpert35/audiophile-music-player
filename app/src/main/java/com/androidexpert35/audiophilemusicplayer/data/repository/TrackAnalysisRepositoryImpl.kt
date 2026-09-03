@@ -1,5 +1,6 @@
 package com.androidexpert35.audiophilemusicplayer.data.repository
 
+import com.androidexpert35.audiophilemusicplayer.data.local.dao.LibraryIndexDao
 import com.androidexpert35.audiophilemusicplayer.data.local.dao.TrackAnalysisDao
 import com.androidexpert35.audiophilemusicplayer.data.local.entity.TrackAnalysisEntity
 import com.androidexpert35.audiophilemusicplayer.data.mapper.mergeIntegralAnalysis
@@ -34,11 +35,14 @@ import javax.inject.Singleton
  * paired DAO calls.
  *
  * @property trackAnalysisDao DAO for the `track_analysis` table.
+ * @property libraryIndexDao DAO used only to translate a track id into the content key
+ *   its file currently has, for callers that follow playback rather than audio.
  * @property ioDispatcher Dispatcher for all blocking database operations.
  */
 @Singleton
 class TrackAnalysisRepositoryImpl @Inject constructor(
     private val trackAnalysisDao: TrackAnalysisDao,
+    private val libraryIndexDao: LibraryIndexDao,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : TrackAnalysisRepository {
 
@@ -60,6 +64,28 @@ class TrackAnalysisRepositoryImpl @Inject constructor(
             )
         }
     }
+
+    /**
+     * @see TrackAnalysisRepository.getAnalysisForTrack
+     */
+    override suspend fun getAnalysisForTrack(trackId: Long): Resource<TrackAnalysis?> =
+        withContext(ioDispatcher) {
+            runCatching {
+                // An unindexed track and a track indexed before its file could be
+                // sampled are the same answer here: there is no key to look a
+                // measurement up by, so there is no measurement.
+                val audioKey = libraryIndexDao.getAudioKeyForTrack(trackId).orEmpty()
+                if (audioKey.isBlank()) {
+                    null
+                } else {
+                    trackAnalysisDao.getByAudioKey(audioKey)
+                        ?.toDomain(TrackAnalysis.SCHEMA_VERSION)
+                }
+            }.fold(
+                onSuccess = { Resource.Success(it) },
+                onFailure = { it.toDatabaseError("Failed to read the analysis cache") }
+            )
+        }
 
     /**
      * @see TrackAnalysisRepository.saveStationaryAnalysis
