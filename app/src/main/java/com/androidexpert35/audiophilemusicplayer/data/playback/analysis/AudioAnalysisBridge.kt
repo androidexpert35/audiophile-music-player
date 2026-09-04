@@ -10,10 +10,10 @@ import java.nio.ByteBuffer
  * Measures the stationary signal properties of decoded PCM without touching playback.
  *
  * Wraps `audio_analysis_bridge.cpp`, which runs a measurement-only libavfilter
- * graph (`aformat` → `aspectralstats` → `astats`) over the windows it is fed and
- * returns the aggregate. Nothing here modifies samples, and nothing here is part
- * of the bit-perfect output path: the caller decodes its own copy of the audio on
- * `@IoDispatcher` and throws it away afterwards.
+ * graph (`aformat` → `aspectralstats` → `astats` → packed-FLT `aformat`) over
+ * the windows it is fed and returns the aggregate. Nothing here modifies samples,
+ * and nothing here is part of the bit-perfect output path: the caller decodes its
+ * own copy of the audio on `@IoDispatcher` and throws it away afterwards.
  *
  * ### Ownership & threading
  *

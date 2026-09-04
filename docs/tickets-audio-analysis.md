@@ -47,11 +47,12 @@ when native code changed.
 
 ```
 AUD-00  (independent, do first)
-AUD-01 ──┬─ AUD-10 ─┬─ AUD-12 ── AUD-13 ──┐
-         │          │                      ├── AUD-30 (gate) ──┬── AUD-40 ── AUD-41
-         └─ AUD-11 ─┘                      │                    ├── AUD-42
-                       AUD-20 ── AUD-21 ───┘                    ├── AUD-50
-                                                                └── AUD-60 (optional)
+AUD-01 ──┬─ AUD-10 ─┬─ AUD-12 ── AUD-13 ── AUD-14 ─────────────┐
+         │          │                                          │
+         └─ AUD-11 ─┘                                          ├── AUD-30 (gate) ──┬── AUD-40 ── AUD-41
+                       AUD-20 ── AUD-21 ── AUD-22 ──────────────┘                    ├── AUD-42
+                                                                                     ├── AUD-50
+                                                                                     └── AUD-60 (optional)
 AUD-31 (refactor) ── required by AUD-40 and AUD-42
 ```
 
@@ -343,6 +344,58 @@ Update docs/ai/playback.md's Telemetry section.
 
 ---
 
+## AUD-14 — Honour the packed-float contract for Class S stereo measurements
+
+**Blocks:** AUD-30, AUD-42. **Blocked by:** AUD-10, AUD-12. **Priority: remediation.**
+
+**Why.** The AUD-30 device run on 2026-09-04 found that every successful Class S row
+had `midRmsDbfs`, `sideRmsDbfs` and `interChannelCorrelation` set to `null`. The native
+log showed the same cause on every track:
+
+```
+harvest_frame: sink delivered format 8, expected FLT — stereo energies skipped
+```
+
+Format 8 is `AV_SAMPLE_FMT_FLTP`. The graph pins `flt` before `aspectralstats` and
+`astats`, but one of those filters renegotiates the downstream format to planar float.
+The bridge then correctly refuses to reinterpret planar data as packed interleaved data,
+so the advertised Class S vector is never actually complete in production. A temporary
+research build confirmed that pinning `aformat=sample_fmts=flt` at the sink side restores
+all three values for the 188 eligible PCM tracks; that experiment was reverted and is not
+the production fix.
+
+**Prompt**
+
+```
+Make the Class S graph's packed-float sink contract true and invalidate the incomplete
+cached measurements it previously produced.
+
+In audio_analysis_bridge.cpp, require packed FLT after every filter that may renegotiate
+sample format, immediately before abuffersink. Keep the defensive format check in
+harvest_frame; do not merely accept FLTP and reinterpret data[0] as interleaved. If you
+choose to support FLTP explicitly instead, read one plane per channel and add a tested
+planar aggregation path — never cast a plane to packed samples.
+
+Verify on a real stereo fixture that the sink is AV_SAMPLE_FMT_FLT and that mid RMS,
+side RMS and correlation are finite. Cover mono and stereo in the pure native aggregate
+tests. Bump TrackAnalysis.SCHEMA_VERSION so rows produced with the broken contract are
+recomputed; this is not a Room migration because no column changes.
+
+This ticket changes measurement output only. Do not change playback, DSP parameters,
+eligibility, window placement or the audio HandlerThread. Update docs/ai/native-audio.md
+with the final sink-format contract and docs/ai/data.md with the cache invalidation.
+```
+
+**Done when**
+- [ ] A real-device Class S pass on a stereo file logs no format mismatch and persists
+  finite mid RMS, side RMS and correlation.
+- [ ] Packed and/or planar handling is covered by native tests without reinterpreting
+  channel planes as interleaved samples.
+- [ ] Old Class S rows are invalidated by a schema-version bump and recomputed.
+- [ ] Playback/DSP output is unchanged and both docs are updated.
+
+---
+
 ## AUD-20 — Class I measurement during playback (the free path)
 
 **Blocks:** AUD-30. **Blocked by:** AUD-11.
@@ -431,9 +484,55 @@ Runs on @IoDispatcher. This ticket changes NO DSP behaviour.
 
 ---
 
+## AUD-22 — Persist the complete Class I vector (Room v16)
+
+**Blocks:** AUD-30, AUD-40, AUD-50. **Blocked by:** AUD-11, AUD-21. **Priority: remediation.**
+
+**Why.** AUD-21's native bridge already returns sample peak, true peak, integrated LUFS,
+PLR, clipping ratio and flat-top run statistics. The current persistence seam deliberately
+drops true peak and every flat-run value in
+`AudioIntegralFeatures.toIntegralAnalysis()`, because `TrackAnalysisEntity` has no columns
+for them. AUD-30 therefore had zero complete stored vectors and needed a temporary
+debug-only export to match on true peak. AUD-40 explicitly needs measured true peak, so it
+must not be built on the current lossy mapping.
+
+**Prompt**
+
+```
+Persist the complete Class I result already returned by AudioIntegralFeatures.
+
+Move Room from version 15 to 16. Add nullable columns to TrackAnalysisEntity for
+truePeakDbfs, flatRunCount, flatRunLongestSamples, flatRunMeanSamples,
+flatRunSampleRatio and integralFrameCount. Keep peakDbfs as the existing sample-peak
+column; do not silently change its meaning or substitute it for true peak.
+
+Extend the framework-free IntegralAnalysis domain model, both mapper directions and the
+Class I partial-upsert path. Remove the mapper comment and behaviour that discard these
+values. Add and register MIGRATION_15_16 using nullable ADD COLUMN statements, and update
+the database schema-history KDoc.
+
+Bump TrackAnalysis.SCHEMA_VERSION so existing integral rows, whose missing fields cannot
+be reconstructed, are measured again. Verify that a Class I upsert still preserves Class S
+and vice versa, and that every native AudioIntegralFeatures field survives a Room
+round-trip exactly (within floating-point equality used by the existing tests).
+
+Do not change eligibility, scheduling, playback or DSP behaviour in this ticket. Update
+docs/ai/data.md and docs/ai/native-audio.md.
+```
+
+**Done when**
+- [ ] Migration 15→16 preserves existing rows and exposes every new nullable column.
+- [ ] Sample peak and true peak remain distinct through native → domain → Room → domain.
+- [ ] All flat-run statistics and integral frame count survive a repository round-trip.
+- [ ] Partial Class S/Class I upserts still do not clobber each other.
+- [ ] Stale incomplete integral rows are invalidated for remeasurement and both docs are
+  updated.
+
+---
+
 ## AUD-30 — DECISION GATE: is the measurement vector sufficient?
 
-**Blocks:** everything after it. **Blocked by:** AUD-13, AUD-20, AUD-21.
+**Blocks:** everything after it. **Blocked by:** AUD-13, AUD-14, AUD-20, AUD-21, AUD-22.
 **This is not a code ticket.**
 
 **Why.** The feasibility document's verdict rests on a falsifiable claim: that measured
@@ -455,6 +554,32 @@ spending effort wiring anything up.
 - *Pairs that measure alike need different treatment, frequently* → the measurement vector
   is not sufficient. Something outside it carries the residual. Re-open the classifier
   question with real evidence, and record which pairs broke it.
+
+### Recorded gate decision — 2026-09-04
+
+The device study exported the user's entire available library: 197 indexed tracks, of
+which 188 PCM tracks yielded a complete six-measure research vector and 9 DSD tracks were
+correctly excluded. Twelve tracks were measured twice; the maximum test-retest difference
+was zero for cutoff, tilt, M/S ratio, PLR, true peak and clipping ratio. With tolerances
+fixed before pair enumeration (500 Hz, 0.00015 slope, 1 dB M/S, 0.75 dB PLR, 0.30 dBTP and
+0.0001 clipping ratio), the corpus produced 20 matched pairs and 12 non-overlapping pairs.
+
+The owner explicitly waived the listening step and accepts the residual risk of treating
+this as analytical rather than perceptual validation. Record the outcome as a
+**conditional go**, not as evidence that the blind A/B passed. The corpus is also narrow:
+none of the 12 selected pairs crosses artist and only one crosses genre, so it cannot
+support a strong generalisation claim.
+
+Do not unblock AUD-31, AUD-40, AUD-42 or AUD-50 until all of the following are true:
+
+- AUD-14 has restored complete Class S stereo measurements in production.
+- AUD-20 is implemented and its audio-thread cost/coverage guarantees pass.
+- AUD-21 has real-device timings for the required 16/44.1 FLAC, 24/96 FLAC and DSD64
+  fixtures, rather than only an aggregate library timing.
+- AUD-22 persists true peak and the rest of the complete Class I vector.
+- A production-path smoke export confirms non-null cutoff, tilt, M/S, PLR, true peak and
+  clipping values without either temporary research modification. No further listening
+  run is required unless that smoke export materially disagrees with the recorded study.
 
 Also worth running here, and it needs no code at all: compute the long-term average
 spectrum of the library grouped by the existing `TrackEntity.genre` tag. If between-genre

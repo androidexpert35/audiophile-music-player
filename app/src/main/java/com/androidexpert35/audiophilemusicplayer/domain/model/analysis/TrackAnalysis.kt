@@ -44,6 +44,6 @@ data class TrackAnalysis(
          *
          * Do **not** bump it when adding a column; that is a real migration.
          */
-        const val SCHEMA_VERSION: Int = 1
+        const val SCHEMA_VERSION: Int = 2
     }
 }

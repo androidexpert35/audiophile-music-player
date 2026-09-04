@@ -19,6 +19,7 @@
 //     -> aformat=sample_fmts=flt
 //     -> aspectralstats(metadata on every output frame)
 //     -> astats(metadata=1, cumulative)
+//     -> aformat=sample_fmts=flt
 //     -> abuffersink
 //
 // Integral ("Class I") mode — every sample of the stream, once:
@@ -230,7 +231,8 @@ static bool build_measurement_chain(char *out, size_t out_size)
             "aspectralstats=win_size=%d:overlap=%.2f:measure=centroid+rolloff+slope,"
             "astats=metadata=1:reset=0"
             ":measure_perchannel=DC_offset+Noise_floor+RMS_level"
-            ":measure_overall=DC_offset+Noise_floor",
+            ":measure_overall=DC_offset+Noise_floor,"
+            "aformat=sample_fmts=flt",
             kSpectralWindowSize,
             static_cast<double>(kSpectralWindowOverlap));
 
@@ -426,8 +428,10 @@ static void harvest_stationary_frame(AnalysisCtx *ctx, const AVFrame *frame)
     read_metadata_double(metadata, "lavfi.astats.Overall.DC_offset", &dc_offset);
     ctx->aggregator->set_level_snapshot(noise_floor, dc_offset);
 
-    // The chain starts with aformat=sample_fmts=flt and no later filter changes
-    // the format, so the sink delivers packed interleaved float32.
+    // The chain pins packed FLT again after the statistics filters because they
+    // may renegotiate their output to FLTP. Keep this check even though the
+    // graph contract is explicit: treating one planar channel as interleaved
+    // stereo would silently corrupt every derived stereo measurement.
     if (frame->format != AV_SAMPLE_FMT_FLT) {
         if (!ctx->warned_non_float) {
             ctx->warned_non_float = true;

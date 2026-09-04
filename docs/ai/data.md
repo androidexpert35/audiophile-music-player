@@ -135,6 +135,9 @@ Rules that hold this together:
   filter graph, different unit, corrected aggregation — and every stored row silently reads as
   absent and is recomputed. That is **not** a Room migration: the schema did not change, only
   what the numbers mean. Adding a column still is one.
+  Version 2 invalidates Class S rows produced before the packed-float sink contract was
+  enforced; those rows could contain spectral values while silently missing mid/side RMS and
+  inter-channel correlation, so the entire cached row must be recomputed.
 - ✅ Writing one class merges over the other through `TrackAnalysisMapper`, which keeps the
   other class's columns only when the stored row carries the current schema version and
   otherwise discards the whole row. `TrackAnalysisRepositoryImpl` serialises that

@@ -512,9 +512,28 @@ void test_analysis_aggregator_averages_windows_and_keeps_last_levels()
     assert(analysis_close(features[kFeatureSpectralSlope], -0.4, 1e-9));
     assert(analysis_close(features[kFeatureNoiseFloorDbfs], -92.0, 1e-12));
     assert(analysis_close(features[kFeatureDcOffset], 0.002, 1e-12));
+    assert(std::isfinite(features[kFeatureMidRmsDbfs]));
+    assert(std::isfinite(features[kFeatureSideRmsDbfs]));
     assert(analysis_close(features[kFeatureInterChannelCorrelation], 1.0, 1e-12));
     assert(analysis_close(features[kFeatureWindowCount], 2.0, 1e-12));
     assert(analysis_close(features[kFeatureFrameCount], 2.0, 1e-12));
+}
+
+void test_mono_analysis_aggregator_reports_finite_stereo_relationships()
+{
+    AudioAnalysisAggregator aggregator(1);
+    const std::array<float, 4> mono{0.25F, -0.25F, 0.5F, -0.5F};
+    aggregator.add_samples(mono.data(), mono.size());
+
+    std::array<double, kAudioAnalysisFeatureCount> features{};
+    assert(aggregator.write_features(features.data(), features.size()) ==
+           kAudioAnalysisFeatureCount);
+
+    assert(std::isfinite(features[kFeatureMidRmsDbfs]));
+    assert(std::isfinite(features[kFeatureSideRmsDbfs]));
+    assert(std::isfinite(features[kFeatureInterChannelCorrelation]));
+    assert(analysis_close(features[kFeatureSideRmsDbfs], kAudioAnalysisSilenceDbfs, 1e-12));
+    assert(analysis_close(features[kFeatureInterChannelCorrelation], 1.0, 1e-12));
 }
 
 void test_analysis_aggregator_reports_unmeasured_as_nan()
@@ -747,6 +766,7 @@ int main()
     test_stereo_energy_silent_channel_has_no_correlation();
     test_stereo_energy_skips_non_finite_frames();
     test_analysis_aggregator_averages_windows_and_keeps_last_levels();
+    test_mono_analysis_aggregator_reports_finite_stereo_relationships();
     test_analysis_aggregator_reports_unmeasured_as_nan();
     test_integral_peak_and_clipping_are_counted_exactly();
     test_integral_flat_runs_are_per_channel_and_length_gated();

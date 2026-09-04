@@ -117,7 +117,8 @@ Key source files:
   [`playback.md`](playback.md).
 - `audio_analysis_bridge.cpp` — JNI implementation of the **measurement-only**
   signal analysis, in two modes that share one session type. Class S builds
-  `abuffer → aformat=sample_fmts=flt → aspectralstats → astats → abuffersink`
+  `abuffer → aformat=sample_fmts=flt → aspectralstats → astats →
+  aformat=sample_fmts=flt → abuffersink`
   over a few sampled windows; Class I builds `abuffer → aformat=sample_fmts=dbl
   → astats → ebur128 → abuffersink` over a whole decoded stream. Both read their
   results out of the output frame metadata dictionary. Neither is on the
@@ -277,6 +278,13 @@ They are accumulated exactly from the float samples the graph already forwards,
 in `audio_analysis_aggregator`. Peak, loudness and clipping counts are integral
 measures and are deliberately absent from **this mode** — they belong to the
 Class I mode below, because sampling them biases them.
+
+The Class S graph pins `aformat=sample_fmts=flt` immediately before
+`abuffersink`, as well as before the statistics filters. `aspectralstats` or
+`astats` may otherwise renegotiate their downstream output to planar FLTP. The
+sink contract is therefore packed interleaved float32; `harvest_stationary_frame`
+still rejects any other format and never treats a single channel plane as
+interleaved stereo.
 
 In the stub build (no FFmpeg provisioned) `ffmpeg_bridge_stub.cpp` answers the
 same five symbols with the failure sentinel, so the APK assembles and the caller
