@@ -26,7 +26,7 @@ import com.androidexpert35.audiophilemusicplayer.data.playback.native_.AudioForm
  *    This means a cold-start race or a failed sequential load produces a
  *    completely silent logcat — impossible to diagnose without this logger.
  *
- * 2. **URI resolution failure** — `resolveUriToPath` throws; the catch lands
+ * 2. **URI resolution failure** — `resolveUriToSource` throws; the catch lands
  *    in `reportPlaybackError`, but no checkpoint before the throw records
  *    which tier or what path was being resolved.
  *

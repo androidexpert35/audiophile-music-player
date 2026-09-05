@@ -16,6 +16,11 @@ import com.androidexpert35.audiophilemusicplayer.data.playback.native_.FFmpegDec
  * decoder pump, only the URI is stored. The engine performs a full
  * sink-and-decoder reload on end-of-stream, producing a brief but correct
  * audible transition.
+ *
+ * A preloaded entry also owns the [BitPerfectSourceHandle] its decoder was
+ * opened from. The handle is released by [clear] when the preload is discarded,
+ * and handed to the engine by [consumeCompatibleEntry] when the swap happens —
+ * so the incoming track's descriptor survives becoming the current track.
  */
 internal class BitPerfectGaplessQueue {
 
@@ -45,6 +50,14 @@ internal class BitPerfectGaplessQueue {
         private set
 
     /**
+     * Open source handle backing [nextDecoder].
+     *
+     * Always set together with [nextDecoder]; ownership moves to the engine on
+     * [consumeCompatibleEntry] and is released here by [clear].
+     */
+    private var nextSourceHandle: BitPerfectSourceHandle? = null
+
+    /**
      * `true` when a fully preloaded, format-compatible decoder is ready for
      * a gapless sink-preserving swap at the next end-of-stream.
      */
@@ -67,11 +80,19 @@ internal class BitPerfectGaplessQueue {
      * @param decoder Opened [FFmpegDecoder] ready to read the next track.
      * @param format Decoded audio format for [decoder].
      * @param uri Content URI of the next track.
+     * @param sourceHandle Open source [decoder] was built from; this queue takes
+     *   ownership of it until the entry is consumed or cleared.
      */
-    fun enqueueCompatible(decoder: FFmpegDecoder, format: AudioFormatInfo, uri: String) {
+    fun enqueueCompatible(
+        decoder: FFmpegDecoder,
+        format: AudioFormatInfo,
+        uri: String,
+        sourceHandle: BitPerfectSourceHandle,
+    ) {
         nextDecoder = decoder
         nextFormat = format
         nextUri = uri
+        nextSourceHandle = sourceHandle
     }
 
     /**
@@ -85,15 +106,18 @@ internal class BitPerfectGaplessQueue {
     }
 
     /**
-     * Closes [nextDecoder] and clears all queued state.
+     * Closes [nextDecoder], releases the preloaded source descriptor, and clears
+     * all queued state.
      *
      * Safe to call when nothing is queued — closing a `null` decoder is a no-op.
      */
     fun clear() {
         runCatching { nextDecoder?.close() }
+        runCatching { nextSourceHandle?.close() }
         nextDecoder = null
         nextFormat = null
         nextUri = null
+        nextSourceHandle = null
     }
 
     /**
@@ -109,10 +133,12 @@ internal class BitPerfectGaplessQueue {
         val decoder = nextDecoder ?: return null
         val format = nextFormat ?: return null
         val uri = nextUri ?: return null
+        val sourceHandle = nextSourceHandle ?: return null
         nextDecoder = null
         nextFormat = null
         nextUri = null
-        return GaplessEntry(decoder, format, uri)
+        nextSourceHandle = null
+        return GaplessEntry(decoder, format, uri, sourceHandle)
     }
 
     /**
@@ -167,10 +193,14 @@ internal class BitPerfectGaplessQueue {
  * @property decoder Opened [FFmpegDecoder] ready to read the next track.
  * @property format Decoded audio format for [decoder].
  * @property uri Content URI of the preloaded track.
+ * @property sourceHandle Open source the decoder was built from. Ownership
+ *   passes to the consumer, which must close it when the track it belongs to
+ *   is replaced.
  */
 internal data class GaplessEntry(
     val decoder: FFmpegDecoder,
     val format: AudioFormatInfo,
     val uri: String,
+    val sourceHandle: BitPerfectSourceHandle,
 )
 

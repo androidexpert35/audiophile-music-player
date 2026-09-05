@@ -55,7 +55,8 @@ import kotlin.coroutines.resume
  * - **[BitPerfectSinkRouter]** — sink selection and DSD transport context creation.
  * - **[BitPerfectPcmRatePolicy]** — PCM sample-rate ownership resolution.
  * - **[BitPerfectRoutingDiagnostics]** — logcat routing banners and heartbeat lines.
- * - **[resolveUriToPath]** — `content://` → `/proc/self/fd/<fd>` resolution.
+ * - **[resolveUriToSource]** — `content://` → `/proc/self/fd/<fd>` resolution,
+ *   returning the [BitPerfectSourceHandle] this engine owns for the loaded track.
  *
  * ### Pause and CPU utilization
  *
@@ -159,6 +160,19 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
 
     private var currentDecoder: FFmpegDecoder? = null
     private var sink: AudiophileOutputSink? = null
+
+    /**
+     * Open source the loaded track is decoded from.
+     *
+     * For a `content://` track this owns the descriptor its
+     * `/proc/self/fd/<n>` path names. Every decoder session built during the
+     * load takes its own `dup()` of that descriptor, so this handle only has to
+     * outlive session building — but it must outlive *all* of it, including the
+     * libusb sink's native decoder, which is opened last. Released together with
+     * the decoder and sink in [releaseCurrentPlaybackResources]; replaced by the
+     * preload's handle on a gapless swap.
+     */
+    private var currentSourceHandle: BitPerfectSourceHandle? = null
 
     /**
      * Active Sonic Upscaling Enhancer stage for the current track, or `null`
@@ -467,8 +481,10 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         _state.value = EnginePlaybackState.LOADING
         notifyEngineStateChanged()
 
-        val path = runCatching { resolveUriToPath(context, uri) }.getOrNull()
-        if (path == null) {
+        // doStopInternal above already released the outgoing track's handle, so
+        // this one is the only descriptor the engine holds from here on.
+        val sourceHandle = runCatching { resolveUriToSource(context, uri) }.getOrNull()
+        if (sourceHandle == null) {
             reportPlaybackError(
                 logMessage = "Cannot resolve URI to a file path: $uri",
                 userMessage = "Unable to open '$uri' — file not accessible",
@@ -476,6 +492,7 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             BitPerfectDiagnosticsLogger.onLoadComplete(autoPlay, success = false, error = "URI resolution failed")
             return
         }
+        val path = sourceHandle.path
 
         // Settings are resolved once per load so the value is immutable for
         // the loaded track's lifetime.
@@ -488,6 +505,9 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
                 reportPlaybackError(logMessage = logMsg, userMessage = userMsg, throwable = t)
             }
         if (session == null) {
+            // Every tier failed, so nothing downstream took a dup() of the
+            // descriptor — release it here rather than at the next stop.
+            sourceHandle.close()
             BitPerfectDiagnosticsLogger.onLoadComplete(autoPlay, success = false, error = "all tiers exhausted")
             return  // error already reported inside tryLoadPcmFallbackSession
         }
@@ -514,6 +534,7 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         applyLoadedTrack(
             decoder = decoder,
             sink = newSink,
+            sourceHandle = sourceHandle,
             format = format,
             uri = uri,
             startPositionMs = startPositionMs,
@@ -605,12 +626,16 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             return
         }
 
-        val path = runCatching { resolveUriToPath(context, uri) }.getOrNull()
-        if (path == null) {
+        val sourceHandle = runCatching { resolveUriToSource(context, uri) }.getOrNull()
+        if (sourceHandle == null) {
             BitPerfectDiagnosticsLogger.onEnqueueDowngradedToUriOnly("uri-resolution-failed")
             gaplessQueue.enqueueUriOnly(uri)
             return
         }
+        // Every downgrade below discards the preload, so it must also release the
+        // descriptor that preload was resolved from — a URI-only entry re-resolves
+        // at EOF. Ownership passes to the queue only on enqueueCompatible.
+        val path = sourceHandle.path
 
         val preload = FFmpegDecoder()
         val tierOneFmt = runCatching { preload.open(path, forcePcm = false) }.getOrNull()
@@ -621,25 +646,28 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             val reopened = FFmpegDecoder()
             val pcmFmt = runCatching { reopened.open(path, forcePcm = true) }.getOrElse {
                 reopened.close()
+                sourceHandle.close()
                 BitPerfectDiagnosticsLogger.onEnqueueDowngradedToUriOnly("pcm-preload-open-failed")
                 gaplessQueue.enqueueUriOnly(uri)
                 return
             }
             if (!areGaplessPipelinesCompatible(current, pcmFmt)) {
                 reopened.close()
+                sourceHandle.close()
                 gaplessQueue.enqueueUriOnly(uri)
                 return
             }
-            gaplessQueue.enqueueCompatible(reopened, pcmFmt, uri)
+            gaplessQueue.enqueueCompatible(reopened, pcmFmt, uri, sourceHandle)
             return
         }
 
         if (!areGaplessPipelinesCompatible(current, fmt)) {
             preload.close()
+            sourceHandle.close()
             gaplessQueue.enqueueUriOnly(uri)
             return
         }
-        gaplessQueue.enqueueCompatible(preload, fmt, uri)
+        gaplessQueue.enqueueCompatible(preload, fmt, uri, sourceHandle)
     }
 
     /**
@@ -911,6 +939,11 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
             // True gapless path — reuse the sink, swap only the decoder.
             currentDecoder?.close()
             currentDecoder = gaplessEntry.decoder
+            // The outgoing track's descriptor is released only after its decoder
+            // is closed; the incoming one is adopted, not re-resolved, so the
+            // preloaded track's source survives becoming the current track.
+            runCatching { currentSourceHandle?.close() }
+            currentSourceHandle = gaplessEntry.sourceHandle
             // Rebuild the SUE stage and publish the new path report BEFORE the
             // new format is emitted: the telemetry collector combines the two
             // flows, and emitting the format first pairs the incoming track's
@@ -1116,6 +1149,7 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     private fun applyLoadedTrack(
         decoder: FFmpegDecoder,
         sink: AudiophileOutputSink,
+        sourceHandle: BitPerfectSourceHandle,
         format: AudioFormatInfo,
         uri: String,
         startPositionMs: Long,
@@ -1129,6 +1163,7 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
     ) {
         currentDecoder = decoder
         this.sink = sink
+        currentSourceHandle = sourceHandle
         activeSueStage = sueStage
         currentPathType = pathType
         currentRateDecision = decision
@@ -1255,6 +1290,10 @@ internal class BitPerfectPlaybackEngine @Inject constructor(
         currentDecoder = null
         runCatching { activeSueStage?.close() }
         activeSueStage = null
+        // Closed only after the decoder and sink, both of which read through
+        // their own dup() of this descriptor.
+        runCatching { currentSourceHandle?.close() }
+        currentSourceHandle = null
         activeDsdPlaybackContext = null
         currentPathType = PathType.STANDARD_PCM
         currentRateDecision = Decision.Bypass
