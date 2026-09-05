@@ -46,6 +46,8 @@
     <string name="onboarding_completed_title">Library ready</string>
     <string name="onboarding_completed_message">Your collection is indexed and ready for the main listening experience.</string>
     <string name="onboarding_retry_action">Retry indexing</string>
+    <string name="onboarding_scan_failed_title">Library scan interrupted</string>
+    <string name="onboarding_scan_failed_message">Try scanning the saved folders again. If your music is on an SD card or USB drive, check that it is connected and accessible. You can also choose another music folder.</string>
 
     <!-- Search -->
     <string name="search_placeholder">Artists, albums, songs…</string>

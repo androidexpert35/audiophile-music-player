@@ -17,10 +17,19 @@ sealed interface OnboardingState {
      *
      * @property hasFailedAttempt Whether a previous pick was cancelled or rejected, so
      *   the screen can explain why the app is asking again.
+     * @property errorMessage Persistent explanation when the selected folder was rejected.
      */
     data class RequiresMusicFolder(
-        val hasFailedAttempt: Boolean = false
+        val hasFailedAttempt: Boolean = false,
+        val errorMessage: String? = null
     ) : OnboardingState
+
+    /**
+     * Keeps a failed scan actionable without requiring another folder grant.
+     *
+     * @property message Explanation retained until the user retries or adds a folder.
+     */
+    data class IndexingFailed(val message: String) : OnboardingState
 
     /**
      * Indicates that the app is currently indexing local audio files.

@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -151,6 +152,54 @@ class OnboardingViewModelTest {
 
         assertTrue(
             viewModel.uiState.value.data?.state is OnboardingState.RequiresMusicFolder
+        )
+        assertEquals(
+            "grant lost",
+            (viewModel.uiState.value.data?.state as OnboardingState.RequiresMusicFolder).errorMessage
+        )
+    }
+
+    @Test
+    fun `given scan failure when retry tapped then saved folders are scanned without another grant`() = runTest {
+        every { scanAndIndexMediaUseCase.invoke() } returnsMany listOf(
+            flowOf(Resource.Error(ResourceError.StorageError("SD card unavailable"))),
+            flowOf(Resource.Success(MediaIndexingProgress(1f, "song.flac", 1, 1)))
+        )
+        val viewModel = createViewModel()
+        viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
+        advanceUntilIdle()
+
+        assertEquals(
+            OnboardingState.IndexingFailed("SD card unavailable"),
+            viewModel.uiState.value.data?.state
+        )
+        viewModel.dismissErrorPopup()
+        viewModel.onEvent(OnboardingUiEvent.MusicFolderPicked(null))
+        advanceUntilIdle()
+        assertEquals(
+            OnboardingState.IndexingFailed("SD card unavailable"),
+            viewModel.uiState.value.data?.state
+        )
+
+        val effect = async(start = CoroutineStart.UNDISPATCHED) { viewModel.uiEffect.first() }
+        viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
+        assertEquals(OnboardingUiEffect.NavigateToHome, effect.await())
+        advanceUntilIdle()
+        assertEquals(OnboardingState.Completed, viewModel.uiState.value.data?.state)
+        coVerify(exactly = 0) { addMusicFolderUseCase.invoke(any()) }
+    }
+
+    @Test
+    fun `given scan throws when collecting then persistent failure replaces scanning`() = runTest {
+        every { scanAndIndexMediaUseCase.invoke() } returns flow {
+            throw IllegalStateException("Provider unavailable")
+        }
+        val viewModel = createViewModel()
+        viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
+        advanceUntilIdle()
+        assertEquals(
+            OnboardingState.IndexingFailed("Provider unavailable"),
+            viewModel.uiState.value.data?.state
         )
     }
 

@@ -1,4 +1,6 @@
 <resources>
+    <string name="onboarding_scan_failed_title">Scansione della libreria interrotta</string>
+    <string name="onboarding_scan_failed_message">Riprova la scansione delle cartelle salvate. Se la musica è su una scheda SD o unità USB, verifica che sia collegata e accessibile. Puoi anche scegliere un’altra cartella musicale.</string>
     <string name="app_name">Audiophile Music Player</string>
 
     <!-- Common -->

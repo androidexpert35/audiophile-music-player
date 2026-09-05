@@ -121,6 +121,9 @@ fun OnboardingScreen(
             },
             onAddMusicFolder = {
                 viewModel.onEvent(OnboardingUiEvent.AddMusicFolderTapped)
+            },
+            onRetryIndexing = {
+                viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
             }
         )
     }
@@ -132,12 +135,14 @@ fun OnboardingScreen(
  * @param model Current immutable onboarding model.
  * @param onRequestPermission Callback requesting the platform permission prompt.
  * @param onAddMusicFolder Callback requesting the platform folder chooser.
+ * @param onRetryIndexing Callback retrying the scan with the saved folders.
  */
 @Composable
 private fun OnboardingContent(
     model: OnboardingUiModel,
     onRequestPermission: () -> Unit,
-    onAddMusicFolder: () -> Unit
+    onAddMusicFolder: () -> Unit,
+    onRetryIndexing: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -206,7 +211,8 @@ private fun OnboardingContent(
                             )
                             if (state.hasFailedAttempt) {
                                 Text(
-                                    text = stringResource(R.string.onboarding_folder_required),
+                                    text = state.errorMessage
+                                        ?: stringResource(R.string.onboarding_folder_required),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -216,6 +222,29 @@ private fun OnboardingContent(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(text = stringResource(R.string.onboarding_folder_action))
+                            }
+                        }
+
+                        is OnboardingState.IndexingFailed -> {
+                            OnboardingIconBadge(icon = Icons.Filled.FolderSpecial)
+                            Text(
+                                text = stringResource(R.string.onboarding_scan_failed_title),
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = stringResource(R.string.onboarding_scan_failed_message),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Button(onClick = onRetryIndexing, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.onboarding_retry_action))
+                            }
+                            Button(onClick = onAddMusicFolder, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.onboarding_folder_action))
                             }
                         }
 

@@ -7,10 +7,12 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIn
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
 import com.tony.coreui.data.strings.StringResolver
 import com.tony.coreui.domain.resource.Resource
+import com.tony.coreui.domain.resource.ResourceError
 import com.tony.coreui.presentation.error.UiErrorMapper
 import com.tony.coreui.presentation.navigation.NavigationManager
 import com.tony.coreui.presentation.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -49,6 +51,7 @@ class OnboardingViewModel @Inject constructor(
 ) {
 
     private var hasInitialized: Boolean = false
+    private val onboardingErrorMapper = uiErrorMapper
 
     init {
         setSuccessState(OnboardingUiModel())
@@ -123,6 +126,7 @@ class OnboardingViewModel @Inject constructor(
      */
     private fun handleMusicFolderPicked(folderId: String?) {
         if (folderId.isNullOrBlank()) {
+            if (uiState.value.data?.state is OnboardingState.IndexingFailed) return
             setSuccessState(
                 OnboardingUiModel(OnboardingState.RequiresMusicFolder(hasFailedAttempt = true))
             )
@@ -136,13 +140,11 @@ class OnboardingViewModel @Inject constructor(
                 is Resource.Error -> {
                     setSuccessState(
                         OnboardingUiModel(
-                            OnboardingState.RequiresMusicFolder(hasFailedAttempt = true)
+                            OnboardingState.RequiresMusicFolder(
+                                hasFailedAttempt = true,
+                                errorMessage = onboardingErrorMapper.mapResourceError(result.data).message
+                            )
                         )
-                    )
-                    handleError(
-                        errorObject = result,
-                        retryAction = { emitEffect(OnboardingUiEffect.PickMusicFolder) },
-                        processUiAfterError = { uiState.value.data }
                     )
                 }
             }
@@ -168,7 +170,15 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch(exceptionHandler) {
             var indexingFailed = false
 
-            scanAndIndexMediaUseCase().collect { resource ->
+            scanAndIndexMediaUseCase().catch { failure ->
+                emit(
+                    Resource.Error(
+                        failure.message?.let { ResourceError.StorageError(it) }
+                            ?: ResourceError.UnknownError
+                    )
+                )
+            }.collect { resource ->
+                if (indexingFailed) return@collect
                 when (resource) {
                     is Resource.Success -> {
                         setSuccessState(
@@ -183,19 +193,14 @@ class OnboardingViewModel @Inject constructor(
 
                     is Resource.Error -> {
                         indexingFailed = true
-                        // Leave the Scanning state before surfacing the error: the guard at
-                        // the top of startIndexing() would otherwise swallow the retry. The
-                        // folder step is the right landing spot because a scan that produced
-                        // nothing almost always means the granted folder is gone or empty.
+                        // Preserve the reason in the screen itself, including after a dialog
+                        // dismissal. A storage or database failure does not require a new grant.
                         setSuccessState(
                             OnboardingUiModel(
-                                OnboardingState.RequiresMusicFolder(hasFailedAttempt = true)
+                                OnboardingState.IndexingFailed(
+                                    onboardingErrorMapper.mapResourceError(resource.data).message
+                                )
                             )
-                        )
-                        handleError(
-                            errorObject = resource,
-                            retryAction = ::startIndexing,
-                            processUiAfterError = { uiState.value.data }
                         )
                     }
                 }

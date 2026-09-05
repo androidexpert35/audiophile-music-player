@@ -163,6 +163,12 @@ ViewModel was added for this. `LibraryViewModel`'s MediaStore `ContentObserver` 
 independently re-indexes on external content changes that don't go through Settings
 (e.g. files copied onto the device without touching the folder list).
 
+Onboarding keeps folder-grant failures inline in `RequiresMusicFolder.errorMessage`.
+Scan failures instead enter `IndexingFailed` with a persistent explanation and separate
+retry-scan / choose-folder actions. They must not reset to a generic folder-required
+prompt: an indexing or temporary storage error does not imply a missing folder grant.
+Cancelling the chooser from that recovery screen preserves the failure and retry action.
+
 `AppNavigator` also defers composing the player overlay (`PlayerViewModel` flow
 collection + `BlurredBackground` GPU layer) until two frames after launch, then keeps it
 pre-warmed off-screen for the jank-free slide-in — an early `ACTION_VIEW` open forces it
