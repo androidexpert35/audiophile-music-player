@@ -90,7 +90,7 @@ coordinator only — each concern is delegated to a dedicated helper in the same
 | `BitPerfectWakeLockController` | `PARTIAL_WAKE_LOCK` lifecycle across play/pause/stop/error |
 | — pause-time output release | Every audiophile-engine pause closes the USB sink immediately plus any platform mixer preference. Decoder metadata and the exact playhead survive; Play transparently rebuilds output at that position. `pauseAndReleaseOutput()` is the awaited boundary used by focus loss and explicit release commands. |
 | `BitPerfectDsdSupport` (`DsdPlaybackContext`) | Immutable DSD transport context (source/effective rate, output mode, DoP encoder) |
-| `BitPerfectUriResolver` | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg |
+| `BitPerfectUriResolver` | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg (the native session reads the descriptor itself — never re-opens the path; see [`native-audio.md`](native-audio.md)) |
 | `BitPerfectPlaybackMath` | Pure sink-playhead → playback-position-ms conversion |
 | — seek/reload anchoring | Libusb sinks expose an absolute post-seek playhead; the engine captures that value as `sinkStartFrames` and snapshots the live head before pause/DSP/routing reloads so the target is never added twice or rounded back to the last UI tick |
 | `BitPerfectDiagnosticsLogger` | Structured `[BP]` failure-mode logging (`adb logcat -s AudiophileDiag`) |

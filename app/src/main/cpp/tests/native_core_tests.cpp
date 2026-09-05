@@ -9,6 +9,7 @@
 #include "audio_gain.h"
 #include "cpu_affinity_policy.h"
 #include "dop_formatter.h"
+#include "fd_trampoline_path.h"
 #include "native_dsd_formatter.h"
 #include "pcm_wire_formatter.h"
 #include "usb_handle_validation.h"
@@ -331,6 +332,30 @@ void test_classify_decode_load()
     assert(classify_decode_load(false, 384'000) == DecodeLoad::HEAVY);
 }
 
+// ── content:// descriptor trampoline ───────────────────────────────────
+
+void test_parse_fd_trampoline_path()
+{
+    // Trampoline paths yield their descriptor number — these must read through
+    // the open fd, never through a path re-open (SAF-granted DSD is EACCES).
+    assert(parse_fd_trampoline_path("/proc/self/fd/0") == 0);
+    assert(parse_fd_trampoline_path("/proc/self/fd/411") == 411);
+    assert(parse_fd_trampoline_path("/proc/self/fd/2147483647") == 2147483647);
+
+    // Ordinary paths keep the path-based open.
+    assert(parse_fd_trampoline_path(nullptr) == -1);
+    assert(parse_fd_trampoline_path("") == -1);
+    assert(parse_fd_trampoline_path("/storage/emulated/0/Music/a.dsf") == -1);
+    assert(parse_fd_trampoline_path("/proc/self/fdinfo/12") == -1);
+
+    // Malformed suffixes must not be mistaken for a descriptor.
+    assert(parse_fd_trampoline_path("/proc/self/fd/") == -1);
+    assert(parse_fd_trampoline_path("/proc/self/fd/12/track.dsf") == -1);
+    assert(parse_fd_trampoline_path("/proc/self/fd/-3") == -1);
+    assert(parse_fd_trampoline_path("/proc/self/fd/12abc") == -1);
+    assert(parse_fd_trampoline_path("/proc/self/fd/99999999999") == -1);
+}
+
 } // namespace
 
 int main()
@@ -352,6 +377,7 @@ int main()
     test_ui_position_to_gain_quadratic_taper();
     test_native_handle_validation();
     test_classify_decode_load();
+    test_parse_fd_trampoline_path();
     std::cout << "audiophile_native_core_tests: all tests passed\n";
     return 0;
 }

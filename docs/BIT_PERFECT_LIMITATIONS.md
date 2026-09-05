@@ -132,9 +132,22 @@ long listening sessions. We consider correctness more important than power.
 
 ## 7. `content://` URIs require file descriptors
 
-The engine resolves MediaStore `content://` URIs by calling
+The engine resolves `content://` URIs by calling
 `ContentResolver.openFileDescriptor` and handing FFmpeg the path
-`/proc/self/fd/<fd>`. This works on every real local file but **fails** for:
+`/proc/self/fd/<fd>`.
+
+**The native session never re-opens that path.** `ffmpeg_bridge.cpp` recognises
+the trampoline (`fd_trampoline_path.h`), `dup()`s the descriptor and reads
+through a custom `AVIOContext`. Opening the path instead makes the kernel
+re-open the underlying file under the app's uid, and MediaProvider's FUSE layer
+re-checks access from scratch: `READ_MEDIA_AUDIO` does not cover `.dsf`/`.dff`,
+so **every SAF-granted DSD file failed with `EACCES`** while MediaStore-indexed
+FLAC on the same volume opened fine. The open descriptor carries the SAF grant;
+the path does not. Reads use `pread` against a session-local cursor because one
+track can be opened by several sessions at once (tier-1 probe, tier-3 fallback,
+and the libusb sink's own decoder).
+
+Even through the descriptor, a load still **fails** for:
 
 - Cloud-backed MediaStore entries (Drive, OneDrive, iCloud sync).
 - DRM-wrapped tracks.

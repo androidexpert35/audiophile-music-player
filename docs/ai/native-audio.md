@@ -58,6 +58,14 @@ Key source files:
   delegate open/read/seek/close to this boundary.
 - `ffmpeg_audio_decoder.{h,cpp}` — thin `IAudioDecoder` adapter over `FfmpegSession`.
 - `ffmpeg_bridge.cpp` / `ffmpeg_bridge_stub.cpp` — full vs. stub JNI bridge (see below).
+- `fd_trampoline_path.h` — recognises the `/proc/self/fd/<n>` paths Kotlin produces
+  for `content://` tracks. Such a source is opened through a `dup()`ed descriptor and
+  a custom `AVIOContext` (`pread` + session-local cursor), **never** by re-opening the
+  path: a path re-open is re-checked by MediaProvider's FUSE layer under the app's uid,
+  where `READ_MEDIA_AUDIO` does not cover `.dsf`/`.dff` — that is what made every
+  SAF-granted DSD file fail with `EACCES` ("avformat_open_input: Permission denied")
+  while MediaStore FLAC on the same volume played. Do not "simplify" this back to a
+  path open. See [`/docs/BIT_PERFECT_LIMITATIONS.md`](../BIT_PERFECT_LIMITATIONS.md) §7.
 - `cpu_affinity_policy.{h,cpp}` — decode-load classification (host-testable) and
   CPU cluster pinning / priority for the decode thread.
 - `decoder_to_ring_bridge.{h,cpp}` — pump thread (decoder → ring buffer).

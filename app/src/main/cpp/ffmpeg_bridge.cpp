@@ -54,7 +54,12 @@
 #include <string>
 #include <vector>
 
-#include "cpu_affinity_policy.h"   // DecodeLoad + audio-thread pinning
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "cpu_affinity_policy.h"    // DecodeLoad + audio-thread pinning
+#include "fd_trampoline_path.h"     // /proc/self/fd/<n> recogniser for content:// URIs
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -167,6 +172,16 @@ struct Session {
     // Reusable workspace frame for pulling filtered output from the sink.
     // Allocated once in dsd_prep_build(); survives across the session lifetime.
     AVFrame         *filt_frame      = nullptr;
+
+    // ── Content-URI file-descriptor I/O ───────────────────────────────────
+    // Non-null / non-negative only when the session was opened from a
+    // `/proc/self/fd/<n>` trampoline path. The demuxer then reads through
+    // `avio_ctx` instead of re-opening the path, which is what keeps SAF-backed
+    // DSD documents readable — see `open_input_from_fd_path()`.
+    AVIOContext     *avio_ctx        = nullptr;
+    int              io_fd           = -1;      // dup() owned by this session
+    int64_t          io_pos          = 0;       // session-local read cursor
+    int64_t          io_size         = -1;      // cached st_size, -1 when unknown
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,10 +226,145 @@ static void free_session(Session *s) {
     if (s->fmt_ctx != nullptr) {
         avformat_close_input(&s->fmt_ctx);
     }
+    // Custom AVIO is never freed by avformat_close_input (AVFMT_FLAG_CUSTOM_IO),
+    // so the context, its probe buffer, and the dup()'d descriptor are released
+    // here — after the demuxer that reads through them is gone.
+    if (s->avio_ctx != nullptr) {
+        av_freep(&s->avio_ctx->buffer);
+        avio_context_free(&s->avio_ctx);
+    }
+    if (s->io_fd >= 0) {
+        close(s->io_fd);
+        s->io_fd = -1;
+    }
     if (s->spill_buf != nullptr) {
         av_free(s->spill_buf);
     }
     delete s;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Content-URI descriptor I/O
+//
+// Kotlin resolves `content://` tracks to a `/proc/self/fd/<n>` trampoline path.
+// Handing that path to FFmpeg's file protocol makes the kernel *re-open* the
+// underlying file under this app's uid, and MediaProvider's FUSE layer then
+// re-checks access from scratch: `READ_MEDIA_AUDIO` does not cover `.dsf` /
+// `.dff` (the platform has no DSD MIME entry), so every SAF-granted DSD
+// document failed with EACCES — "avformat_open_input: Permission denied" —
+// while MediaStore-indexed FLAC/WAV on the very same volume opened fine.
+//
+// The already-open descriptor carries the SAF grant, so the fix is to never
+// re-open the path: dup() the descriptor and feed the demuxer through a custom
+// AVIOContext. Reads use pread() against a session-local cursor so several
+// concurrent sessions on the same file description (tier-1 probe, tier-3
+// fallback, and the libusb sink's own decoder all open the same path string)
+// cannot corrupt each other's position.
+// ───────────────────────────────────────────────────────────────────────────
+
+static constexpr int FD_AVIO_BUFFER_BYTES = 65536;
+
+/** AVIO read callback: positional read against the session-local cursor. */
+static int fd_read_packet(void *opaque, uint8_t *buf, int buf_size) {
+    auto *s = static_cast<Session *>(opaque);
+    if (s == nullptr || s->io_fd < 0 || buf_size <= 0) return AVERROR(EINVAL);
+
+    ssize_t n;
+    do {
+        n = pread(s->io_fd, buf, static_cast<size_t>(buf_size), s->io_pos);
+    } while (n < 0 && errno == EINTR);
+
+    if (n < 0) return AVERROR(errno);
+    if (n == 0) return AVERROR_EOF;
+    s->io_pos += n;
+    return static_cast<int>(n);
+}
+
+/** AVIO seek callback: moves the session-local cursor and answers AVSEEK_SIZE. */
+static int64_t fd_seek(void *opaque, int64_t offset, int whence) {
+    auto *s = static_cast<Session *>(opaque);
+    if (s == nullptr || s->io_fd < 0) return AVERROR(EINVAL);
+
+    if ((whence & AVSEEK_SIZE) != 0) {
+        return s->io_size >= 0 ? s->io_size : AVERROR(ENOSYS);
+    }
+
+    int64_t target;
+    switch (whence & ~AVSEEK_FORCE) {
+        case SEEK_SET: target = offset;             break;
+        case SEEK_CUR: target = s->io_pos + offset; break;
+        case SEEK_END:
+            if (s->io_size < 0) return AVERROR(ENOSYS);
+            target = s->io_size + offset;
+            break;
+        default:       return AVERROR(EINVAL);
+    }
+    if (target < 0) return AVERROR(EINVAL);
+    s->io_pos = target;
+    return target;
+}
+
+/**
+ * Opens [s]'s demuxer through a duplicate of the descriptor named by [path].
+ *
+ * The format is probed from the bytes themselves (no URL hint is passed), which
+ * is what DSF / DSDIFF need anyway — the trampoline path carries no extension.
+ *
+ * @param s    Session receiving `fmt_ctx`, `avio_ctx`, and the dup()'d fd.
+ * @param fd   Descriptor number parsed from the trampoline path.
+ * @return `0` on success, or a negative AVERROR.
+ */
+static int open_input_from_fd(Session *s, int fd) {
+    const int dup_fd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (dup_fd < 0) return AVERROR(errno);
+    s->io_fd  = dup_fd;
+    s->io_pos = 0;
+
+    struct stat st = {};
+    s->io_size = (fstat(dup_fd, &st) == 0 && S_ISREG(st.st_mode))
+                 ? static_cast<int64_t>(st.st_size)
+                 : -1;
+
+    auto *buffer = static_cast<uint8_t *>(av_malloc(FD_AVIO_BUFFER_BYTES));
+    if (buffer == nullptr) return AVERROR(ENOMEM);
+
+    s->avio_ctx = avio_alloc_context(
+            buffer, FD_AVIO_BUFFER_BYTES, /*write_flag=*/0, s,
+            &fd_read_packet, /*write_packet=*/nullptr, &fd_seek);
+    if (s->avio_ctx == nullptr) {
+        av_free(buffer);
+        return AVERROR(ENOMEM);
+    }
+    s->avio_ctx->seekable = (s->io_size >= 0) ? AVIO_SEEKABLE_NORMAL : 0;
+
+    s->fmt_ctx = avformat_alloc_context();
+    if (s->fmt_ctx == nullptr) return AVERROR(ENOMEM);
+    s->fmt_ctx->pb     = s->avio_ctx;
+    s->fmt_ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+    return avformat_open_input(&s->fmt_ctx, nullptr, nullptr, nullptr);
+}
+
+/**
+ * Releases the descriptor-backed I/O state so the session can be retried with
+ * the ordinary path-based open.
+ *
+ * @param s Session whose `fmt_ctx`, `avio_ctx`, and dup()'d fd are discarded.
+ */
+static void reset_fd_io(Session *s) {
+    if (s->fmt_ctx != nullptr) {
+        avformat_close_input(&s->fmt_ctx);
+    }
+    if (s->avio_ctx != nullptr) {
+        av_freep(&s->avio_ctx->buffer);
+        avio_context_free(&s->avio_ctx);
+    }
+    if (s->io_fd >= 0) {
+        close(s->io_fd);
+        s->io_fd = -1;
+    }
+    s->io_pos  = 0;
+    s->io_size = -1;
 }
 
 // CPU affinity and scheduling policy for the decode thread lives in
@@ -1006,7 +1156,23 @@ FfmpegSession *ffmpeg_session_open(
         return nullptr;
     };
 
-    int ret = avformat_open_input(&s->fmt_ctx, path, nullptr, nullptr);
+    // `content://` sources arrive as a `/proc/self/fd/<n>` trampoline. Read through
+    // the descriptor rather than re-opening the path so SAF-granted documents —
+    // every DSD file in the library — are not rejected with EACCES by MediaProvider's
+    // FUSE access check. See open_input_from_fd() for the full rationale.
+    const int trampoline_fd = parse_fd_trampoline_path(path);
+    int ret = (trampoline_fd >= 0)
+              ? open_input_from_fd(s, trampoline_fd)
+              : avformat_open_input(&s->fmt_ctx, path, nullptr, nullptr);
+    if (ret < 0 && trampoline_fd >= 0) {
+        // Descriptor route failed (dup/alloc error, or a container the demuxer
+        // could not probe from bytes alone). The path re-open still works for
+        // everything MediaProvider does grant by path, so it stays as a
+        // last resort rather than failing the load outright.
+        ALOGW("ffmpeg_session_open: descriptor route failed (%d) — retrying path open", ret);
+        reset_fd_io(s);
+        ret = avformat_open_input(&s->fmt_ctx, path, nullptr, nullptr);
+    }
     if (ret < 0) return report(ret, "avformat_open_input");
 
     ret = avformat_find_stream_info(s->fmt_ctx, nullptr);
