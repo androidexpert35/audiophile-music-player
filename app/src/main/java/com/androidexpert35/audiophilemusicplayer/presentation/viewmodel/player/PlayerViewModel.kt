@@ -2,7 +2,6 @@ package com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.player
 
 import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
-import com.androidexpert35.audiophilemusicplayer.R
 import com.androidexpert35.audiophilemusicplayer.domain.model.audio.AudioTelemetry
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.toUserMessage
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ClearQueueUseCase
@@ -14,7 +13,6 @@ import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObservePlaybackS
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ObserveQueueStateUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PausePlaybackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.PlayTrackUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReleaseUsbAudioUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ResumePlaybackUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SeekToPositionUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.SetRepeatModeUseCase
@@ -65,7 +63,6 @@ import javax.inject.Inject
  *
  * @property playTrackUseCase Starts playback of a track within a queue.
  * @property pausePlaybackUseCase Pauses the current track.
- * @property releaseUsbAudioUseCase Pauses and returns the exclusive DAC to Android.
  * @property resumePlaybackUseCase Resumes from the paused position.
  * @property seekToPositionUseCase Seeks to a specific position.
  * @property skipNextUseCase Advances to the next track.
@@ -86,7 +83,6 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val playTrackUseCase: PlayTrackUseCase,
     private val pausePlaybackUseCase: PausePlaybackUseCase,
-    private val releaseUsbAudioUseCase: ReleaseUsbAudioUseCase,
     private val resumePlaybackUseCase: ResumePlaybackUseCase,
     private val seekToPositionUseCase: SeekToPositionUseCase,
     private val skipNextUseCase: SkipNextUseCase,
@@ -212,8 +208,6 @@ class PlayerViewModel @Inject constructor(
         when (event) {
             is PlayerUiEvent.Play -> playTrack(event)
             is PlayerUiEvent.Pause -> executePlayPauseCommand { pausePlaybackUseCase() }
-            PlayerUiEvent.ReleaseUsbAudio -> releaseUsbAudio(exitAfterRelease = false)
-            PlayerUiEvent.ExitAndReleaseUsbAudio -> releaseUsbAudio(exitAfterRelease = true)
             is PlayerUiEvent.Resume -> executePlayPauseCommand { resumePlaybackUseCase() }
             is PlayerUiEvent.SkipNext -> executePlaybackCommand { skipNextUseCase() }
             is PlayerUiEvent.SkipPrevious -> executePlaybackCommand { skipPreviousUseCase() }
@@ -361,34 +355,6 @@ class PlayerViewModel @Inject constructor(
                     val message = error?.toUserMessage() ?: PlaybackStrings.playbackCommandFailed
                     emitEffect(PlayerUiEffect.PlaybackError(message))
                 }
-        }
-    }
-
-    /** Releases the DAC and optionally closes the application after teardown succeeds. */
-    private fun releaseUsbAudio(exitAfterRelease: Boolean) {
-        viewModelScope.launch(exceptionHandler) {
-            when (val result = releaseUsbAudioUseCase()) {
-                is Resource.Success -> {
-                    if (exitAfterRelease) {
-                        emitEffect(PlayerUiEffect.ExitApplication)
-                    } else {
-                        emitEffect(
-                            PlayerUiEffect.UsbAudioReleased(
-                                resolveString(R.string.player_dac_released)
-                            )
-                        )
-                    }
-                }
-
-                is Resource.Error -> {
-                    emitEffect(
-                        PlayerUiEffect.PlaybackError(
-                            result.data?.toUserMessage()
-                                ?: resolveString(R.string.player_dac_release_failed)
-                        )
-                    )
-                }
-            }
         }
     }
 

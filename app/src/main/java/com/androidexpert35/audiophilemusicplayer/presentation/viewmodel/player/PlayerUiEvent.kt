@@ -20,12 +20,6 @@ sealed interface PlayerUiEvent {
     /** Pause the currently playing track. */
     data object Pause : PlayerUiEvent
 
-    /** Pauses playback and explicitly returns the USB DAC to Android. */
-    data object ReleaseUsbAudio : PlayerUiEvent
-
-    /** Releases USB audio before closing the application task. */
-    data object ExitAndReleaseUsbAudio : PlayerUiEvent
-
     /** Resume playback from the paused position. */
     data object Resume : PlayerUiEvent
 

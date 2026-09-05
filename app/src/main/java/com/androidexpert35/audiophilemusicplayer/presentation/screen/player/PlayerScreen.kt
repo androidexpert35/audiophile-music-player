@@ -99,7 +99,7 @@ fun PlayerScreen(
     val lyricsState: State<LyricsState> =
         viewModel.lyricsFlow.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(viewModel) {
         viewModel.uiEffect.collect { effect ->
             when (effect) {
                 is PlayerUiEffect.PlaybackError -> snackbarHostState.showSnackbar(effect.message)
