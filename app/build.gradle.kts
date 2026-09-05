@@ -36,9 +36,9 @@ android {
         // Bump these three values for each release; versionCode is derived automatically.
         val major = 1
         val minor = 1
-        val patch = 5
+        val patch = 8
         versionCode = major * 10000 + minor * 100 + patch   // e.g. 1.2.3 → 10203
-        versionName = "$major.$minor.$patch Beta 1"
+        versionName = "$major.$minor.$patch RC"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
