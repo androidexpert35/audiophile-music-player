@@ -35,5 +35,7 @@ sealed interface OnboardingUiEvent {
 
     /** Retries the scan-and-index flow after an indexing failure. */
     data object RetryIndexing : OnboardingUiEvent
+    /** Prepares a diagnostic attachment and opens an email draft for user review. */
+    data object ReportBug : OnboardingUiEvent
 }
 

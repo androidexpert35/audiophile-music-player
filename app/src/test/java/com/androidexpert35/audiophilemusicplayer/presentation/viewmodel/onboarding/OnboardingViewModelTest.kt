@@ -4,10 +4,12 @@ import com.androidexpert35.audiophilemusicplayer.FakeNavigationManager
 import com.androidexpert35.audiophilemusicplayer.MainDispatcherRule
 import com.androidexpert35.audiophilemusicplayer.TestStringResolver
 import com.androidexpert35.audiophilemusicplayer.TestUiErrorMapper
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryResourceError
 import com.androidexpert35.audiophilemusicplayer.domain.model.indexing.MediaIndexingProgress
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportLibraryBugUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
@@ -15,6 +17,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -38,7 +42,32 @@ class OnboardingViewModelTest {
     private val isMediaLibraryIndexedUseCase = mockk<IsMediaLibraryIndexedUseCase>()
     private val hasMusicFoldersUseCase = mockk<HasMusicFoldersUseCase>()
     private val addMusicFolderUseCase = mockk<AddMusicFolderUseCase>()
+    private val reportLibraryBugUseCase = mockk<ReportLibraryBugUseCase>()
     private val navigationManager = FakeNavigationManager()
+
+    @Test
+    fun `reporting keeps the original dialog and prevents duplicate drafts`() = runTest {
+        val failure = LibraryResourceError.SCAN_READ_FAILED
+        every { scanAndIndexMediaUseCase.invoke() } returns flowOf(Resource.Error(failure))
+        val completion = CompletableDeferred<Resource<Unit>>()
+        coEvery { reportLibraryBugUseCase.invoke(failure) } coAnswers { completion.await() }
+        val viewModel = createViewModel()
+        viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.showErrorDialog)
+        assertEquals(failure, viewModel.uiState.value.error?.type)
+        viewModel.onEvent(OnboardingUiEvent.ReportBug)
+        viewModel.onEvent(OnboardingUiEvent.ReportBug)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.data?.preparingReport == true)
+        completion.complete(Resource.Error(ResourceError.ServiceError("No email app installed", null)))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { reportLibraryBugUseCase.invoke(failure) }
+        assertEquals("No email app installed", viewModel.uiState.value.data?.reportFailure)
+        assertEquals(false, viewModel.uiState.value.data?.preparingReport)
+        assertEquals(failure, viewModel.uiState.value.error?.type)
+        assertTrue(viewModel.uiState.value.showErrorDialog)
+    }
 
     @Test
     fun `given missing permission when initialized then state requires permission`() = runTest {
@@ -154,7 +183,7 @@ class OnboardingViewModelTest {
             viewModel.uiState.value.data?.state is OnboardingState.RequiresMusicFolder
         )
         assertEquals(
-            "grant lost",
+            TestUiErrorMapper.mapResourceError(LibraryResourceError.FOLDER_FAILED).message,
             (viewModel.uiState.value.data?.state as OnboardingState.RequiresMusicFolder).errorMessage
         )
     }
@@ -162,7 +191,7 @@ class OnboardingViewModelTest {
     @Test
     fun `given scan failure when retry tapped then saved folders are scanned without another grant`() = runTest {
         every { scanAndIndexMediaUseCase.invoke() } returnsMany listOf(
-            flowOf(Resource.Error(ResourceError.StorageError("SD card unavailable"))),
+            flowOf(Resource.Error(LibraryResourceError.STORAGE_UNAVAILABLE)),
             flowOf(Resource.Success(MediaIndexingProgress(1f, "song.flac", 1, 1)))
         )
         val viewModel = createViewModel()
@@ -170,14 +199,14 @@ class OnboardingViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            OnboardingState.IndexingFailed("SD card unavailable"),
+            OnboardingState.IndexingFailed(TestUiErrorMapper.mapResourceError(LibraryResourceError.STORAGE_UNAVAILABLE).message, true),
             viewModel.uiState.value.data?.state
         )
         viewModel.dismissErrorPopup()
         viewModel.onEvent(OnboardingUiEvent.MusicFolderPicked(null))
         advanceUntilIdle()
         assertEquals(
-            OnboardingState.IndexingFailed("SD card unavailable"),
+            OnboardingState.IndexingFailed(TestUiErrorMapper.mapResourceError(LibraryResourceError.STORAGE_UNAVAILABLE).message, true),
             viewModel.uiState.value.data?.state
         )
 
@@ -198,7 +227,7 @@ class OnboardingViewModelTest {
         viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
         advanceUntilIdle()
         assertEquals(
-            OnboardingState.IndexingFailed("Provider unavailable"),
+            OnboardingState.IndexingFailed(TestUiErrorMapper.mapResourceError(LibraryResourceError.SCAN_FAILED).message),
             viewModel.uiState.value.data?.state
         )
     }
@@ -263,6 +292,7 @@ class OnboardingViewModelTest {
         isMediaLibraryIndexedUseCase = isMediaLibraryIndexedUseCase,
         hasMusicFoldersUseCase = hasMusicFoldersUseCase,
         addMusicFolderUseCase = addMusicFolderUseCase,
+        reportLibraryBugUseCase = reportLibraryBugUseCase,
         navigationManager = navigationManager,
         stringResolver = TestStringResolver,
         uiErrorMapper = TestUiErrorMapper

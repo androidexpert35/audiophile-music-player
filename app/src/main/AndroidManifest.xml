@@ -24,6 +24,13 @@
     <!-- Deezer remote metadata enrichment (artist images, album covers) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
+
     <application
         android:name=".AudiophileMusicPlayerApp"
         android:allowBackup="true"
@@ -36,6 +43,14 @@
         android:theme="@style/Theme.AudiophileMusicPlayer">
 
         <profileable android:shell="true" />
+        <provider
+            android:name=".data.repository.BugReportFileProvider"
+            android:authorities="${applicationId}.bugreports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/bug_report_paths" />
+        </provider>
 
         <activity
             android:name=".presentation.activity.MainActivity"

@@ -35,6 +35,11 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+    /** Binds preparation of user-initiated email diagnostics. */
+    @Binds
+    abstract fun bindBugReportRepository(
+        impl: com.androidexpert35.audiophilemusicplayer.data.repository.BugReportRepositoryImpl
+    ): com.androidexpert35.audiophilemusicplayer.domain.repository.BugReportRepository
 
     /**
      * Binds [MusicRepositoryImpl] as the singleton [MusicRepository] provider.

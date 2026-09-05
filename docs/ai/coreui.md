@@ -157,7 +157,7 @@ interface ResourceError {
 ```
 
 Use CoreUI `ResourceError` as the domain-level error contract. Audiophile extends the
-open interface only with `PlaybackResourceError`, which is mapped by
+open interface with `PlaybackResourceError` and the stable coded `LibraryResourceError`, mapped by
 `AudiophileUiErrorMapper`.
 
 ---

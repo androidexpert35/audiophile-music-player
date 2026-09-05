@@ -84,6 +84,23 @@ catalogue and playback session must survive upgrades.
 
 ## User-granted music folders (`MusicFolderRegistry`)
 
+Folder additions return `Resource<Unit>` with stable `LibraryResourceError` codes:
+1001 unsupported location, 1002 durable permission denied, 1003 settings write failed,
+1004 storage unavailable, 1005 scan I/O failure, 1006 scan permission denied,
+1007 unclassified scan failure, 1008 unclassified folder failure. Only 1003–1005 recommend
+repeating the same operation. Do not replace these with exception-message strings.
+
+`BugReportRepositoryImpl` prepares user-initiated email drafts to
+`developer@antoniocirielli.it`, using private `bug_reports/` cache attachments exposed by
+`BugReportFileProvider` with temporary read permission. It never sends email itself.
+Attachments include app/device versions and bounded logcat output for the current process
+and the `LibraryDiagnostics` tag only. That tag writes codes, exception classes and stack
+locations, never exception messages, document URIs or track metadata. Logcat capture has a
+two-second timeout and may be unavailable on OEM builds; the report remains usable without it.
+No `READ_LOGS` or storage permission is added. Attachments expire on a later report preparation
+after seven days so recent email drafts retain their attachment. Missing email apps and
+preparation failures are returned as errors rather than silently dropped.
+
 **The library scan is scoped to folders the user picks — never to the whole device.**
 This is load-bearing for two separate reasons and must not be relaxed:
 

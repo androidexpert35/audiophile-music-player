@@ -1,4 +1,19 @@
 <resources>
+    <string name="bug_report_preparing">Preparing email attachment…</string>
+    <string name="bug_report_no_email">No compatible email app was found. Install or enable an email app, then tap Report bug again. You can also email the error code to developer@antoniocirielli.it.</string>
+    <string name="bug_report_failed">The report could not be prepared or the email app could not be opened. Tap Report bug to try again, or email the error code to developer@antoniocirielli.it.</string>
+    <string name="bug_report_email_body">Hello, I encountered error %1$d while setting up my music library.\n\nWhat I was doing:\n\n\nThe attachment includes the error code, app and device versions, and recent library diagnostics from this app. Please review this email and press Send to submit the report.</string>
+    <string name="library_error_title">Error: %1$d</string>
+    <string name="library_error_unsupported_folder">This location cannot be scanned. Choose a music folder on internal storage or an SD card from the system folder picker.</string>
+    <string name="library_error_folder_permission">Access to this folder was not granted. Choose the folder again and allow access when asked.</string>
+    <string name="library_error_folder_save">Your folder selection could not be saved. Check that your phone has free space, then try again.</string>
+    <string name="library_error_storage_unavailable">Your music storage is not available. Reconnect your SD card or USB drive, then try again.</string>
+    <string name="library_error_scan_read">Some music could not be read. Check that the storage is connected and accessible, then try again.</string>
+    <string name="library_error_scan_permission">Access to your music was denied. Check the app’s audio permission and select your music folder again to restore access.</string>
+    <string name="library_error_scan_failed">The library scan could not finish. Please report this bug so we can investigate.</string>
+    <string name="library_error_folder_failed">This folder could not be added. You can choose another music folder or report this bug so we can investigate.</string>
+    <string name="bug_report_action">Report bug</string>
+    <string name="error_retry_action">Retry</string>
     <string name="app_name">Audiophile Music Player</string>
 
     <!-- Common -->

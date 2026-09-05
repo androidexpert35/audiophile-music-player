@@ -19,10 +19,12 @@ import com.androidexpert35.audiophilemusicplayer.data.scanner.M3uFileScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MediaStoreScanner
 import com.androidexpert35.audiophilemusicplayer.data.scanner.ScannedAudioFile
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryResourceError
 import com.androidexpert35.audiophilemusicplayer.domain.model.indexing.MediaIndexingProgress
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MediaIndexRepository
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -113,11 +116,10 @@ class MediaIndexRepositoryImpl @Inject constructor(
                 // there would destroy a good catalogue over a temporary condition, so the
                 // scan aborts and leaves the index untouched.
                 if (folders.isEmpty() && musicFolderRegistry.hasStoredFolders()) {
+                    LibraryDiagnostics.record(LibraryResourceError.STORAGE_UNAVAILABLE)
                     trySend(
                         Resource.Error(
-                            ResourceError.StorageError(
-                                "Your music folders are not reachable right now. Reconnect the storage holding them, or add a folder again."
-                            )
+                            LibraryResourceError.STORAGE_UNAVAILABLE
                         )
                     )
                     return@launch
@@ -207,12 +209,16 @@ class MediaIndexRepositoryImpl @Inject constructor(
                         )
                     )
                 )
-            } catch (throwable: Throwable) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Exception) {
                 trySend(
                     Resource.Error(
-                        ResourceError.StorageError(
-                            throwable.message ?: "Failed to index local audio library"
-                        )
+                        when (throwable) {
+                            is SecurityException -> LibraryResourceError.SCAN_PERMISSION_DENIED
+                            is IOException -> LibraryResourceError.SCAN_READ_FAILED
+                            else -> LibraryResourceError.SCAN_FAILED
+                        }.also { LibraryDiagnostics.record(it, throwable) }
                     )
                 )
             } finally {

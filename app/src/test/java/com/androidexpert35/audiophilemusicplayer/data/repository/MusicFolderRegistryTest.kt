@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MusicFolderScopeResolver
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryResourceError
+import com.tony.coreui.domain.resource.Resource
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -15,6 +17,7 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +25,27 @@ import org.junit.Test
 /** Verifies one-time folder-selection upgrades enforced by the scan-scope registry. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MusicFolderRegistryTest {
+
+    @Test
+    fun `denied persistent grant returns a support code instead of leaking the provider message`() = runTest {
+        val resolver = mockk<ContentResolver>()
+        val uri = mockk<Uri>()
+        every { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } throws
+            SecurityException("content://private/music/secret.flac")
+        val registry = MusicFolderRegistry(mockk(), resolver, mockk(), UnconfinedTestDispatcher(testScheduler))
+        assertEquals(Resource.Error(LibraryResourceError.FOLDER_PERMISSION_DENIED), registry.add(uri))
+    }
+
+    @Test
+    fun `unsupported location returns its own support code and releases the new grant`() = runTest {
+        val resolver = mockk<ContentResolver>(relaxed = true)
+        val scopeResolver = mockk<MusicFolderScopeResolver>()
+        val uri = mockk<Uri>()
+        every { scopeResolver.resolve(uri) } returns null
+        val registry = MusicFolderRegistry(mockk(), resolver, scopeResolver, UnconfinedTestDispatcher(testScheduler))
+        assertEquals(Resource.Error(LibraryResourceError.UNSUPPORTED_FOLDER), registry.add(uri))
+        verify { resolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+    }
 
     @Test
     fun `given legacy folder selection when folders checked then grant is retired and onboarding is required`() =

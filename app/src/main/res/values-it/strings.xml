@@ -1,4 +1,19 @@
 <resources>
+    <string name="bug_report_preparing">Preparazione dell’allegato email…</string>
+    <string name="bug_report_no_email">Nessuna app email compatibile trovata. Installa o abilita un’app email, poi premi di nuovo Segnala bug. Puoi anche inviare il codice di errore a developer@antoniocirielli.it.</string>
+    <string name="bug_report_failed">Non è stato possibile preparare il report o aprire l’app email. Premi Segnala bug per riprovare, oppure invia il codice di errore a developer@antoniocirielli.it.</string>
+    <string name="bug_report_email_body">Ciao, ho riscontrato l’errore %1$d durante la configurazione della libreria musicale.\n\nCosa stavo facendo:\n\n\nL’allegato contiene il codice di errore, le versioni dell’app e del dispositivo e la diagnostica recente della libreria di questa app. Controlla questa email e premi Invia per inviare la segnalazione.</string>
+    <string name="library_error_title">Errore: %1$d</string>
+    <string name="library_error_unsupported_folder">Questa posizione non può essere scansionata. Scegli una cartella musicale nella memoria interna o su una scheda SD dal selettore di cartelle di sistema.</string>
+    <string name="library_error_folder_permission">L’accesso a questa cartella non è stato concesso. Selezionala di nuovo e autorizza l’accesso quando richiesto.</string>
+    <string name="library_error_folder_save">Non è stato possibile salvare la cartella selezionata. Verifica che il telefono abbia spazio libero, poi riprova.</string>
+    <string name="library_error_storage_unavailable">La memoria che contiene la musica non è disponibile. Ricollega la scheda SD o l’unità USB, poi riprova.</string>
+    <string name="library_error_scan_read">Non è stato possibile leggere parte della musica. Verifica che la memoria sia collegata e accessibile, poi riprova.</string>
+    <string name="library_error_scan_permission">L’accesso alla musica è stato negato. Controlla il permesso audio dell’app e seleziona di nuovo la cartella musicale per ripristinare l’accesso.</string>
+    <string name="library_error_scan_failed">La scansione della libreria non è stata completata. Segnala questo bug per aiutarci a individuare il problema.</string>
+    <string name="library_error_folder_failed">Non è stato possibile aggiungere questa cartella. Puoi scegliere un’altra cartella musicale o segnalare il bug per aiutarci a individuare il problema.</string>
+    <string name="bug_report_action">Segnala bug</string>
+    <string name="error_retry_action">Riprova</string>
     <string name="onboarding_scan_failed_title">Scansione della libreria interrotta</string>
     <string name="onboarding_scan_failed_message">Riprova la scansione delle cartelle salvate. Se la musica è su una scheda SD o unità USB, verifica che sia collegata e accessibile. Puoi anche scegliere un’altra cartella musicale.</string>
     <string name="app_name">Audiophile Music Player</string>

@@ -28,8 +28,9 @@ sealed interface OnboardingState {
      * Keeps a failed scan actionable without requiring another folder grant.
      *
      * @property message Explanation retained until the user retries or adds a folder.
+     * @property canRetry Whether repeating the scan may resolve the failure.
      */
-    data class IndexingFailed(val message: String) : OnboardingState
+    data class IndexingFailed(val message: String, val canRetry: Boolean = false) : OnboardingState
 
     /**
      * Indicates that the app is currently indexing local audio files.

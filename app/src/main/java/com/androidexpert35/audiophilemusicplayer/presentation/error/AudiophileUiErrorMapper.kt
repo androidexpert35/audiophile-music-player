@@ -1,6 +1,7 @@
 package com.androidexpert35.audiophilemusicplayer.presentation.error
 
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryResourceError
 import com.androidexpert35.audiophilemusicplayer.domain.model.common.PlaybackResourceError
 import com.tony.coreui.data.strings.StringResolver
 import com.tony.coreui.domain.resource.ResourceError
@@ -31,6 +32,21 @@ class AudiophileUiErrorMapper @Inject constructor(
         resource: ResourceError?,
         retryAction: (() -> Unit)?
     ): UIError = when (resource) {
+        is LibraryResourceError -> error(
+            title = stringResolver.get(R.string.library_error_title, resource.code),
+            message = stringResolver.get(when (resource) {
+                LibraryResourceError.UNSUPPORTED_FOLDER -> R.string.library_error_unsupported_folder
+                LibraryResourceError.FOLDER_PERMISSION_DENIED -> R.string.library_error_folder_permission
+                LibraryResourceError.FOLDER_SAVE_FAILED -> R.string.library_error_folder_save
+                LibraryResourceError.STORAGE_UNAVAILABLE -> R.string.library_error_storage_unavailable
+                LibraryResourceError.SCAN_READ_FAILED -> R.string.library_error_scan_read
+                LibraryResourceError.SCAN_PERMISSION_DENIED -> R.string.library_error_scan_permission
+                LibraryResourceError.SCAN_FAILED -> R.string.library_error_scan_failed
+                LibraryResourceError.FOLDER_FAILED -> R.string.library_error_folder_failed
+            }),
+            type = resource,
+            retryAction = retryAction.takeIf { resource.isRecoverable }
+        )
         is PlaybackResourceError -> error(
             title = stringResolver.get(R.string.error_playback_title),
             message = resource.message.ifBlank {

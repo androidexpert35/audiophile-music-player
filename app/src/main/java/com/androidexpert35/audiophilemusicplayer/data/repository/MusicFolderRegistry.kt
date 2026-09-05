@@ -8,6 +8,8 @@ import androidx.core.net.toUri
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MusicFolderScope
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MusicFolderScopeResolver
 import com.androidexpert35.audiophilemusicplayer.di.IoDispatcher
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryResourceError
+import com.tony.coreui.domain.resource.Resource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -107,24 +109,26 @@ class MusicFolderRegistry @Inject constructor(
      * ever walked twice.
      *
      * @param treeUri Document-tree URI returned by the system folder chooser.
-     * @return `true` when the folder is durably part of the scan scope, `false` when the
-     *   grant could not be taken or the preference could not be written.
+     * @return Success when saved, or a stable failure distinguishing location, grant,
+     *   and settings-write problems for user support.
      */
-    suspend fun add(treeUri: Uri): Boolean = withContext(ioDispatcher) {
+    suspend fun add(treeUri: Uri): Resource<Unit> = withContext(ioDispatcher) {
         val takeSucceeded = runCatching {
             contentResolver.takePersistableUriPermission(
                 treeUri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
+        }.onFailure {
+            LibraryDiagnostics.record(LibraryResourceError.FOLDER_PERMISSION_DENIED, it)
         }.isSuccess
-        if (!takeSucceeded) return@withContext false
+        if (!takeSucceeded) return@withContext Resource.Error(LibraryResourceError.FOLDER_PERMISSION_DENIED)
 
         // Providers outside external storage (cloud shortcuts, some Downloads roots) do not
         // expose a volume-addressable document ID, so MediaStore could never be filtered to
         // them. Give the grant straight back rather than storing a folder that cannot scan.
         val addedScope = scopeResolver.resolve(treeUri) ?: run {
             releaseGrant(treeUri)
-            return@withContext false
+            return@withContext Resource.Error(LibraryResourceError.UNSUPPORTED_FOLDER)
         }
         val storedUris = storedUriStrings()
         val storedScopes = storedUris.mapNotNull { uri -> resolveStoredScope(uri) }
@@ -133,17 +137,28 @@ class MusicFolderRegistry @Inject constructor(
         // above is released again unless this exact URI is the covering entry itself.
         if (storedScopes.any { stored -> stored.covers(addedScope) }) {
             if (treeUri.toString() !in storedUris) releaseGrant(treeUri)
-            return@withContext true
+            // A failed commit still updates SharedPreferences in memory. Recommit on
+            // retry rather than mistaking an in-memory selection for durable success.
+            return@withContext if (writeUriStrings(storedUris)) Resource.Success(Unit)
+                else Resource.Error(LibraryResourceError.FOLDER_SAVE_FAILED)
         }
 
         // Replace any stored sub-folder of the new grant, releasing its now-redundant
         // permission so the app does not retain access it no longer uses.
         val supersededScopes = storedScopes.filter { stored -> addedScope.covers(stored) }
-        supersededScopes.forEach { superseded -> releaseGrant(superseded.treeUri) }
 
         val supersededUris = supersededScopes.map { it.treeUri.toString() }.toSet()
         val updatedUris = storedUris - supersededUris + treeUri.toString()
-        writeUriStrings(updatedUris)
+        if (writeUriStrings(updatedUris)) {
+            supersededScopes.forEach { superseded -> releaseGrant(superseded.treeUri) }
+            Resource.Success(Unit)
+        } else {
+            Resource.Error(LibraryResourceError.FOLDER_SAVE_FAILED)
+        }
+    }.also { result ->
+        (result as? Resource.Error)?.data?.let { error ->
+            if (error is LibraryResourceError) LibraryDiagnostics.record(error)
+        }
     }
 
     /**

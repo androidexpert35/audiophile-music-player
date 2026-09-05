@@ -58,6 +58,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidexpert35.audiophilemusicplayer.R
+import com.androidexpert35.audiophilemusicplayer.presentation.screen.onboarding.components.LibraryErrorDialog
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.AudiophileMusicPlayerTheme
 import com.androidexpert35.audiophilemusicplayer.presentation.theme.MotionTokens
 import com.androidexpert35.audiophilemusicplayer.presentation.viewmodel.onboarding.OnboardingState
@@ -113,7 +114,19 @@ fun OnboardingScreen(
         }
     }
 
-    AppBaseScreen(uiState = uiState, onErrorDialogDismiss = viewModel::dismissErrorPopup) { model ->
+    AppBaseScreen(
+        uiState = uiState,
+        onErrorDialogDismiss = viewModel::dismissErrorPopup,
+        errorDialog = { error, dismiss ->
+            LibraryErrorDialog(
+                error = error,
+                preparingReport = uiState.data?.preparingReport == true,
+                reportFailure = uiState.data?.reportFailure,
+                onReportBug = { viewModel.onEvent(OnboardingUiEvent.ReportBug) },
+                onDismiss = dismiss,
+            )
+        }
+    ) { model ->
         OnboardingContent(
             model = model,
             onRequestPermission = {
@@ -236,12 +249,10 @@ private fun OnboardingContent(
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.error
                             )
-                            Text(
-                                text = stringResource(R.string.onboarding_scan_failed_message),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Button(onClick = onRetryIndexing, modifier = Modifier.fillMaxWidth()) {
-                                Text(stringResource(R.string.onboarding_retry_action))
+                            if (state.canRetry) {
+                                Button(onClick = onRetryIndexing, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.onboarding_retry_action))
+                                }
                             }
                             Button(onClick = onAddMusicFolder, modifier = Modifier.fillMaxWidth()) {
                                 Text(stringResource(R.string.onboarding_folder_action))

@@ -2,10 +2,12 @@ package com.androidexpert35.audiophilemusicplayer.data.repository
 
 import androidx.core.net.toUri
 import com.androidexpert35.audiophilemusicplayer.data.scanner.MusicFolderScope
+import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryResourceError
 import com.androidexpert35.audiophilemusicplayer.domain.model.library.MusicFolder
 import com.androidexpert35.audiophilemusicplayer.domain.repository.MusicFolderRepository
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -35,19 +37,16 @@ class MusicFolderRepositoryImpl @Inject constructor(
     override suspend fun addMusicFolder(folderId: String): Resource<Unit> {
         val treeUri = runCatching { folderId.toUri() }.getOrNull()
             ?: return Resource.Error(
-                ResourceError.StorageError("That location could not be read as a folder.")
+                LibraryResourceError.UNSUPPORTED_FOLDER
             )
 
-        val added = runCatching { registry.add(treeUri) }.getOrDefault(false)
-        return if (added) {
-            Resource.Success(Unit)
-        } else {
-            Resource.Error(
-                ResourceError.StorageError(
-                    "Audiophile could not keep access to that folder. " +
-                        "Choose a folder on internal storage or an SD card rather than a cloud or shortcut location."
-                )
-            )
+        return try {
+            registry.add(treeUri)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            LibraryDiagnostics.record(LibraryResourceError.FOLDER_FAILED, failure)
+            Resource.Error(LibraryResourceError.FOLDER_FAILED)
         }
     }
 
