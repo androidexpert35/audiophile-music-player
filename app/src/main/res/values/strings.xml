@@ -1,4 +1,6 @@
 <resources>
+    <string name="bug_report_session_description">Report a problem by email. App and device details and errors recorded during the current session will be attached. You can review the email before sending it.</string>
+    <string name="bug_report_session_email_body">Hello, I would like to report a problem with Audiophile.\n\nWhat happened:\n\nSteps to reproduce:\n\nExpected behavior:\n\nThe attachment contains app and device details and errors recorded during the current app session.</string>
     <string name="bug_report_preparing">Preparing email attachment…</string>
     <string name="bug_report_no_email">No compatible email app was found. Install or enable an email app, then tap Report bug again. You can also email the error code to developer@antoniocirielli.it.</string>
     <string name="bug_report_failed">The report could not be prepared or the email app could not be opened. Tap Report bug to try again, or email the error code to developer@antoniocirielli.it.</string>

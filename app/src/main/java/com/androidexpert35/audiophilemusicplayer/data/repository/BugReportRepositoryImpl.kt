@@ -34,7 +34,7 @@ class BugReportRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : BugReportRepository {
-    override suspend fun openEmail(error: LibraryResourceError): Resource<Unit> = withContext(ioDispatcher) {
+    override suspend fun openEmail(error: LibraryResourceError?): Resource<Unit> = withContext(ioDispatcher) {
         try {
             val emailPackages = context.packageManager.queryIntentActivities(
                 Intent(Intent.ACTION_SENDTO, "mailto:".toUri()),
@@ -48,12 +48,13 @@ class BugReportRepositoryImpl @Inject constructor(
                 ?.forEach { it.delete() }
             val report = File(directory, "audiophile-${UUID.randomUUID()}.txt")
             val details = buildString {
-                appendLine("Audiophile library bug report")
-                appendLine("Error: ${error.code} (${error.name})")
+                appendLine("Audiophile bug report")
+                error?.let { appendLine("Error: ${it.code} (${it.name})") }
                 appendLine("App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                 appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
                 appendLine("Android: ${Build.VERSION.RELEASE}; SDK: ${Build.VERSION.SDK_INT}")
                 appendLine()
+                appendLine(SessionDiagnostics.snapshot())
                 appendLine("App library diagnostics (current process only):")
                 append(captureLogcat())
             }
@@ -64,8 +65,9 @@ class BugReportRepositoryImpl @Inject constructor(
                     type = "text/plain"
                     setPackage(packageName)
                     putExtra(Intent.EXTRA_EMAIL, arrayOf(SUPPORT_EMAIL))
-                    putExtra(Intent.EXTRA_SUBJECT, "Audiophile — Error: ${error.code}")
-                    putExtra(Intent.EXTRA_TEXT, context.getString(R.string.bug_report_email_body, error.code))
+                    putExtra(Intent.EXTRA_SUBJECT, error?.let { "Audiophile — Error: ${it.code}" } ?: "Audiophile — Bug report")
+                    putExtra(Intent.EXTRA_TEXT, error?.let { context.getString(R.string.bug_report_email_body, it.code) }
+                        ?: context.getString(R.string.bug_report_session_email_body))
                     putExtra(Intent.EXTRA_STREAM, uri)
                     clipData = ClipData.newRawUri("Diagnostics", uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

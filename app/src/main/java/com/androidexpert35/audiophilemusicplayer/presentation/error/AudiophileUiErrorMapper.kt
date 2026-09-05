@@ -13,7 +13,8 @@ import javax.inject.Inject
  * Converts CoreUI and Audiophile failures into localized Audiophile error copy.
  */
 class AudiophileUiErrorMapper @Inject constructor(
-    private val stringResolver: StringResolver
+    private val stringResolver: StringResolver,
+    private val sessionDiagnostics: com.androidexpert35.audiophilemusicplayer.domain.repository.SessionDiagnosticsRepository
 ) : UiErrorMapper {
 
     override fun map(errorObject: Any, retryAction: (() -> Unit)?): UIError = when (errorObject) {
@@ -131,5 +132,5 @@ class AudiophileUiErrorMapper @Inject constructor(
         type = type,
         retryAction = retryAction,
         metadata = metadata
-    )
+    ).also { type?.let(sessionDiagnostics::record) }
 }

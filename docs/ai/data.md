@@ -101,6 +101,13 @@ No `READ_LOGS` or storage permission is added. Attachments expire on a later rep
 after seven days so recent email drafts retain their attachment. Missing email apps and
 preparation failures are returned as errors rather than silently dropped.
 
+Reports also include `SessionDiagnostics`, a synchronized in-memory ring of the latest 200
+handled errors from the current app process. Library diagnostics and the shared UI error
+mapper feed it, so playback and other surfaced failures are included as well. It records
+timestamps, types, stable codes and stack locations, never exception messages. It resets
+on process restart, explicitly labels an empty session and counts omitted older entries.
+It is not a complete capture of native or silently swallowed exceptions.
+
 **The library scan is scoped to folders the user picks — never to the whole device.**
 This is load-bearing for two separate reasons and must not be relaxed:
 

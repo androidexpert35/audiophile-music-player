@@ -9,7 +9,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.indexing.MediaInde
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportLibraryBugUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportBugUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
 import com.tony.coreui.domain.resource.Resource
 import com.tony.coreui.domain.resource.ResourceError
@@ -42,7 +42,7 @@ class OnboardingViewModelTest {
     private val isMediaLibraryIndexedUseCase = mockk<IsMediaLibraryIndexedUseCase>()
     private val hasMusicFoldersUseCase = mockk<HasMusicFoldersUseCase>()
     private val addMusicFolderUseCase = mockk<AddMusicFolderUseCase>()
-    private val reportLibraryBugUseCase = mockk<ReportLibraryBugUseCase>()
+    private val reportBugUseCase = mockk<ReportBugUseCase>()
     private val navigationManager = FakeNavigationManager()
 
     @Test
@@ -50,7 +50,7 @@ class OnboardingViewModelTest {
         val failure = LibraryResourceError.SCAN_READ_FAILED
         every { scanAndIndexMediaUseCase.invoke() } returns flowOf(Resource.Error(failure))
         val completion = CompletableDeferred<Resource<Unit>>()
-        coEvery { reportLibraryBugUseCase.invoke(failure) } coAnswers { completion.await() }
+        coEvery { reportBugUseCase.invoke(failure) } coAnswers { completion.await() }
         val viewModel = createViewModel()
         viewModel.onEvent(OnboardingUiEvent.RetryIndexing)
         advanceUntilIdle()
@@ -62,7 +62,7 @@ class OnboardingViewModelTest {
         assertTrue(viewModel.uiState.value.data?.preparingReport == true)
         completion.complete(Resource.Error(ResourceError.ServiceError("No email app installed", null)))
         advanceUntilIdle()
-        coVerify(exactly = 1) { reportLibraryBugUseCase.invoke(failure) }
+        coVerify(exactly = 1) { reportBugUseCase.invoke(failure) }
         assertEquals("No email app installed", viewModel.uiState.value.data?.reportFailure)
         assertEquals(false, viewModel.uiState.value.data?.preparingReport)
         assertEquals(failure, viewModel.uiState.value.error?.type)
@@ -292,7 +292,7 @@ class OnboardingViewModelTest {
         isMediaLibraryIndexedUseCase = isMediaLibraryIndexedUseCase,
         hasMusicFoldersUseCase = hasMusicFoldersUseCase,
         addMusicFolderUseCase = addMusicFolderUseCase,
-        reportLibraryBugUseCase = reportLibraryBugUseCase,
+        reportBugUseCase = reportBugUseCase,
         navigationManager = navigationManager,
         stringResolver = TestStringResolver,
         uiErrorMapper = TestUiErrorMapper

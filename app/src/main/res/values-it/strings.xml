@@ -1,4 +1,6 @@
 <resources>
+    <string name="bug_report_session_description">Segnala un problema via email. Saranno allegati i dettagli dell’app e del dispositivo e gli errori registrati durante la sessione corrente. Potrai controllare l’email prima di inviarla.</string>
+    <string name="bug_report_session_email_body">Ciao, vorrei segnalare un problema con Audiophile.\n\nCosa è successo:\n\nPassaggi per riprodurlo:\n\nComportamento atteso:\n\nL’allegato contiene i dettagli dell’app e del dispositivo e gli errori registrati durante la sessione corrente dell’app.</string>
     <string name="bug_report_preparing">Preparazione dell’allegato email…</string>
     <string name="bug_report_no_email">Nessuna app email compatibile trovata. Installa o abilita un’app email, poi premi di nuovo Segnala bug. Puoi anche inviare il codice di errore a developer@antoniocirielli.it.</string>
     <string name="bug_report_failed">Non è stato possibile preparare il report o aprire l’app email. Premi Segnala bug per riprovare, oppure invia il codice di errore a developer@antoniocirielli.it.</string>

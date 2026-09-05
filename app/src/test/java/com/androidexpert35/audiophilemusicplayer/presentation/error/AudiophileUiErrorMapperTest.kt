@@ -11,7 +11,7 @@ import org.junit.Test
 
 class AudiophileUiErrorMapperTest {
 
-    private val mapper = AudiophileUiErrorMapper(TestStringResolver)
+    private val mapper = AudiophileUiErrorMapper(TestStringResolver, io.mockk.mockk(relaxed = true))
 
     @Test
     fun `library codes are unique and retry is offered only for recoverable failures`() {

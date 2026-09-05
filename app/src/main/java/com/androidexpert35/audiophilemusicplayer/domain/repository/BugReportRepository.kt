@@ -11,5 +11,5 @@ interface BugReportRepository {
      * @param error Library failure being reported.
      * @return Success when the composer opens, never confirmation of email delivery.
      */
-    suspend fun openEmail(error: LibraryResourceError): Resource<Unit>
+    suspend fun openEmail(error: LibraryResourceError? = null): Resource<Unit>
 }

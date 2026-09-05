@@ -5,7 +5,7 @@ import com.androidexpert35.audiophilemusicplayer.domain.model.common.LibraryReso
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.AddMusicFolderUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.HasMusicFoldersUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.IsMediaLibraryIndexedUseCase
-import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportLibraryBugUseCase
+import com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportBugUseCase
 import com.androidexpert35.audiophilemusicplayer.domain.usecase.ScanAndIndexMediaUseCase
 import com.tony.coreui.data.strings.StringResolver
 import com.tony.coreui.domain.resource.Resource
@@ -34,7 +34,7 @@ import javax.inject.Inject
  * @property isMediaLibraryIndexedUseCase Checks whether onboarding can be skipped on launch.
  * @property hasMusicFoldersUseCase Checks whether the user already named their music folders.
  * @property addMusicFolderUseCase Persists the folder chosen in the system chooser.
- * @property reportLibraryBugUseCase Opens a diagnostic email draft at the user's request.
+ * @property reportBugUseCase Opens a diagnostic email draft at the user's request.
  * @property navigationManager Shared navigation manager required by the base ViewModel contract.
  */
 @HiltViewModel
@@ -43,7 +43,7 @@ class OnboardingViewModel @Inject constructor(
     private val isMediaLibraryIndexedUseCase: IsMediaLibraryIndexedUseCase,
     private val hasMusicFoldersUseCase: HasMusicFoldersUseCase,
     private val addMusicFolderUseCase: AddMusicFolderUseCase,
-    private val reportLibraryBugUseCase: ReportLibraryBugUseCase,
+    private val reportBugUseCase: ReportBugUseCase,
     navigationManager: NavigationManager,
     stringResolver: StringResolver,
     uiErrorMapper: UiErrorMapper
@@ -237,7 +237,7 @@ class OnboardingViewModel @Inject constructor(
         if (model.preparingReport) return
         updateUiData(model.copy(preparingReport = true, reportFailure = null))
         viewModelScope.launch(exceptionHandler) {
-            val result = reportLibraryBugUseCase(failure)
+            val result = reportBugUseCase(failure)
             uiState.value.data?.let {
                 updateUiData(it.copy(
                     preparingReport = false,

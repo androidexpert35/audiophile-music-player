@@ -46,6 +46,11 @@ object NavigationModule {
     @Singleton
     fun provideUiErrorMapper(mapper: AudiophileUiErrorMapper): UiErrorMapper = mapper
 
+    /** Shares the process-session diagnostic buffer across error mapping and email reports. */
+    @Provides
+    fun provideSessionDiagnostics(): com.androidexpert35.audiophilemusicplayer.domain.repository.SessionDiagnosticsRepository =
+        com.androidexpert35.audiophilemusicplayer.data.repository.SessionDiagnostics
+
     /**
      * Provides the app-specific coordinator for the persistent player overlay.
      */

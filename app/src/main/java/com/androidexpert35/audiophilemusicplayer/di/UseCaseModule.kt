@@ -90,11 +90,11 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 object UseCaseModule {
-    /** Provides user-initiated library bug reporting. */
+    /** Provides the shared settings and onboarding bug-report flow. */
     @Provides
-    fun provideReportLibraryBugUseCase(
+    fun provideReportBugUseCase(
         repository: com.androidexpert35.audiophilemusicplayer.domain.repository.BugReportRepository
-    ) = com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportLibraryBugUseCase(repository)
+    ) = com.androidexpert35.audiophilemusicplayer.domain.usecase.ReportBugUseCase(repository)
 
     /** Provides persisted library layout preferences backed by [SettingsRepository]. */
     @Provides

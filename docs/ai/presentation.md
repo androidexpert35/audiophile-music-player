@@ -67,6 +67,11 @@ State types live under `presentation/viewmodel/<feature>/` as separate files:
 
 ## Screen structure
 
+`AboutSettingsScreen` includes a Report bug card, coordinated by `AboutSettingsViewModel`
+and `ReportBugUseCase`. It opens a prefilled email with session diagnostics even
+without a selected library error. Preparation disables duplicate clicks; failures use
+the standard error dialog. Opening the composer is not confirmation of delivery.
+
 ```kotlin
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
@@ -166,7 +171,7 @@ independently re-indexes on external content changes that don't go through Setti
 Onboarding maps `LibraryResourceError` to a dialog titled `Error: <code>` with localized
 recovery instructions, never a raw exception message. `LibraryErrorDialog` offers Retry
 only when the mapped error has a recoverable retry action, and Report bug opens a prefilled
-email through `ReportLibraryBugUseCase`. Preparation disables duplicate submissions; failures
+email through `ReportBugUseCase`. Preparation disables duplicate submissions; failures
 remain in the same dialog, and opening a composer is never reported as successful delivery.
 Folder-grant failures remain in `RequiresMusicFolder.errorMessage`; scan failures enter
 `IndexingFailed` and do not reset to a generic folder-required prompt. Dismissing the dialog

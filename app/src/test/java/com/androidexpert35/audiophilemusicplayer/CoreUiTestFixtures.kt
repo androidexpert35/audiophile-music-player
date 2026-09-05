@@ -27,7 +27,7 @@ internal object TestStringResolver : StringResolver {
 }
 
 /** Shared Audiophile error mapper configured for local JVM tests. */
-internal val TestUiErrorMapper = AudiophileUiErrorMapper(TestStringResolver)
+internal val TestUiErrorMapper = AudiophileUiErrorMapper(TestStringResolver, io.mockk.mockk(relaxed = true))
 
 /**
  * Navigation test double that records the most recent forward route.
