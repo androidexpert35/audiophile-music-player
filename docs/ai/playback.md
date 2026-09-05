@@ -90,7 +90,7 @@ coordinator only — each concern is delegated to a dedicated helper in the same
 | `BitPerfectWakeLockController` | `PARTIAL_WAKE_LOCK` lifecycle across play/pause/stop/error |
 | — pause-time output release | Every audiophile-engine pause closes the USB sink immediately plus any platform mixer preference. Decoder metadata and the exact playhead survive; Play transparently rebuilds output at that position. `pauseAndReleaseOutput()` is the awaited boundary used by focus loss and explicit release commands. |
 | `BitPerfectDsdSupport` (`DsdPlaybackContext`) | Immutable DSD transport context (source/effective rate, output mode, DoP encoder) |
-| `BitPerfectUriResolver` | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg (the native session reads the descriptor itself — never re-opens the path; see [`native-audio.md`](native-audio.md)) |
+| `BitPerfectUriResolver` | `content://` → `/proc/self/fd/<fd>` trampoline resolution for FFmpeg (the native session reads the descriptor itself — never re-opens the path; see [`native-audio.md`](native-audio.md)). Returns a **closable `BitPerfectSourceHandle`** the engine owns for the loaded track — see the ownership rule below |
 | `BitPerfectPlaybackMath` | Pure sink-playhead → playback-position-ms conversion |
 | — seek/reload anchoring | Libusb sinks expose an absolute post-seek playhead; the engine captures that value as `sinkStartFrames` and snapshots the live head before pause/DSP/routing reloads so the target is never added twice or rounded back to the last UI tick |
 | `BitPerfectDiagnosticsLogger` | Structured `[BP]` failure-mode logging (`adb logcat -s AudiophileDiag`) |
@@ -99,6 +99,31 @@ coordinator only — each concern is delegated to a dedicated helper in the same
 
 When adding a new concern to this engine, add a new helper rather than growing
 `BitPerfectPlaybackEngine` itself, and list it in the table above.
+
+### Source-descriptor ownership
+
+A `content://` track's `/proc/self/fd/<n>` path only names a descriptor the app
+holds open; nothing else in the process closes it, and the number is meaningless
+once it is gone. `resolveUriToSource` therefore returns a closable
+`BitPerfectSourceHandle`, and **exactly one owner holds it at a time**:
+
+- The engine's `currentSourceHandle`, set in `applyLoadedTrack` and released in
+  `releaseCurrentPlaybackResources` — so `doStopInternal`, track replacement, and
+  the failed-autoplay rollback all free it.
+- `BitPerfectGaplessQueue`, for a preloaded next track. `clear()` releases it when
+  the preload is discarded; `consumeCompatibleEntry()` transfers it to the engine
+  at the gapless swap, which closes the outgoing handle and adopts the incoming
+  one rather than re-resolving the URI.
+- `doLoadTrack` / `doEnqueueNext` themselves, between resolution and hand-off:
+  every failure exit in between (all tiers exhausted, preload open failed, format
+  incompatible) must close the handle before it downgrades or returns.
+
+The handle only has to outlive **session building**, not the sessions: each
+decoder session `dup()`s the descriptor (`ffmpeg_session_open`). But it must
+outlive *all* of it — the tier-1 probe, the tier-3 fallback, and the libusb sink's
+own native decoder, which is opened last, inside `UsbAudioSinkFactory`. Never
+close it right after the first open, and never hand the bare `path` string
+anywhere that outlives the handle.
 
 ---
 

@@ -136,6 +136,22 @@ The engine resolves `content://` URIs by calling
 `ContentResolver.openFileDescriptor` and handing FFmpeg the path
 `/proc/self/fd/<fd>`.
 
+**The descriptor is owned, not abandoned.** `resolveUriToSource` keeps the
+`ParcelFileDescriptor` inside a closable `BitPerfectSourceHandle` — it must never
+`detachFd()`, which strands the raw descriptor with no owner at all and leaked one
+per track load, resume, settings reload, and gapless preload. The engine holds the
+handle for the loaded track's lifetime and closes it on stop or replacement; the
+gapless queue holds a preloaded track's handle and either transfers it at the swap
+or closes it when the preload is discarded. See "Source-descriptor ownership" in
+[`docs/ai/playback.md`](ai/playback.md).
+
+The handle only has to outlive **session building**: every decoder session takes
+its own `dup()`. But it must outlive all of it — the tier-1 probe, the tier-3
+fallback, and the libusb sink's native decoder, opened last inside
+`UsbAudioSinkFactory`. Closing it after the first open, or letting the bare path
+string outlive the handle, breaks every route: even the path-open fallback below
+resolves the same `/proc/self/fd/<n>` symlink.
+
 **The native session never re-opens that path.** `ffmpeg_bridge.cpp` recognises
 the trampoline (`fd_trampoline_path.h`), `dup()`s the descriptor and reads
 through a custom `AVIOContext`. Opening the path instead makes the kernel

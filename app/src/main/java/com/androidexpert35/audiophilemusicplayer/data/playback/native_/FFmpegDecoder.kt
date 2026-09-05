@@ -296,7 +296,7 @@ class FFmpegDecoder {
         private const val PATH_TAG = "AudiophilePath"
 
         private fun sanitizeSource(absolutePath: String): String = when {
-            absolutePath.startsWith("/proc/self/fd/") -> "/proc/self/fd/<detached>"
+            absolutePath.startsWith("/proc/self/fd/") -> "/proc/self/fd/<owned>"
             absolutePath.startsWith("content://") -> "content://<redacted>"
             absolutePath.startsWith("file://") -> "file://<redacted>"
             else -> "file:<redacted>"
